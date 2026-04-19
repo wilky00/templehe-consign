@@ -136,6 +136,30 @@ These are in addition to the global rules in `~/.claude/CLAUDE.md`.
 
 ---
 
+## Sub-Agents
+
+### researcher
+
+Defined at `.claude/agents/researcher.md`. Runs on Haiku (fast, cheap). Read-only — cannot write or modify files.
+
+**Always delegate to `researcher` when the task is:**
+- Reading and summarizing dev_plan/ files before starting a phase
+- Finding where a symbol, pattern, or field name appears in the codebase
+- Checking what already exists before adding something new
+- Understanding the structure of a directory or module
+- Looking up library or API documentation on the web
+- Answering "does X exist?" or "how is Y currently implemented?"
+- Session startup artifact review (reading CLAUDE.md, decisions.md, progress.md, known-issues.md)
+
+**Do NOT use `researcher` for:**
+- Writing or editing any file
+- Running tests or executing shell commands
+- Anything that requires judgment about what to build next
+
+**How to invoke:** just ask the question and Claude will route it. You can also be explicit: "use the researcher agent to find all usages of RecordLockService."
+
+---
+
 ## Open Decisions (Pre-Build)
 
 These need Jim's call before the relevant phase starts.
