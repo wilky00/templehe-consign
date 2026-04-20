@@ -105,7 +105,7 @@ async def seed(session: AsyncSession) -> None:
         await session.execute(
             text(
                 "INSERT INTO app_config (id, key, value, category, field_type) "
-                "VALUES (:id, :key, :value::jsonb, :category, :field_type) "
+                "VALUES (:id, :key, CAST(:value AS jsonb), :category, :field_type) "
                 "ON CONFLICT (key) DO NOTHING"
             ),
             {

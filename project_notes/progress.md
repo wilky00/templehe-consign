@@ -2,7 +2,7 @@
 
 ## Phase 1 — Infrastructure & Auth (In Progress, started 2026-04-20)
 
-### Sprint 1: Foundation — COMPLETE
+### Sprint 1: Foundation — COMPLETE (verified green 2026-04-20)
 - [x] docker-compose.yml (Postgres 15 + Mailpit)
 - [x] Makefile (dev, reset, seed, install, test-unit-api, test-integration-api, lint)
 - [x] .env.example (all secret keys documented)
@@ -10,17 +10,20 @@
 - [x] README.md (5-step quickstart)
 - [x] api/pyproject.toml (uv + Python 3.12)
 - [x] api/Dockerfile
-- [x] api/config.py (pydantic-settings)
+- [x] api/config.py (pydantic-settings; .env resolved from repo root; extra fields ignored)
 - [x] api/main.py (FastAPI scaffold with CORS + Sentry wiring)
 - [x] api/database/base.py (async engine + session factory)
 - [x] api/database/models.py (31 tables — all SQLAlchemy ORM models)
 - [x] api/alembic.ini + api/alembic/env.py (async migration runner)
 - [x] api/alembic/versions/001_init_schema.py (all tables + triggers + indexes)
+- [x] api/alembic/versions/002_fix_set_updated_at_trigger.py (clock_timestamp fix)
 - [x] api/tests/conftest.py (test DB fixtures, async client)
-- [x] api/tests/integration/test_migrations.py (schema + trigger verification)
+- [x] api/tests/integration/test_migrations.py (schema + trigger verification — 5/5 passing)
 - [x] scripts/seed.py (idempotent — roles, 15 categories, app_config defaults, admin user)
 - [x] web/ scaffold (Vite + React 18 + TypeScript strict + Tailwind + React Query)
 - [x] web/Dockerfile + nginx.conf
+
+**Integration test gate: PASSED — 5/5 green on 2026-04-20**
 
 ### Sprint 2: Auth Flows — NOT STARTED
 - [ ] api/routers/auth.py

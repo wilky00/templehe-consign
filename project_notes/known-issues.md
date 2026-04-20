@@ -42,6 +42,26 @@
 **Was:** `from database.base import Base, get_db` — `Base` lives in `database.models`, not `database.base`
 **Fix:** Split into `from database.base import get_db` + `from database.models import Base`
 
+## FIXED — `make dev` failing to load .env / DATABASE_URL not set
+**Fixed:** 2026-04-20
+**Was:** Makefile didn't load `.env`; alembic and config.py couldn't find required env vars
+**Fix:** Inline DATABASE_URL default in alembic Makefile target; config.py resolves `.env` from repo root via `Path(__file__).parent.parent`; added `extra="ignore"` for Docker Compose-only vars (POSTGRES_PASSWORD)
+
+## FIXED — seed.py asyncpg syntax error on JSONB cast
+**Fixed:** 2026-04-20 — `scripts/seed.py`
+**Was:** `:value::jsonb` — asyncpg rejects `::` cast mixed with named params
+**Fix:** `CAST(:value AS jsonb)`
+
+## FIXED — templehe_test database not created on make dev
+**Fixed:** 2026-04-20 — `Makefile`
+**Was:** Docker Compose only creates `templehe` DB; integration test fixture failed immediately
+**Fix:** Added `CREATE DATABASE templehe_test` step to `make dev` after Postgres ready
+
+## FIXED — set_updated_at trigger using NOW() instead of clock_timestamp()
+**Fixed:** 2026-04-20 — `api/alembic/versions/002_fix_set_updated_at_trigger_to_use_clock_.py`
+**Was:** `NOW()` returns transaction start time — INSERT + UPDATE in same transaction get identical timestamps, breaking the trigger test
+**Fix:** Migration 002 replaces the function with `clock_timestamp()` (wall clock)
+
 ## OPEN — Category components / prompts / scoring rules
 **Status:** Placeholder data only
 **Impact:** Scoring engine (Phase 6) will need real component weights and red flag rules per category

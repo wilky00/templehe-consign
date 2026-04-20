@@ -211,8 +211,8 @@ SENDGRID_FROM_NAME=Temple Heavy Equipment
 cd /path/to/templehe-consign
 
 # Copy and fill in the env file
-cp api/.env.example api/.env
-# Edit api/.env — fill in at minimum:
+cp .env.example .env
+# Edit .env — fill in at minimum:
 #   DATABASE_URL (auto-set if using docker-compose)
 #   JWT_SECRET_KEY (generate: openssl rand -hex 32)
 #   JWT_REFRESH_SECRET (generate: openssl rand -hex 32)
@@ -257,7 +257,7 @@ If any of these fail, stop and fix before Sprint 2.
 
 ### 5. Generate Local Secrets
 
-You'll need these in `api/.env` for Sprint 2 auth flows to work:
+You'll need these in `.env` for Sprint 2 auth flows to work:
 
 ```bash
 # JWT secret (access tokens)
@@ -270,7 +270,7 @@ openssl rand -hex 32
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Add the output values to `api/.env`:
+Add the output values to `.env`:
 ```
 JWT_SECRET_KEY=<output of first command>
 JWT_REFRESH_SECRET=<output of second command>

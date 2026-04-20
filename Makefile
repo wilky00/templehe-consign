@@ -9,7 +9,8 @@ dev:
 	docker compose up -d
 	@echo "Waiting for Postgres..."
 	@until docker compose exec -T postgres pg_isready -U templehe -d templehe > /dev/null 2>&1; do sleep 1; done
-	cd api && uv run alembic upgrade head
+	docker compose exec -T postgres psql -U templehe -c "CREATE DATABASE templehe_test;" 2>/dev/null || true
+	cd api && DATABASE_URL=$${DATABASE_URL:-postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe} uv run alembic upgrade head
 	$(MAKE) seed
 	@echo ""
 	@echo "Stack ready. Start servers:"
