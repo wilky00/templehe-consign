@@ -12,6 +12,7 @@ from middleware.request_id import RequestIDMiddleware
 from middleware.security_headers import SecurityHeadersMiddleware
 from middleware.structured_logging import StructuredLoggingMiddleware
 from routers import auth as auth_router
+from routers import health as health_router
 
 logger = structlog.get_logger(__name__)
 
@@ -19,6 +20,7 @@ if settings.sentry_dsn:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.environment,
+        release=settings.release or None,
         traces_sample_rate=0.1,
     )
 
@@ -44,9 +46,4 @@ app.add_middleware(
 
 
 app.include_router(auth_router.router, prefix="/api/v1")
-
-
-@app.get("/api/v1/health", tags=["system"])
-async def health() -> dict:
-    """Basic liveness check. Full health check (DB + R2) is in routers/health.py (Sprint 4)."""
-    return {"status": "ok"}
+app.include_router(health_router.router, prefix="/api/v1")

@@ -97,14 +97,18 @@ Spec: Epic 1.4 + Feature 1.1.5 in `dev_plan/01_phase1_infrastructure_auth.md`
 
 ---
 
-### Sprint 4: Health Check + Observability — NOT STARTED
+### Sprint 4: Health Check + Observability — COMPLETE (verified green 2026-04-20)
 
 Spec: Feature 1.1.5 in `dev_plan/01_phase1_infrastructure_auth.md`
 
-- [ ] `GET /api/v1/health` — checks DB reachability + migration version; used as Fly readiness probe
-- [ ] Sentry SDK wired into API and web frontend (DSNs from env; already stubbed in main.py)
-- [ ] BetterStack log drain configured on prod Fly app (manual step — see Outline Manual Tasks doc)
-- [ ] UptimeRobot monitor on `/api/v1/health` (manual step — see Outline Manual Tasks doc)
+- [x] `GET /api/v1/health` — checks DB reachability, migration version (alembic_version), R2 connectivity; 200/503 based on required checks
+- [x] Sentry SDK: added `release=settings.release` (populated from `GIT_SHA` / `FLY_IMAGE_REF` env var at build time)
+- [x] `config.py`: added `release: str = ""` setting
+- [x] api/tests/integration/test_health.py — 9/9 passing (shape, db ok, migrations ok, r2 unconfigured, 503 on failure, r2 error non-degrading)
+- [ ] BetterStack log drain — manual step (configure on prod Fly app; token in `betterstack_source_token` env var)
+- [ ] UptimeRobot monitor on `/api/v1/health` — manual step
+
+**Integration test gate: PASSED — 49/49 green on 2026-04-20**
 
 ---
 

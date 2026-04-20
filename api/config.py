@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # Optional: Sentry CSP report endpoint — appended to CSP header when set
     sentry_csp_report_uri: str = ""
     betterstack_source_token: str = ""
+    # Git SHA injected at build time (e.g. FLY_IMAGE_REF or GIT_SHA env var)
+    release: str = ""
 
     # Google OAuth (stub — not active in Phase 1)
     google_client_id: str = ""
