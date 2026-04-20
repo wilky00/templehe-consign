@@ -33,7 +33,7 @@ venv/
 env/
 ENV/
 .uv/
-uv.lock
+# uv.lock is intentionally committed — lock files must be tracked per Python standards
 *.egg
 *.egg-info/
 dist/
@@ -188,3 +188,4 @@ surefire-reports/
 *.tmp
 *.temp
 .claude/sessions/
+.mcp.json

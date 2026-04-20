@@ -192,3 +192,55 @@ Distribute via TestFlight for internal use during Phase 5. Submit to the App Sto
 
 - Submit early. Apple review averages 1–3 days but can spike. Don't wait until the last day of Phase 5.
 - Min-version kill switch built into Phase 5 — Admin Panel can force an app update.
+
+---
+
+## ADR-009: Phase 1 Auth — Email/Password + TOTP (No SSO in Phase 1)
+
+**Date:** 2026-04-20
+**Status:** Accepted (supersedes ADR-004 scope for Phase 1 only)
+**Deciders:** Jim Wilen
+
+### Context
+
+ADR-004 specified Google SSO only for authentication. During Phase 1 planning, the decision was made to defer Google OAuth implementation and build a working email/password system first for faster iteration. Google SSO can be added behind the `SSOService` stub without changing existing auth flows.
+
+### Decision
+
+Phase 1 implements **email/password + optional TOTP 2FA** only. Google OAuth is stubbed (`SSOService` interface) and documented in `docs/fly-provisioning.md`. No staff-only SSO in Phase 1.
+
+### Consequences
+
+- `password_hash` column is not nullable until SSO is implemented (diverges from original schema note).
+- Google SSO implementation is a Phase 1 or Phase 2 add-on, scheduled when Jim confirms timing.
+
+---
+
+## ADR-010: Session and Rate Limiting Storage — Postgres Tables in POC
+
+**Date:** 2026-04-20
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+ADR-002 bans Redis in POC. The auth spec references Redis for refresh token storage. These are reconciled here.
+
+### Decision
+
+Use two Postgres tables in the POC:
+- `user_sessions` — opaque refresh tokens (SHA-256 hashed). Replaces Redis session store.
+- `rate_limit_counters` — fixed-window counters keyed by endpoint+identity. Replaces Redis rate limiter.
+
+Both are accessed via `SessionService` and `RateLimitService` interfaces. The GCP migration swaps both implementations to Redis Memorystore with zero application code changes.
+
+### Performance
+
+- At POC scale (< 20 users, < 100 req/min), overhead is negligible (~1ms per session lookup, ~2ms per rate limit check).
+- Expired `user_sessions` rows cleaned lazily on read + periodic vacuum.
+- `rate_limit_counters` pruned daily by a lightweight cron query.
+
+### Consequences
+
+- `user_sessions` and `rate_limit_counters` are present in the initial Alembic migration.
+- No Redis dependency in the POC environment (docker-compose.yml has only Postgres + Mailpit).
