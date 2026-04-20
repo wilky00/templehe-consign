@@ -55,6 +55,8 @@ class Settings(BaseSettings):
 
     # Observability
     sentry_dsn: str = ""
+    # Optional: Sentry CSP report endpoint — appended to CSP header when set
+    sentry_csp_report_uri: str = ""
     betterstack_source_token: str = ""
 
     # Google OAuth (stub — not active in Phase 1)

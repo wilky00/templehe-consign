@@ -8,6 +8,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
+from middleware.request_id import RequestIDMiddleware
+from middleware.security_headers import SecurityHeadersMiddleware
+from middleware.structured_logging import StructuredLoggingMiddleware
 from routers import auth as auth_router
 
 logger = structlog.get_logger(__name__)
@@ -26,6 +29,11 @@ app = FastAPI(
     redoc_url="/redoc" if not settings.is_production else None,
 )
 
+# Middleware is applied in reverse registration order (last registered = outermost).
+# Desired order: RequestID → StructuredLogging → SecurityHeaders → CORS → route handler
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(StructuredLoggingMiddleware)
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,

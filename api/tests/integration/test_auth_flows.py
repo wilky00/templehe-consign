@@ -26,31 +26,23 @@ async def _register(client: AsyncClient, email: str = _VALID_EMAIL) -> dict:
     return resp
 
 
-async def _verify_and_login(client: AsyncClient, email: str = _VALID_EMAIL) -> dict:
-    """Register, extract verify token from email service mock, verify, then login."""
+async def _verify_and_login(
+    client: AsyncClient, db_session, email: str = _VALID_EMAIL
+) -> dict:
+    """Register, activate via test session, then login."""
+    from sqlalchemy import select
+
+    from database.models import User
+
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         reg = await _register(client, email)
         assert reg.status_code == 201
 
-    # Extract token from the auth_service directly (we need a verified user)
-    # In integration tests we patch at the transport level — use the DB directly
-    # to flip status instead of going through the email link.
-    from sqlalchemy import select
-
-    from database.base import get_db
-    from database.models import User
-
-    # Access the DB session through the app's dependency override
-    db = None
-    async for session in get_db():
-        db = session
-        result = await db.execute(select(User).where(User.email == email.lower()))
-        user = result.scalar_one_or_none()
-        if user:
-            user.status = "active"
-            db.add(user)
-            await db.commit()
-        break
+    result = await db_session.execute(select(User).where(User.email == email.lower()))
+    user = result.scalar_one_or_none()
+    if user:
+        user.status = "active"
+        await db_session.flush()
 
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         login_resp = await client.post(
@@ -182,23 +174,20 @@ async def test_login_nonexistent_user(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_login_account_lockout(client: AsyncClient):
+async def test_login_account_lockout(client: AsyncClient, db_session):
     """Five wrong-password attempts should lock the account."""
+    from sqlalchemy import select
+
+    from database.models import User
+
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         await _register(client)
-        # Flip to active
-        from sqlalchemy import select
 
-        from database.base import get_db
-        from database.models import User
-        async for db in get_db():
-            result = await db.execute(select(User).where(User.email == _VALID_EMAIL))
-            user = result.scalar_one_or_none()
-            if user:
-                user.status = "active"
-                db.add(user)
-                await db.commit()
-            break
+    result = await db_session.execute(select(User).where(User.email == _VALID_EMAIL))
+    user = result.scalar_one_or_none()
+    assert user is not None
+    user.status = "active"
+    await db_session.flush()
 
     for _ in range(5):
         await client.post(

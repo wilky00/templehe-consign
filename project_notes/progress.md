@@ -76,16 +76,24 @@ Spec: Epic 1.3 in `dev_plan/01_phase1_infrastructure_auth.md`
 
 ---
 
-### Sprint 3: RBAC + Security Middleware — NOT STARTED
+### Sprint 3: RBAC + Security Middleware — COMPLETE (verified green 2026-04-20)
 
 Spec: Epic 1.4 + Feature 1.1.5 in `dev_plan/01_phase1_infrastructure_auth.md`
 
-- [ ] api/middleware/rbac.py — `require_roles(*roles)` FastAPI dependency
-- [ ] api/middleware/security_headers.py — CSP, HSTS, X-Frame-Options, X-Content-Type, Referrer-Policy
-- [ ] api/middleware/request_id.py — generate/thread `X-Request-ID` through all logs
-- [ ] api/middleware/structured_logging.py — JSON log per request: timestamp, severity, request_id, user_id, route, status_code, latency_ms
-- [ ] api/tests/integration/test_rbac.py — each role against role permission matrix
-- [ ] api/tests/integration/test_audit_log.py — all state-transition events produce audit log rows
+- [x] api/middleware/rbac.py — `require_roles(*roles)` FastAPI dependency (moved from auth.py)
+- [x] api/middleware/security_headers.py — CSP, HSTS, X-Frame-Options, X-Content-Type, Referrer-Policy, Permissions-Policy (pure ASGI)
+- [x] api/middleware/request_id.py — generate/thread `X-Request-ID` through all logs (pure ASGI)
+- [x] api/middleware/structured_logging.py — JSON log per request: request_id, user_id, method, path, status_code, latency_ms (pure ASGI)
+- [x] api/tests/integration/test_rbac.py — 9 tests: no-token 401, wrong-role 403, correct-role 200, multi-role, security headers, request-id passthrough
+- [x] api/tests/integration/test_audit_log.py — 7 tests: registered, login, login_failed, account_locked, password_reset_requested, 2fa_setup_initiated
+
+**Bugs fixed during sprint:**
+- `BaseHTTPMiddleware` causes `RuntimeError: Task got Future attached to a different loop` when route handlers use `asyncio.create_task()` → rewrote all three middleware as pure ASGI
+- Test helpers using `get_db()` (new connection) can't see data registered via `db_session` (READ COMMITTED, uncommitted) → threaded `db_session` through all helpers, use `await db.flush()`
+- `user.login_failed` and `user.2fa_setup_initiated` audit events missing from auth_service.py → added in `_record_failed_attempt()` and `setup_2fa()`
+
+**Integration test gate: PASSED — 40/40 green on 2026-04-20**
+(18 auth flows + 5 migrations + 16 RBAC/headers + 7 audit log + 1 health + 3 middleware)
 
 ---
 

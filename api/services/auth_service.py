@@ -277,6 +277,10 @@ async def login(
         if user is None:
             return
         user.failed_login_count = (user.failed_login_count or 0) + 1
+        await _audit(
+            db, "user.login_failed", actor_id=user.id,
+            target_id=user.id, target_type="user", ip_address=ip_address,
+        )
         if user.failed_login_count >= 5:
             user.locked_until = now + timedelta(minutes=30)
             user.failed_login_count = 0
@@ -512,6 +516,7 @@ async def setup_2fa(user_id: uuid.UUID, db: AsyncSession) -> dict:
     user.totp_secret_enc = _encrypt_totp_secret(secret)
     db.add(user)
     await db.flush()
+    await _audit(db, "user.2fa_setup_initiated", actor_id=user_id, target_id=user_id, target_type="user")
     return {"secret": secret, "qr_uri": qr_uri}
 
 
