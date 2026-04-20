@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
+from routers import auth as auth_router
 
 logger = structlog.get_logger(__name__)
 
@@ -32,6 +33,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(auth_router.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["system"])

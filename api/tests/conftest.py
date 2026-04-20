@@ -18,11 +18,15 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-minimum-32-chars-lo
 os.environ.setdefault("JWT_REFRESH_SECRET", "test-jwt-refresh-secret-min-32-chars-xx")
 os.environ.setdefault(
     "TOTP_ENCRYPTION_KEY",
-    "dGVzdC10b3RwLWtleS1mb3ItdGVzdGluZy1vbmx5eA==",  # base64, not a real Fernet key
+    # Valid Fernet key: base64.urlsafe_b64encode(b'\x00' * 32)
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
 )
+
+import uuid  # noqa: E402
 
 import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,
     async_sessionmaker,
@@ -32,6 +36,15 @@ from sqlalchemy.pool import NullPool  # noqa: E402
 
 from database.base import get_db  # noqa: E402
 from main import app  # noqa: E402
+
+_ROLES = [
+    ("customer", "Customer"),
+    ("sales", "Sales Representative"),
+    ("appraiser", "Appraiser"),
+    ("sales_manager", "Sales Manager"),
+    ("admin", "Administrator"),
+    ("reporting", "Reporting User"),
+]
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
@@ -58,6 +71,23 @@ async def setup_test_db():
     )
     if result.returncode != 0:
         pytest.fail(f"Alembic migration failed:\n{result.stdout}\n{result.stderr}")
+
+    # Seed roles so auth_service can look up role_id by slug.
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        for slug, display_name in _ROLES:
+            await session.execute(
+                text(
+                    "INSERT INTO roles (id, slug, display_name) "
+                    "VALUES (:id, :slug, :display_name) "
+                    "ON CONFLICT (slug) DO NOTHING"
+                ),
+                {"id": str(uuid.uuid4()), "slug": slug, "display_name": display_name},
+            )
+        await session.commit()
+    await engine.dispose()
+
     yield
     # Teardown: downgrade to base to clean up after the session
     result = subprocess.run(

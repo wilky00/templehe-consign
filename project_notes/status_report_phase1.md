@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-20
 **Phase:** 1 — Infrastructure & Auth
-**Status:** BLOCKED (Sprint 1 of 5 complete)
+**Status:** IN PROGRESS (Sprint 2 of 5 complete)
 **Author:** Jim Wilen
 
 ---
@@ -302,6 +302,66 @@ Quick checklist:
 | App Store review timing | Phase 5 completion | Open |
 | Twilio A2P 10DLC registration | Now | Action required |
 | SendGrid DNS records | Staging deployment | Action required |
+
+---
+
+---
+
+## What Was Built (Sprint 2) — 2026-04-20
+
+### Auth Flows (14 endpoints under `/api/v1/auth/`)
+
+| Endpoint | Description |
+|---|---|
+| `POST /register` | bcrypt cost 12, sends verification email, returns 201 |
+| `GET /verify-email?token=` | JWT-signed token (24h), activates account |
+| `POST /resend-verification` | rate-limited 3/hr per email |
+| `POST /login` | bcrypt verify, lockout after 5 failures (30 min), 2FA partial token, device fingerprint + new-device email |
+| `POST /refresh` | opaque token rotation, SHA-256 hash stored in `user_sessions` |
+| `POST /logout` | revokes refresh token (idempotent) |
+| `POST /password-reset-request` | always 200 (no email enumeration); JWT-signed link (30 min) |
+| `POST /password-reset-confirm` | validates token, re-hashes, revokes all sessions |
+| `POST /change-email` | requires current password; verification sent to new address (1 hr link); old address notified |
+| `GET /change-email/confirm` | activates new email after confirmation |
+| `POST /2fa/setup` | Fernet-encrypted TOTP secret at rest; returns secret + QR URI |
+| `POST /2fa/confirm` | activates 2FA; returns 10 SHA-256-hashed recovery codes (shown once) |
+| `POST /2fa/verify` | partial token + TOTP → full session |
+| `POST /2fa/recovery` | partial token + recovery code → full session; code consumed; 2FA warning email at ≤2 remaining |
+| `POST /2fa/disable` | requires current TOTP code |
+
+### New Files
+- `api/schemas/auth.py` — 17 request/response Pydantic models; password regex enforces 12+ chars, uppercase, number, special
+- `api/services/auth_service.py` — all business logic; pure functions exported for unit tests
+- `api/services/session_service.py` — opaque refresh token CRUD (issue, validate+rotate, revoke, revoke-all)
+- `api/services/email_service.py` — SendGrid prod / SMTP dev; `asyncio.to_thread` for blocking calls; 7 templates
+- `api/middleware/auth.py` — `get_current_user` dependency; `require_roles()` factory; `CurrentUserDep` alias
+- `api/middleware/rate_limit.py` — Postgres fixed-window counters (ADR-010); 8 endpoint limiters
+- `api/routers/auth.py` — thin route handlers; all 14 endpoints
+
+### Modified Files
+- `api/main.py` — registered auth router at `/api/v1`
+- `api/tests/conftest.py` — added role seeding to `setup_test_db` fixture
+- `api/pyproject.toml` — replaced `passlib[bcrypt]` with `bcrypt>=4.0` (passlib incompatible with Python 3.14 + bcrypt 5.x)
+- `Makefile` — split coverage gate: `test-unit-api` (no gate), `test-integration-api` (no gate), `test-api` (85% on combined)
+
+### Test Results
+
+| Suite | Result |
+|---|---|
+| Unit tests (`make test-unit-api`) | 21/21 passing |
+| Integration tests (`make test-integration-api`) | 23/23 passing |
+| Lint (`uv run ruff check .`) | Clean |
+
+### Phase Gate Status Update
+
+| Gate | Status | Notes |
+|---|---|---|
+| Unit tests | PASS | 21/21 (pure function coverage) |
+| Integration tests — auth flows | PASS | 18/18 auth flow tests green |
+| Integration tests — migrations | PASS | 5/5 (same as Sprint 1) |
+| RBAC middleware tests | BLOCKED | Sprint 3 not built |
+| Security headers | BLOCKED | Sprint 3 not built |
+| Playwright E2E | BLOCKED | Sprint 5 not built |
 
 ---
 

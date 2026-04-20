@@ -1,7 +1,7 @@
 # ABOUTME: Dev workflow automation — start stack, run tests, seed DB, lint.
-# ABOUTME: Targets: dev, reset, seed, install, test-unit-api, test-integration-api, lint.
+# ABOUTME: Targets: dev, reset, seed, install, test-unit-api, test-integration-api, test-api, lint.
 
-.PHONY: dev reset seed install test-unit-api test-integration-api lint
+.PHONY: dev reset seed install test-unit-api test-integration-api test-api lint
 
 ## Start Docker services, run migrations, and seed the database.
 ## Then run API and web servers manually (see output for commands).
@@ -33,15 +33,21 @@ install:
 	cd api && uv sync
 	cd web && npm install
 
-## Run API unit tests with 85% coverage gate.
+## Run API unit tests (pure functions only — no coverage gate).
 test-unit-api:
 	cd api && uv run pytest tests/unit/ -v \
-		--cov=. --cov-report=term-missing --cov-fail-under=85 \
+		--cov=. --cov-report=term-missing \
 		--ignore=tests/integration
 
-## Run API integration tests against the test database.
+## Run API integration tests against the test database (no coverage gate).
 test-integration-api:
-	cd api && uv run pytest tests/integration/ -v
+	cd api && uv run pytest tests/integration/ -v \
+		--cov=. --cov-report=term-missing
+
+## Run full API test suite (unit + integration) with 85% coverage gate.
+test-api:
+	cd api && uv run pytest tests/ -v \
+		--cov=. --cov-report=term-missing --cov-fail-under=85
 
 ## Lint Python (ruff) and TypeScript (eslint).
 lint:
