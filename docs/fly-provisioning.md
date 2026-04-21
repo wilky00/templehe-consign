@@ -47,7 +47,6 @@ Each app needs its own `fly secrets set`. Example for dev:
 fly secrets set -a temple-api-dev \
   DATABASE_URL="postgresql+asyncpg://..." \
   JWT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(64))')" \
-  JWT_REFRESH_SECRET="$(python -c 'import secrets; print(secrets.token_hex(64))')" \
   TOTP_ENCRYPTION_KEY="$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" \
   ENVIRONMENT="development" \
   CORS_ORIGINS="https://temple-web-dev.fly.dev" \

@@ -15,7 +15,6 @@ _TEST_DB = os.environ.get(
 )
 os.environ.setdefault("DATABASE_URL", _TEST_DB)
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-minimum-32-chars-long-xx")
-os.environ.setdefault("JWT_REFRESH_SECRET", "test-jwt-refresh-secret-min-32-chars-xx")
 os.environ.setdefault(
     "TOTP_ENCRYPTION_KEY",
     # Valid Fernet key: base64.urlsafe_b64encode(b'\x00' * 32)

@@ -42,7 +42,11 @@ jobs:
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
           exit-code: '1'
-          ignore-unfixed: true
+          # ignore-unfixed: false (default) — surface unfixed CRITICAL/HIGH
+          # CVEs. Suppressions must be per-CVE in a .trivyignore file with a
+          # written justification; silencing the whole class hides exploitable
+          # bugs that upstream hasn't patched yet.
+          ignore-unfixed: false
 
       - name: Upload Trivy results to GitHub Security
         if: always()

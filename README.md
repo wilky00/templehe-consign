@@ -10,7 +10,7 @@ Internal platform for equipment intake, appraisal, and consignment management.
 # 1. Clone and copy env template
 git clone <repo-url> templehe-consign && cd templehe-consign
 cp .env.example .env
-# Edit .env — set JWT_SECRET_KEY, JWT_REFRESH_SECRET, TOTP_ENCRYPTION_KEY, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
+# Edit .env — set JWT_SECRET_KEY, TOTP_ENCRYPTION_KEY, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD
 
 # 2. Install dependencies
 make install
