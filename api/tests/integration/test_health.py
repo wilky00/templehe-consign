@@ -76,12 +76,35 @@ async def test_health_degraded_bad_migration(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_health_r2_error_does_not_degrade(client: AsyncClient):
-    """R2 failure alone should not degrade overall status — it's non-required."""
+    """In non-production, R2 failure is informational — overall stays 200."""
     with patch("routers.health._check_r2", return_value="error"):
         resp = await client.get("/api/v1/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
     assert resp.json()["checks"]["r2"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_health_r2_unconfigured_in_production_returns_503(client: AsyncClient):
+    """In production, missing R2 credentials is a config-drift incident.
+    Previously this reported 200 ok, silently masking a rotated or deleted
+    R2 key. Now the probe fails so UptimeRobot / Fly notice."""
+    with patch.object(settings, "environment", "production"):
+        resp = await client.get("/api/v1/health")
+    assert resp.status_code == 503
+    assert resp.json()["status"] == "degraded"
+    assert resp.json()["checks"]["r2"] == "unconfigured"
+
+
+@pytest.mark.asyncio
+async def test_health_r2_error_in_production_returns_503(client: AsyncClient):
+    """Runtime R2 outage in production also fails the probe."""
+    with (
+        patch.object(settings, "environment", "production"),
+        patch("routers.health._check_r2", return_value="error"),
+    ):
+        resp = await client.get("/api/v1/health")
+    assert resp.status_code == 503
 
 
 # ---------------------------------------------------------------------------
