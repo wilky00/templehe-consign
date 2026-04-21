@@ -61,19 +61,19 @@ test.describe('Auth — health check', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Web UI — login page', () => {
-  test('login page renders', async ({ page }) => {
+  test('login page renders', async ({ page: _page }) => {
     test.skip(true, 'Web UI stub — implement once login page exists in Phase 2');
   });
 
-  test('invalid credentials shows error message', async ({ page }) => {
+  test('invalid credentials shows error message', async ({ page: _page }) => {
     test.skip(true, 'Web UI stub — implement once login page exists in Phase 2');
   });
 
-  test('valid credentials redirects to dashboard', async ({ page }) => {
+  test('valid credentials redirects to dashboard', async ({ page: _page }) => {
     test.skip(true, 'Web UI stub — implement once login page exists in Phase 2');
   });
 
-  test('2FA prompt appears when TOTP is enabled', async ({ page }) => {
+  test('2FA prompt appears when TOTP is enabled', async ({ page: _page }) => {
     test.skip(true, 'Web UI stub — implement once login page exists in Phase 2');
   });
 });
