@@ -1,0 +1,25 @@
+# ABOUTME: Fly.io app config for the hourly retention + audit partitioning sweeper.
+# ABOUTME: Reuses the API Docker image; no HTTP service — scheduled machine only.
+
+app = 'temple-sweeper'
+primary_region = 'iad'
+
+# Reuse the API image. At launch time the sweeper invokes:
+#   python /app/scripts/sweep_retention.py
+# DATABASE_URL is supplied via `fly secrets set -a temple-sweeper`.
+
+[build]
+  dockerfile = "../../api/Dockerfile"
+
+[processes]
+  worker = "/app/.venv/bin/python /app/scripts/sweep_retention.py"
+
+# One scheduled machine. Launch via:
+#   fly machine run . --app temple-sweeper --schedule hourly
+# (`--schedule` accepts hourly / daily; hourly matches the 2-hour retention
+#  window of rate_limit_counters and the 24-hour expires_at on webhook_events_seen.)
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1
