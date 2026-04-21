@@ -6,7 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_NO_CACHE=1 \
-    UV_PYTHON_DOWNLOADS=never
+    UV_PYTHON_DOWNLOADS=never \
+    PATH="/app/.venv/bin:$PATH"
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /usr/local/bin/uv
@@ -20,14 +21,15 @@ RUN uv sync --frozen --no-dev
 # Copy source
 COPY . .
 
-# Non-root user for runtime
-RUN addgroup --system app && adduser --system --ingroup app app
+# Non-root user for runtime; chown venv so the app user can read it
+RUN addgroup --system app && adduser --system --ingroup app app \
+    && chown -R app:app /app
 USER app
 
 EXPOSE 8000
 
-# Injected at build time by CI: fly deploy --build-arg GIT_SHA=$GITHUB_SHA
+# Injected at build time by CI: flyctl deploy --build-arg GIT_SHA=$GITHUB_SHA
 ARG GIT_SHA=""
 ENV RELEASE=${GIT_SHA}
 
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
