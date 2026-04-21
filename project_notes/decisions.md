@@ -21,7 +21,7 @@ Run the POC and initial production on **Fly.io + Neon Postgres + Cloudflare R2 +
 **POC stack:**
 - Compute: Fly Machines (six apps: `temple-{api,web}-{dev,staging,prod}`)
 - Database: Neon Postgres (one project, three branches: `dev`, `staging`, `prod`; PITR on prod)
-- Object Storage: Cloudflare R2 (versioning enabled)
+- Object Storage: Cloudflare R2 (immutable key naming — R2 does not support object versioning)
 - Async Jobs: Postgres `jobs` table drained by scheduled Fly Machines
 - Secrets: `fly secrets` per app
 - Edge: Cloudflare WAF (Managed ruleset), CDN, Full (Strict) TLS, HSTS preload
@@ -192,3 +192,101 @@ Distribute via TestFlight for internal use during Phase 5. Submit to the App Sto
 
 - Submit early. Apple review averages 1–3 days but can spike. Don't wait until the last day of Phase 5.
 - Min-version kill switch built into Phase 5 — Admin Panel can force an app update.
+
+---
+
+## ADR-009: Phase 1 Auth — Email/Password + TOTP (No SSO in Phase 1)
+
+**Date:** 2026-04-20
+**Status:** Accepted (supersedes ADR-004 scope for Phase 1 only)
+**Deciders:** Jim Wilen
+
+### Context
+
+ADR-004 specified Google SSO only for authentication. During Phase 1 planning, the decision was made to defer Google OAuth implementation and build a working email/password system first for faster iteration. Google SSO can be added behind the `SSOService` stub without changing existing auth flows.
+
+### Decision
+
+Phase 1 implements **email/password + optional TOTP 2FA** only. Google OAuth is stubbed (`SSOService` interface) and documented in `docs/fly-provisioning.md`. No staff-only SSO in Phase 1.
+
+### Consequences
+
+- `password_hash` column is not nullable until SSO is implemented (diverges from original schema note).
+- Google SSO implementation is a Phase 1 or Phase 2 add-on, scheduled when Jim confirms timing.
+
+---
+
+## ADR-011: POC Database Hosting — Neon over Fly Postgres
+
+**Date:** 2026-04-20
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Fly.io offers a built-in Postgres option. The question was whether to use it instead of Neon for the POC, given that Fly is already our compute host and consolidating vendors has operational appeal.
+
+### Decision
+
+Use **Neon Postgres** for the POC, not Fly Postgres.
+
+### Rationale
+
+**Fly Postgres is not a managed service.** It is a Fly Machine running Postgres in a VM that you own and operate. Backups, failover, and recovery are the operator's responsibility. For a one-engineer team on an 8–24 hour SLA, any database incident that requires hands-on recovery is unacceptable.
+
+**Neon is fully managed.** Automatic failover, connection pooling (PgBouncer built in), and point-in-time recovery are included. No operational burden on the operator.
+
+**Neon's branching model fits the dev workflow.** Neon treats database branches like git branches — `dev`, `staging`, and `prod` are branches of the same project. Schema migrations can be tested against a branch before being promoted. This is a natural fit for the three-environment Fly setup and mirrors how Cloud SQL environments would be managed on GCP.
+
+**Autoscale to zero.** Neon's serverless compute scales to zero when idle. Fly Postgres keeps a VM running 24/7 regardless of traffic. At POC scale, this matters for cost.
+
+**Migration to GCP is identical either way.** The app only knows `DATABASE_URL`. Swapping Neon → Cloud SQL is one env var change per app. Fly Postgres → Cloud SQL is the same swap. The migration path is not easier or harder with either choice.
+
+**Cost.** Neon's free tier covers the dev branch comfortably. Fly Postgres starts at ~$5–7/month for the smallest always-on machine.
+
+### Tradeoffs
+
+- Neon adds a second vendor dashboard during the POC period (Fly + Neon). Acceptable given the operational benefits.
+- Neon's serverless cold-start latency (~100–300ms after sustained idle) is not a concern at POC scale with keepalive health checks in place.
+
+### Postgres Version
+
+**Use Postgres 16** across all environments (local dev, Neon, and eventual Cloud SQL). Rationale: Postgres 17 was released Oct 2024 and Cloud SQL support for it is recent; Postgres 16 has a longer track record in GCP's managed environment and has no meaningful feature gaps for this project. `docker-compose.yml` and Neon branches are both pinned to 16. Upgrade to 17 when Cloud SQL support matures.
+
+### Consequences
+
+- Neon project `temple-he` with branches `dev`, `staging`, `prod`. PITR enabled on `prod` branch (requires Neon Pro — upgrade before any real customer data lands).
+- `DATABASE_URL` is the only app-level coupling to Neon. No Neon-specific SDK or client code anywhere in the application.
+- `docker-compose.yml` pinned to `postgres:16.9-alpine` to match Neon and Cloud SQL target.
+- See Manual Tasks doc section 4 for provisioning steps.
+
+---
+
+## ADR-010: Session and Rate Limiting Storage — Postgres Tables in POC
+
+**Date:** 2026-04-20
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+ADR-002 bans Redis in POC. The auth spec references Redis for refresh token storage. These are reconciled here.
+
+### Decision
+
+Use two Postgres tables in the POC:
+- `user_sessions` — opaque refresh tokens (SHA-256 hashed). Replaces Redis session store.
+- `rate_limit_counters` — fixed-window counters keyed by endpoint+identity. Replaces Redis rate limiter.
+
+Both are accessed via `SessionService` and `RateLimitService` interfaces. The GCP migration swaps both implementations to Redis Memorystore with zero application code changes.
+
+### Performance
+
+- At POC scale (< 20 users, < 100 req/min), overhead is negligible (~1ms per session lookup, ~2ms per rate limit check).
+- Expired `user_sessions` rows cleaned lazily on read + periodic vacuum.
+- `rate_limit_counters` pruned daily by a lightweight cron query.
+
+### Consequences
+
+- `user_sessions` and `rate_limit_counters` are present in the initial Alembic migration.
+- No Redis dependency in the POC environment (docker-compose.yml has only Postgres + Mailpit).
