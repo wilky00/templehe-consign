@@ -19,16 +19,16 @@ async def _register(client: AsyncClient, email: str = _VALID_EMAIL) -> dict:
     resp = await client.post(
         "/api/v1/auth/register",
         json={
-            "email": email, "password": _VALID_PASSWORD,
-            "first_name": "Test", "last_name": "User",
+            "email": email,
+            "password": _VALID_PASSWORD,
+            "first_name": "Test",
+            "last_name": "User",
         },
     )
     return resp
 
 
-async def _verify_and_login(
-    client: AsyncClient, db_session, email: str = _VALID_EMAIL
-) -> dict:
+async def _verify_and_login(client: AsyncClient, db_session, email: str = _VALID_EMAIL) -> dict:
     """Register, activate via test session, then login."""
     from sqlalchemy import select
 
@@ -91,8 +91,10 @@ async def test_register_invalid_email(client: AsyncClient):
     resp = await client.post(
         "/api/v1/auth/register",
         json={
-            "email": "not-an-email", "password": _VALID_PASSWORD,
-            "first_name": "A", "last_name": "B",
+            "email": "not-an-email",
+            "password": _VALID_PASSWORD,
+            "first_name": "A",
+            "last_name": "B",
         },
     )
     assert resp.status_code == 422
@@ -118,6 +120,7 @@ async def test_verify_email_success(client: AsyncClient):
     async def _capture_email(to: str, subject: str, html: str) -> None:
         if "verify" in subject.lower():
             import re
+
             match = re.search(r'href="([^"]+verify[^"]+)"', html)
             if match:
                 captured_url.append(match.group(1))

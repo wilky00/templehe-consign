@@ -18,9 +18,7 @@ class RequestIDMiddleware:
             return
 
         headers = dict(scope.get("headers", []))
-        request_id = (
-            headers.get(b"x-request-id", b"").decode() or str(uuid.uuid4())
-        )
+        request_id = headers.get(b"x-request-id", b"").decode() or str(uuid.uuid4())
         structlog.contextvars.bind_contextvars(request_id=request_id)
 
         async def send_with_request_id(message: Message) -> None:

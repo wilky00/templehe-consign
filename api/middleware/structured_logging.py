@@ -20,9 +20,7 @@ def _extract_user_id(scope: Scope) -> str | None:
         return None
     token = auth.removeprefix("Bearer ")
     try:
-        payload = jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-        )
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         return payload.get("sub")
     except JWTError:
         return None

@@ -58,9 +58,7 @@ class User(Base):
     totp_secret_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     profile_photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    tos_accepted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    tos_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tos_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
     privacy_accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -426,9 +424,7 @@ class AppraisalSubmission(Base):
     management_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     hold_for_title_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     marketability_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    approved_purchase_offer: Mapped[Decimal | None] = mapped_column(
-        Numeric(12, 2), nullable=True
-    )
+    approved_purchase_offer: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     suggested_consignment_price: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
     )
@@ -664,9 +660,7 @@ class RecordLock(Base):
     overridden_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
-    overridden_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    overridden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (UniqueConstraint("record_id", "record_type"),)
 

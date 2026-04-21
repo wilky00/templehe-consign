@@ -47,9 +47,7 @@ async def _register_and_activate(
 
 
 async def _get_audit_events(db: AsyncSession, user_id: str) -> list[AuditLog]:
-    result = await db.execute(
-        select(AuditLog).where(AuditLog.actor_id == user_id)
-    )
+    result = await db.execute(select(AuditLog).where(AuditLog.actor_id == user_id))
     return list(result.scalars().all())
 
 
@@ -85,9 +83,7 @@ async def test_audit_log_registration(client: AsyncClient, db_session: AsyncSess
 
 @pytest.mark.asyncio
 async def test_audit_log_login_success(client: AsyncClient, db_session: AsyncSession):
-    user_id, _ = await _register_and_activate(
-        client, db_session, "audit_login@example.com"
-    )
+    user_id, _ = await _register_and_activate(client, db_session, "audit_login@example.com")
     events = await _get_audit_events(db_session, user_id)
     event_types = [e.event_type for e in events]
     assert "user.login" in event_types
@@ -107,9 +103,7 @@ async def test_audit_log_failed_login(client: AsyncClient, db_session: AsyncSess
         )
     user_id = reg.json()["id"]
 
-    result = await db_session.execute(
-        select(User).where(User.email == "audit_fail@example.com")
-    )
+    result = await db_session.execute(select(User).where(User.email == "audit_fail@example.com"))
     user = result.scalar_one_or_none()
     assert user is not None
     user.status = "active"
@@ -127,9 +121,7 @@ async def test_audit_log_failed_login(client: AsyncClient, db_session: AsyncSess
 
 @pytest.mark.asyncio
 async def test_audit_log_logout(client: AsyncClient, db_session: AsyncSession):
-    user_id, _ = await _register_and_activate(
-        client, db_session, "audit_logout@example.com"
-    )
+    user_id, _ = await _register_and_activate(client, db_session, "audit_logout@example.com")
     # Logout on invalid token is graceful (idempotent) — only verifies login audit was written
     await client.post(
         "/api/v1/auth/logout",
@@ -183,12 +175,8 @@ async def test_audit_log_account_locked(client: AsyncClient, db_session: AsyncSe
 
 
 @pytest.mark.asyncio
-async def test_audit_log_password_reset_request(
-    client: AsyncClient, db_session: AsyncSession
-):
-    user_id, _ = await _register_and_activate(
-        client, db_session, "audit_pwreset@example.com"
-    )
+async def test_audit_log_password_reset_request(client: AsyncClient, db_session: AsyncSession):
+    user_id, _ = await _register_and_activate(client, db_session, "audit_pwreset@example.com")
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         await client.post(
             "/api/v1/auth/password-reset-request",
@@ -207,9 +195,7 @@ async def test_audit_log_password_reset_request(
 
 @pytest.mark.asyncio
 async def test_audit_log_2fa_setup(client: AsyncClient, db_session: AsyncSession):
-    user_id, token = await _register_and_activate(
-        client, db_session, "audit_2fa@example.com"
-    )
+    user_id, token = await _register_and_activate(client, db_session, "audit_2fa@example.com")
     resp = await client.post(
         "/api/v1/auth/2fa/setup",
         headers={"Authorization": f"Bearer {token}"},

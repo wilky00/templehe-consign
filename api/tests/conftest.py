@@ -120,6 +120,7 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI async test client with the test DB injected."""
+
     async def override_get_db():
         yield db_session
 

@@ -139,7 +139,8 @@ async def refresh(
     _: None = Depends(refresh_ip_limiter),
 ) -> TokenResponse:
     result = await auth_service.refresh_access_token(
-        body.refresh_token, db,
+        body.refresh_token,
+        db,
         ip_address=_ip(request),
         user_agent=request.headers.get("User-Agent"),
     )
@@ -193,9 +194,7 @@ async def change_email(
     await auth_service.initiate_email_change(
         current_user.id, body.new_email, body.current_password, db, _base_url(request)
     )
-    return MessageResponse(
-        message="A confirmation link has been sent to your new email address."
-    )
+    return MessageResponse(message="A confirmation link has been sent to your new email address.")
 
 
 @router.get("/change-email/confirm", response_model=MessageResponse)

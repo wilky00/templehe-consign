@@ -99,31 +99,23 @@ async def test_rbac_no_token_returns_401(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_rbac_wrong_role_returns_403(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_rbac_wrong_role_returns_403(client: AsyncClient, db_session: AsyncSession):
     login_data = await _create_active_user(
         client, db_session, "customer_rbac@example.com", "customer"
     )
     token = login_data["access_token"]
-    resp = await client.get(
-        _ADMIN_ROUTE, headers={"Authorization": f"Bearer {token}"}
-    )
+    resp = await client.get(_ADMIN_ROUTE, headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403
     assert "permission" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
-async def test_rbac_403_message_is_human_readable(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_rbac_403_message_is_human_readable(client: AsyncClient, db_session: AsyncSession):
     login_data = await _create_active_user(
         client, db_session, "sales_rbac_403@example.com", "sales"
     )
     token = login_data["access_token"]
-    resp = await client.get(
-        _ADMIN_ROUTE, headers={"Authorization": f"Bearer {token}"}
-    )
+    resp = await client.get(_ADMIN_ROUTE, headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403
     detail = resp.json()["detail"]
     assert len(detail) > 10
@@ -136,59 +128,39 @@ async def test_rbac_403_message_is_human_readable(
 
 
 @pytest.mark.asyncio
-async def test_rbac_correct_role_succeeds(
-    client: AsyncClient, db_session: AsyncSession
-):
-    login_data = await _create_active_user(
-        client, db_session, "admin_rbac@example.com", "admin"
-    )
+async def test_rbac_correct_role_succeeds(client: AsyncClient, db_session: AsyncSession):
+    login_data = await _create_active_user(client, db_session, "admin_rbac@example.com", "admin")
     token = login_data["access_token"]
-    resp = await client.get(
-        _ADMIN_ROUTE, headers={"Authorization": f"Bearer {token}"}
-    )
+    resp = await client.get(_ADMIN_ROUTE, headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     assert resp.json()["role"] == "admin"
 
 
 @pytest.mark.asyncio
-async def test_rbac_multi_role_first_allowed(
-    client: AsyncClient, db_session: AsyncSession
-):
-    login_data = await _create_active_user(
-        client, db_session, "sales_multi@example.com", "sales"
-    )
+async def test_rbac_multi_role_first_allowed(client: AsyncClient, db_session: AsyncSession):
+    login_data = await _create_active_user(client, db_session, "sales_multi@example.com", "sales")
     token = login_data["access_token"]
-    resp = await client.get(
-        _SALES_OR_MANAGER_ROUTE, headers={"Authorization": f"Bearer {token}"}
-    )
+    resp = await client.get(_SALES_OR_MANAGER_ROUTE, headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_rbac_multi_role_second_allowed(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_rbac_multi_role_second_allowed(client: AsyncClient, db_session: AsyncSession):
     login_data = await _create_active_user(
         client, db_session, "manager_multi@example.com", "sales_manager"
     )
     token = login_data["access_token"]
-    resp = await client.get(
-        _SALES_OR_MANAGER_ROUTE, headers={"Authorization": f"Bearer {token}"}
-    )
+    resp = await client.get(_SALES_OR_MANAGER_ROUTE, headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_rbac_multi_role_excluded_returns_403(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_rbac_multi_role_excluded_returns_403(client: AsyncClient, db_session: AsyncSession):
     login_data = await _create_active_user(
         client, db_session, "appraiser_multi@example.com", "appraiser"
     )
     token = login_data["access_token"]
-    resp = await client.get(
-        _SALES_OR_MANAGER_ROUTE, headers={"Authorization": f"Bearer {token}"}
-    )
+    resp = await client.get(_SALES_OR_MANAGER_ROUTE, headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403
 
 
@@ -222,7 +194,5 @@ async def test_request_id_header_returned(client: AsyncClient):
 async def test_request_id_passthrough(client: AsyncClient):
     """Client-supplied X-Request-ID should be echoed back unchanged."""
     custom_id = "my-trace-id-12345"
-    resp = await client.get(
-        "/api/v1/health", headers={"X-Request-ID": custom_id}
-    )
+    resp = await client.get("/api/v1/health", headers={"X-Request-ID": custom_id})
     assert resp.headers.get("x-request-id") == custom_id

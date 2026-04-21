@@ -20,6 +20,7 @@ def require_roles(*role_slugs: str):
         async def admin_route(user: User = Depends(require_roles("admin", "sales_manager"))):
             ...
     """
+
     async def _check(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),

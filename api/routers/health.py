@@ -29,9 +29,7 @@ async def _check_database(db: AsyncSession) -> str:
 
 async def _check_migrations(db: AsyncSession) -> str:
     try:
-        result = await db.execute(
-            text("SELECT version_num FROM alembic_version")
-        )
+        result = await db.execute(text("SELECT version_num FROM alembic_version"))
         version = result.scalar_one_or_none()
         return "ok" if version == _EXPECTED_MIGRATION_HEAD else "error"
     except Exception:
@@ -42,6 +40,7 @@ async def _check_r2() -> str:
     if not settings.r2_access_key_id or not settings.r2_secret_access_key:
         return "unconfigured"
     try:
+
         def _head() -> None:
             client = boto3.client(
                 "s3",

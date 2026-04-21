@@ -44,9 +44,7 @@ EXPECTED_TABLES = [
 async def test_all_tables_exist(db_session):
     """Every expected table is present in the database after migration."""
     result = await db_session.execute(
-        text(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
-        )
+        text("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename")
     )
     existing = {row[0] for row in result.fetchall()}
     for table in EXPECTED_TABLES:
@@ -69,25 +67,19 @@ async def test_roles_have_indexes(db_session):
 async def test_audit_logs_append_only_trigger(db_session):
     """Attempting to DELETE from audit_logs raises an exception."""
     # Insert a test row
-    await db_session.execute(
-        text("INSERT INTO audit_logs (event_type) VALUES ('test_event')")
-    )
+    await db_session.execute(text("INSERT INTO audit_logs (event_type) VALUES ('test_event')"))
     await db_session.flush()
 
     # DELETE must be blocked by trigger
     with pytest.raises(Exception, match="append-only"):
-        await db_session.execute(
-            text("DELETE FROM audit_logs WHERE event_type = 'test_event'")
-        )
+        await db_session.execute(text("DELETE FROM audit_logs WHERE event_type = 'test_event'"))
         await db_session.flush()
 
 
 @pytest.mark.asyncio
 async def test_audit_logs_update_blocked(db_session):
     """Attempting to UPDATE audit_logs raises an exception."""
-    await db_session.execute(
-        text("INSERT INTO audit_logs (event_type) VALUES ('update_test')")
-    )
+    await db_session.execute(text("INSERT INTO audit_logs (event_type) VALUES ('update_test')"))
     await db_session.flush()
 
     with pytest.raises(Exception, match="append-only"):
@@ -107,9 +99,7 @@ async def test_users_updated_at_trigger(db_session):
             " ON CONFLICT DO NOTHING"
         )
     )
-    role_row = await db_session.execute(
-        text("SELECT id FROM roles WHERE slug = 'test_role'")
-    )
+    role_row = await db_session.execute(text("SELECT id FROM roles WHERE slug = 'test_role'"))
     role_id = role_row.scalar()
 
     await db_session.execute(
@@ -128,6 +118,7 @@ async def test_users_updated_at_trigger(db_session):
 
     # Small delay to ensure clock advances
     import asyncio
+
     await asyncio.sleep(0.01)
 
     await db_session.execute(

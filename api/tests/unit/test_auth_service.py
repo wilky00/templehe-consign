@@ -79,12 +79,14 @@ def test_decode_token_rejects_wrong_type():
     user_id = uuid.uuid4()
     token = create_partial_token(user_id)
     from jose import JWTError
+
     with pytest.raises(JWTError):
         _decode_token(token, _TYPE_ACCESS)
 
 
 def test_decode_token_rejects_expired():
     from jose import JWTError
+
     expired_token = _create_signed_token(
         {"sub": str(uuid.uuid4()), "type": _TYPE_VERIFY_EMAIL},
         timedelta(seconds=-1),
@@ -168,6 +170,7 @@ def test_password_schema_rejects_short():
     from pydantic import ValidationError
 
     from schemas.auth import RegisterRequest
+
     with pytest.raises(ValidationError, match="12 characters"):
         RegisterRequest(email="a@b.com", password="Short1!", first_name="A", last_name="B")
 
@@ -176,6 +179,7 @@ def test_password_schema_rejects_no_uppercase():
     from pydantic import ValidationError
 
     from schemas.auth import RegisterRequest
+
     with pytest.raises(ValidationError, match="uppercase"):
         RegisterRequest(email="a@b.com", password="alllowercase1!", first_name="A", last_name="B")
 
@@ -184,12 +188,14 @@ def test_password_schema_rejects_no_special():
     from pydantic import ValidationError
 
     from schemas.auth import RegisterRequest
+
     with pytest.raises(ValidationError, match="special"):
         RegisterRequest(email="a@b.com", password="NoSpecialChar1", first_name="A", last_name="B")
 
 
 def test_password_schema_accepts_valid():
     from schemas.auth import RegisterRequest
+
     req = RegisterRequest(
         email="user@example.com",
         password="ValidPass1!xx",
@@ -201,6 +207,7 @@ def test_password_schema_accepts_valid():
 
 def test_register_request_strips_name_whitespace():
     from schemas.auth import RegisterRequest
+
     req = RegisterRequest(
         email="user@example.com",
         password="ValidPass1!xx",

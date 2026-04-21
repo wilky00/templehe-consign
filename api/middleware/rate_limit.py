@@ -24,13 +24,17 @@ async def _check_rate_limit(
     """
     # Truncate now to the window boundary
     now = datetime.now(UTC)
-    window_start = now.replace(
-        second=(now.second // window_seconds) * window_seconds,
-        microsecond=0,
-    ) if window_seconds < 60 else now.replace(
-        minute=(now.minute // (window_seconds // 60)) * (window_seconds // 60),
-        second=0,
-        microsecond=0,
+    window_start = (
+        now.replace(
+            second=(now.second // window_seconds) * window_seconds,
+            microsecond=0,
+        )
+        if window_seconds < 60
+        else now.replace(
+            minute=(now.minute // (window_seconds // 60)) * (window_seconds // 60),
+            second=0,
+            microsecond=0,
+        )
     )
 
     row_id = str(uuid.uuid4())
@@ -63,14 +67,17 @@ async def _check_rate_limit(
 
 def rate_limit_by_ip(limit: int, window_seconds: int, endpoint: str):
     """Dependency: limit requests per IP address."""
+
     async def _dep(request: Request, db: AsyncSession = Depends(get_db)) -> None:
         ip = request.client.host if request.client else "unknown"
         await _check_rate_limit(f"{endpoint}_ip:{ip}", limit, window_seconds, db)
+
     return _dep
 
 
 def rate_limit_by_email(limit: int, window_seconds: int, endpoint: str):
     """Dependency: limit requests per email in the request body."""
+
     async def _dep(request: Request, db: AsyncSession = Depends(get_db)) -> None:
         try:
             body = await request.json()
@@ -79,6 +86,7 @@ def rate_limit_by_email(limit: int, window_seconds: int, endpoint: str):
             email = "unknown"
         if email:
             await _check_rate_limit(f"{endpoint}_email:{email}", limit, window_seconds, db)
+
     return _dep
 
 
