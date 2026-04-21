@@ -68,7 +68,7 @@ def _base_html(title: str, body_html: str) -> str:
   {body_html}
   <hr style="margin-top:32px;border:none;border-top:1px solid #eee;">
   <p style="font-size:12px;color:#666;">
-    Temple Heavy Equipment &mdash; <a href="mailto:support@templehe.com">support@templehe.com</a>
+    Temple Heavy Equipment &mdash; <a href="mailto:support@saltrun.net">support@saltrun.net</a>
   </p>
 </body>
 </html>"""
@@ -106,7 +106,7 @@ async def send_password_changed_email(to_email: str) -> None:
     body = """
     <p>Your TempleHE account password was just changed.</p>
     <p>If this was you, no further action is needed.</p>
-    <p>If this wasn't you, <a href="mailto:support@templehe.com">contact support immediately</a>
+    <p>If this wasn't you, <a href="mailto:support@saltrun.net">contact support immediately</a>
        or reset your password using the login page.</p>
     """
     await send_email(
@@ -123,7 +123,7 @@ async def send_new_device_email(to_email: str, location: str, device: str) -> No
     </ul>
     <p>If this was you, no action is needed.</p>
     <p>If this wasn't you,
-       <a href="mailto:support@templehe.com">reset your password immediately</a>.</p>
+       <a href="mailto:support@saltrun.net">reset your password immediately</a>.</p>
     """
     await send_email(
         to_email,
@@ -153,7 +153,7 @@ async def send_email_change_notification(old_email: str, new_email: str) -> None
     <p>Your TempleHE account email is being changed to <strong>{masked}</strong>.</p>
     <p>The change will take effect once the new address is confirmed.</p>
     <p>If you didn't request this change,
-       <a href="mailto:support@templehe.com">contact support immediately</a>.</p>
+       <a href="mailto:support@saltrun.net">contact support immediately</a>.</p>
     """
     await send_email(
         old_email,

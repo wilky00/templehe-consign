@@ -1,0 +1,35 @@
+# ABOUTME: Fly.io app config for temple-api-prod.
+# ABOUTME: Run `fly deploy --config infra/fly/temple-api-prod.toml` from the api/ directory.
+
+app = 'temple-api-prod'
+primary_region = 'iad'
+
+[deploy]
+  release_command = 'uv run alembic upgrade head'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 200
+    soft_limit = 150
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[checks]
+  [checks.health]
+    grace_period = '10s'
+    interval = '30s'
+    method = 'get'
+    path = '/api/v1/health'
+    port = 8000
+    timeout = '5s'
+    type = 'http'

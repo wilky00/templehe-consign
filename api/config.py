@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str
+    # Direct (non-pooler) URL for Alembic migrations — bypasses PgBouncer on Neon.
+    # Falls back to database_url when not set (fine for local Docker dev).
+    database_direct_url: str = ""
     test_database_url: str = ""
 
     # JWT
@@ -34,7 +37,7 @@ class Settings(BaseSettings):
 
     # Email
     sendgrid_api_key: str = ""
-    sendgrid_from_email: str = "noreply@templehe.com"
+    sendgrid_from_email: str = "noreply@saltrun.net"
     sendgrid_from_name: str = "Temple Heavy Equipment"
     smtp_host: str = "localhost"
     smtp_port: int = 1025

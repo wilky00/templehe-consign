@@ -14,7 +14,7 @@
 1. Log in to SendGrid → Settings → Sender Authentication
 2. Add SPF: `v=spf1 include:sendgrid.net ~all`
 3. Add two DKIM CNAME records (from SendGrid dashboard)
-4. Add DMARC: `v=DMARC1; p=none; rua=mailto:dmarc@templehe.com` (start at p=none for 2 weeks, then quarantine, then reject)
+4. Add DMARC: `v=DMARC1; p=none; rua=mailto:dmarc@saltrun.net` (start at p=none for 2 weeks, then quarantine, then reject)
 5. Validate at mail-tester.com
 
 ## OPEN — Google OAuth workspace domain
@@ -61,6 +61,17 @@
 **Fixed:** 2026-04-20 — `api/alembic/versions/002_fix_set_updated_at_trigger_to_use_clock_.py`
 **Was:** `NOW()` returns transaction start time — INSERT + UPDATE in same transaction get identical timestamps, breaking the trigger test
 **Fix:** Migration 002 replaces the function with `clock_timestamp()` (wall clock)
+
+## DESIGN CONSTRAINT — R2 Does Not Support Object Versioning
+**Status:** Permanent constraint — not a bug, not fixable
+**Impact:** Any code that uploads to R2 must never overwrite an existing key
+**Rule:** All R2 object keys must be immutable by design:
+- Photos: `photos/{equipment_id}/{upload_uuid}.{ext}` — new UUID per upload
+- Reports: `reports/{consignment_id}/{generated_at_unix}.pdf` — timestamp in key
+- Backups: `backups/{date}/{timestamp}-backup.sql.gz` — date-partitioned
+**Deletions:** Soft-delete in the DB only; never call R2 delete on a file that may be referenced
+**Recovery:** Neon PITR is the primary DB recovery path. R2 backups are supplementary.
+**Note:** ADR-001 previously said "versioning enabled" — that was incorrect and has been corrected.
 
 ## OPEN — Category components / prompts / scoring rules
 **Status:** Placeholder data only

@@ -25,4 +25,8 @@ USER app
 
 EXPOSE 8000
 
+# Injected at build time by CI: fly deploy --build-arg GIT_SHA=$GITHUB_SHA
+ARG GIT_SHA=""
+ENV RELEASE=${GIT_SHA}
+
 CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

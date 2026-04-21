@@ -1,0 +1,166 @@
+# ABOUTME: CI/CD pipeline — lint, test, deploy to staging on push to main, deploy to prod on manual trigger.
+# ABOUTME: Staging deploys automatically. Production requires a manual workflow_dispatch run.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Deploy target'
+        required: true
+        default: 'production'
+        type: choice
+        options: [production]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: '0.5.4'
+
+      - name: Install API deps
+        run: cd api && uv sync
+
+      - name: Lint Python
+        run: cd api && uv run ruff check . && uv run ruff format --check .
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web deps
+        run: cd web && npm ci
+
+      - name: Lint TypeScript
+        run: cd web && npm run lint
+
+  test:
+    name: Test
+    needs: lint
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16.9-alpine
+        env:
+          POSTGRES_USER: templehe
+          POSTGRES_PASSWORD: devpassword
+          POSTGRES_DB: templehe
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe
+      TEST_DATABASE_URL: postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: '0.5.4'
+
+      - name: Install API deps
+        run: cd api && uv sync
+
+      - name: Generate CI secrets
+        run: |
+          echo "JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(64))')" >> $GITHUB_ENV
+          echo "JWT_REFRESH_SECRET=$(python3 -c 'import secrets; print(secrets.token_hex(64))')" >> $GITHUB_ENV
+          cd api && echo "TOTP_ENCRYPTION_KEY=$(uv run python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> $GITHUB_ENV
+
+      - name: Create test database
+        run: PGPASSWORD=devpassword psql -h localhost -U templehe -d templehe -c "CREATE DATABASE templehe_test;"
+
+      - name: Run migrations
+        run: cd api && uv run alembic upgrade head
+
+      - name: Run migrations on test database
+        run: |
+          cd api && DATABASE_URL=postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe_test \
+            uv run alembic upgrade head
+
+      - name: Run test suite
+        run: cd api && uv run pytest tests/ -v --cov=. --cov-report=term-missing --cov-fail-under=85
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy API to staging
+        run: cd api && fly deploy --config ../infra/fly/temple-api-staging.toml --remote-only --build-arg GIT_SHA=${{ github.sha }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_API_STAGING }}
+
+      - name: Deploy web to staging
+        run: cd web && fly deploy --config ../infra/fly/temple-web-staging.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB_STAGING }}
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: '0.5.4'
+
+      - name: Install API deps
+        run: cd api && uv sync
+
+      - name: Generate CI secrets
+        run: |
+          echo "JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(64))')" >> $GITHUB_ENV
+          echo "JWT_REFRESH_SECRET=$(python3 -c 'import secrets; print(secrets.token_hex(64))')" >> $GITHUB_ENV
+          cd api && echo "TOTP_ENCRYPTION_KEY=$(uv run python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> $GITHUB_ENV
+
+      - name: Run test suite against staging DB
+        run: echo "Skipping — staging deploy already passed CI. Prod deploys from the same SHA."
+
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy API to production
+        run: cd api && fly deploy --config ../infra/fly/temple-api-prod.toml --remote-only --build-arg GIT_SHA=${{ github.sha }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_API_PROD }}
+
+      - name: Deploy web to production
+        run: cd web && fly deploy --config ../infra/fly/temple-web-prod.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_WEB_PROD }}

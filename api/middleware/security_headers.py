@@ -10,7 +10,7 @@ _CSP_BASE = (
     "default-src 'self'; "
     "script-src 'self'; "
     "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: https://*.r2.cloudflarestorage.com https://images.templehe.com; "
+    "img-src 'self' data: https://*.r2.cloudflarestorage.com https://temple-he-photos.saltrun.net; "
     "connect-src 'self' https://sentry.io; "
     "frame-ancestors 'none'"
 )
