@@ -9,14 +9,18 @@ from config import settings
 from database.base import get_db
 from middleware.auth import CurrentUserDep
 from middleware.rate_limit import (
+    get_client_ip,
     login_email_limiter,
     login_ip_limiter,
+    recovery_ip_limiter,
+    recovery_partial_token_limiter,
     refresh_ip_limiter,
     register_ip_limiter,
     resend_email_limiter,
     reset_email_limiter,
     reset_ip_limiter,
     totp_ip_limiter,
+    totp_partial_token_limiter,
 )
 from schemas.auth import (
     ChangeEmailRequest,
@@ -47,14 +51,6 @@ _REFRESH_COOKIE_PATH = "/api/v1/auth"
 
 def _base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
-
-
-def _ip(request: Request) -> str | None:
-    # Honour X-Forwarded-For when behind Fly proxy / Cloudflare
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else None
 
 
 def _set_refresh_cookie(response: Response, token: str) -> None:
@@ -140,7 +136,7 @@ async def login(
         email=body.email,
         password=body.password,
         db=db,
-        ip_address=_ip(request),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("User-Agent"),
         base_url=_base_url(request),
     )
@@ -168,7 +164,7 @@ async def refresh(
     result = await auth_service.refresh_access_token(
         raw_token,
         db,
-        ip_address=_ip(request),
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("User-Agent"),
     )
     _set_refresh_cookie(response, result["refresh_token"])
@@ -277,7 +273,8 @@ async def verify_2fa(
     body: TwoFAVerifyRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
-    _: None = Depends(totp_ip_limiter),
+    _rl_ip: None = Depends(totp_ip_limiter),
+    _rl_token: None = Depends(totp_partial_token_limiter),
 ) -> TokenResponse:
     result = await auth_service.verify_2fa(body.partial_token, body.totp_code, db)
     _set_refresh_cookie(response, result["refresh_token"])
@@ -289,6 +286,8 @@ async def recover_2fa(
     body: TwoFARecoveryRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
+    _rl_ip: None = Depends(recovery_ip_limiter),
+    _rl_token: None = Depends(recovery_partial_token_limiter),
 ) -> TokenResponse:
     result = await auth_service.recover_2fa(body.partial_token, body.recovery_code, db)
     _set_refresh_cookie(response, result["refresh_token"])

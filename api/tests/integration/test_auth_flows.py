@@ -372,6 +372,59 @@ async def test_protected_route_with_invalid_token(client: AsyncClient):
     assert resp.status_code == 401
 
 
+@pytest.mark.asyncio
+async def test_recovery_endpoint_rate_limits_by_ip(client: AsyncClient):
+    """/2fa/recovery allows 5 attempts/hour per IP; the 6th from same IP returns 429.
+
+    Vary the partial_token on every request so the per-token limiter (3/5min) does
+    NOT trip — we want to exercise the IP-scoped counter in isolation.
+    """
+    headers = {"CF-Connecting-IP": "203.0.113.42"}
+
+    for attempt in range(5):
+        resp = await client.post(
+            "/api/v1/auth/2fa/recovery",
+            headers=headers,
+            json={
+                "partial_token": f"token-per-request-{attempt}",
+                "recovery_code": "AAAAAAAAAAAAAAAA",
+            },
+        )
+        assert resp.status_code != 429, f"limiter tripped too early on attempt {attempt + 1}"
+
+    # 6th from the same CF-IP must trip the IP limiter.
+    resp = await client.post(
+        "/api/v1/auth/2fa/recovery",
+        headers=headers,
+        json={"partial_token": "token-per-request-5", "recovery_code": "AAAAAAAAAAAAAAAA"},
+    )
+    assert resp.status_code == 429
+    assert resp.headers.get("Retry-After") is not None
+
+
+@pytest.mark.asyncio
+async def test_recovery_endpoint_rate_limits_per_partial_token_across_ips(client: AsyncClient):
+    """Same partial_token hitting 3+ distinct IPs still trips the token-scoped limit."""
+    payload = {"partial_token": "stolen-token-reused", "recovery_code": "AAAAAAAAAAAAAAAA"}
+
+    # 3 attempts across 3 different IPs — each attempt should not yet be 429.
+    for ip in ("10.0.0.1", "10.0.0.2", "10.0.0.3"):
+        resp = await client.post(
+            "/api/v1/auth/2fa/recovery",
+            headers={"CF-Connecting-IP": ip},
+            json=payload,
+        )
+        assert resp.status_code != 429
+
+    # 4th attempt on yet another IP — token-scoped counter trips regardless of IP.
+    resp = await client.post(
+        "/api/v1/auth/2fa/recovery",
+        headers={"CF-Connecting-IP": "10.0.0.4"},
+        json=payload,
+    )
+    assert resp.status_code == 429
+
+
 # ---------------------------------------------------------------------------
 # Refresh token — success path (service-layer test; HTTP layer omits token in body)
 # ---------------------------------------------------------------------------
