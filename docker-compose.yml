@@ -1,8 +1,8 @@
-# ABOUTME: Local development stack — PostgreSQL 15 and Mailpit (email catcher).
+# ABOUTME: Local development stack — PostgreSQL 16 and Mailpit (email catcher).
 # ABOUTME: No Redis in POC; rate limiting and session storage use Postgres tables.
 services:
   postgres:
-    image: postgres:15.7-alpine
+    image: postgres:16.9-alpine
     environment:
       POSTGRES_DB: templehe
       POSTGRES_USER: templehe

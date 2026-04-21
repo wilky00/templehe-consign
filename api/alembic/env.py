@@ -16,8 +16,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Resolve DATABASE_URL at migration time; allows overriding for test runs
-database_url = os.environ.get("DATABASE_URL", "")
+# Migrations use DATABASE_DIRECT_URL when set (bypasses PgBouncer on Neon).
+# Falls back to DATABASE_URL for local Docker dev where no pooler is involved.
+database_url = os.environ.get("DATABASE_DIRECT_URL") or os.environ.get("DATABASE_URL", "")
 if not database_url:
     raise RuntimeError("DATABASE_URL environment variable is not set")
 config.set_main_option("sqlalchemy.url", database_url)
