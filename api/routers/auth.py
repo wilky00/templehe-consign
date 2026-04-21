@@ -182,6 +182,7 @@ async def refresh(
 async def logout(
     request: Request,
     response: Response,
+    current_user: CurrentUserDep,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     raw_token = request.cookies.get(_REFRESH_COOKIE_NAME)

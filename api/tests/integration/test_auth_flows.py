@@ -227,9 +227,10 @@ async def test_refresh_with_invalid_cookie_returns_401(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_logout_without_cookie_is_idempotent(client: AsyncClient):
+async def test_logout_without_auth_returns_401(client: AsyncClient):
+    """Logout requires a bearer access token for audit hygiene."""
     resp = await client.post("/api/v1/auth/logout")
-    assert resp.status_code == 200
+    assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -272,9 +273,11 @@ async def test_refresh_cookie_full_cycle(client: AsyncClient, db_session):
     )
     assert replay_resp.status_code == 401
 
-    # Logout with the current cookie clears it and revokes the session.
+    # Logout requires Bearer auth; carries the cookie to revoke.
+    access_token = login_resp.json()["access_token"]
     logout_resp = await client.post(
         "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {access_token}"},
         cookies={"refresh_token": rotated_cookie},
     )
     assert logout_resp.status_code == 200
@@ -287,6 +290,62 @@ async def test_refresh_cookie_full_cycle(client: AsyncClient, db_session):
         cookies={"refresh_token": rotated_cookie},
     )
     assert post_logout.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_email_change_revokes_sessions(client: AsyncClient, db_session):
+    """Confirming an email change must invalidate all active sessions for that
+    account so existing refresh cookies (which were issued under the old
+    identity) can't continue working."""
+    import re
+
+    from sqlalchemy import select
+
+    from database.models import User
+
+    login_resp = await _verify_and_login(client, db_session, email="changing@example.com")
+    assert login_resp.status_code == 200
+    access_token = login_resp.json()["access_token"]
+    auth_headers = {"Authorization": f"Bearer {access_token}"}
+    old_refresh_cookie = login_resp.cookies.get("refresh_token")
+    assert old_refresh_cookie
+
+    # Capture the confirmation URL emitted to the *new* address.
+    captured_urls: list[str] = []
+
+    async def _capture(to: str, subject: str, html: str) -> None:
+        match = re.search(r'href="([^"]+change-email[^"]+)"', html)
+        if match:
+            captured_urls.append(match.group(1))
+
+    with patch("services.email_service.send_email", side_effect=_capture):
+        init_resp = await client.post(
+            "/api/v1/auth/change-email",
+            headers=auth_headers,
+            json={
+                "new_email": "changed@example.com",
+                "current_password": _VALID_PASSWORD,
+            },
+        )
+    assert init_resp.status_code == 200
+    assert captured_urls, "email change confirmation URL not captured"
+    token = captured_urls[0].split("token=")[-1]
+
+    confirm_resp = await client.get(f"/api/v1/auth/change-email/confirm?token={token}")
+    assert confirm_resp.status_code == 200
+
+    # User's email actually changed in the DB.
+    updated = (
+        await db_session.execute(select(User).where(User.email == "changed@example.com"))
+    ).scalar_one_or_none()
+    assert updated is not None
+
+    # The cookie issued before the email change must no longer refresh.
+    replay = await client.post(
+        "/api/v1/auth/refresh",
+        cookies={"refresh_token": old_refresh_cookie},
+    )
+    assert replay.status_code == 401
 
 
 @pytest.mark.asyncio

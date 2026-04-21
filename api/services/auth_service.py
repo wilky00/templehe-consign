@@ -566,6 +566,10 @@ async def confirm_email_change(token: str, db: AsyncSession) -> None:
 
     user.email = new_email
     db.add(user)
+    # Changing the email on an account is an identity shift — all outstanding
+    # sessions (browsers, mobile) must be invalidated so they re-authenticate
+    # under the new identity.
+    await session_service.revoke_all_for_user(user_id, db)
     await _audit(
         db,
         "user.email_changed",
