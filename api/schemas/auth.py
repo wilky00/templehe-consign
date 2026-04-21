@@ -127,6 +127,9 @@ class TwoFASetupResponse(BaseModel):
 
 class TwoFAConfirmRequest(BaseModel):
     totp_code: str
+    # Re-auth required: enabling 2FA binds the account to an authenticator app.
+    # A stolen access token alone must not be enough to change that binding.
+    password: str
 
 
 class TwoFAConfirmResponse(BaseModel):
@@ -146,6 +149,9 @@ class TwoFARecoveryRequest(BaseModel):
 
 class TwoFADisableRequest(BaseModel):
     totp_code: str
+    # Re-auth required: disabling 2FA removes a security layer, so prove the
+    # current password in addition to holding an access token.
+    password: str
 
 
 # ---------------------------------------------------------------------------

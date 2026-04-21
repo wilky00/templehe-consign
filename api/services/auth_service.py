@@ -549,11 +549,23 @@ async def setup_2fa(user_id: uuid.UUID, db: AsyncSession) -> dict:
     return {"secret": secret, "qr_uri": qr_uri}
 
 
-async def confirm_2fa(user_id: uuid.UUID, totp_code: str, db: AsyncSession) -> list[str]:
+async def confirm_2fa(
+    user_id: uuid.UUID, totp_code: str, password: str, db: AsyncSession
+) -> list[str]:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.totp_secret_enc:
         raise HTTPException(status_code=400, detail="2FA setup has not been initiated.")
+
+    if not user.password_hash or not verify_password(password, user.password_hash):
+        await _audit(
+            db,
+            "user.2fa_reauth_failed",
+            actor_id=user_id,
+            target_id=user_id,
+            target_type="user",
+        )
+        raise HTTPException(status_code=401, detail="Current password is incorrect.")
 
     secret = _decrypt_totp_secret(user.totp_secret_enc)
     if not pyotp.TOTP(secret).verify(totp_code, valid_window=1):
@@ -650,11 +662,21 @@ async def _complete_2fa_login(user: User, db: AsyncSession) -> dict:
     return {"access_token": access_token, "refresh_token": refresh_token}
 
 
-async def disable_2fa(user_id: uuid.UUID, totp_code: str, db: AsyncSession) -> None:
+async def disable_2fa(user_id: uuid.UUID, totp_code: str, password: str, db: AsyncSession) -> None:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.totp_enabled or not user.totp_secret_enc:
         raise HTTPException(status_code=400, detail="Two-factor authentication is not enabled.")
+
+    if not user.password_hash or not verify_password(password, user.password_hash):
+        await _audit(
+            db,
+            "user.2fa_reauth_failed",
+            actor_id=user_id,
+            target_id=user_id,
+            target_type="user",
+        )
+        raise HTTPException(status_code=401, detail="Current password is incorrect.")
 
     secret = _decrypt_totp_secret(user.totp_secret_enc)
     if not pyotp.TOTP(secret).verify(totp_code, valid_window=1):

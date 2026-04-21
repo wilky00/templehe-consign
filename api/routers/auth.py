@@ -258,7 +258,7 @@ async def confirm_2fa(
     current_user: CurrentUserDep,
     db: AsyncSession = Depends(get_db),
 ) -> TwoFAConfirmResponse:
-    codes = await auth_service.confirm_2fa(current_user.id, body.totp_code, db)
+    codes = await auth_service.confirm_2fa(current_user.id, body.totp_code, body.password, db)
     return TwoFAConfirmResponse(
         recovery_codes=codes,
         message=(
@@ -300,5 +300,5 @@ async def disable_2fa(
     current_user: CurrentUserDep,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    await auth_service.disable_2fa(current_user.id, body.totp_code, db)
+    await auth_service.disable_2fa(current_user.id, body.totp_code, body.password, db)
     return MessageResponse(message="Two-factor authentication has been disabled.")

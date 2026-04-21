@@ -402,6 +402,110 @@ async def test_recovery_endpoint_rate_limits_by_ip(client: AsyncClient):
     assert resp.headers.get("Retry-After") is not None
 
 
+# ---------------------------------------------------------------------------
+# 2FA — re-auth required on enable / disable
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_2fa_confirm_requires_password(client: AsyncClient, db_session):
+    """Enabling 2FA without a password reprompt lets a stolen access token
+    bind the account to an attacker's authenticator. Confirm must require
+    the current password in addition to a valid TOTP code.
+    """
+    import pyotp
+
+    login_resp = await _verify_and_login(client, db_session, email="twofa_enable@example.com")
+    access_token = login_resp.json()["access_token"]
+    auth_headers = {"Authorization": f"Bearer {access_token}"}
+
+    setup_resp = await client.post("/api/v1/auth/2fa/setup", headers=auth_headers)
+    assert setup_resp.status_code == 200
+    secret = setup_resp.json()["secret"]
+    totp = pyotp.TOTP(secret)
+
+    # Missing password → 422 (schema validation).
+    missing = await client.post(
+        "/api/v1/auth/2fa/confirm",
+        headers=auth_headers,
+        json={"totp_code": totp.now()},
+    )
+    assert missing.status_code == 422
+
+    # Wrong password → 401; emit user.2fa_reauth_failed audit event.
+    wrong = await client.post(
+        "/api/v1/auth/2fa/confirm",
+        headers=auth_headers,
+        json={"totp_code": totp.now(), "password": "WrongPassword1!"},
+    )
+    assert wrong.status_code == 401
+
+    from sqlalchemy import select
+
+    from database.models import AuditLog
+
+    audit_row = (
+        await db_session.execute(
+            select(AuditLog).where(AuditLog.event_type == "user.2fa_reauth_failed")
+        )
+    ).scalar_one_or_none()
+    assert audit_row is not None
+
+    # Correct password + valid TOTP → 200 with recovery codes.
+    ok = await client.post(
+        "/api/v1/auth/2fa/confirm",
+        headers=auth_headers,
+        json={"totp_code": totp.now(), "password": _VALID_PASSWORD},
+    )
+    assert ok.status_code == 200
+    assert len(ok.json()["recovery_codes"]) == 10
+
+
+@pytest.mark.asyncio
+async def test_2fa_disable_requires_password(client: AsyncClient, db_session):
+    """Disabling 2FA removes a security layer, so require the current
+    password in addition to the TOTP code."""
+    import pyotp
+
+    login_resp = await _verify_and_login(client, db_session, email="twofa_disable@example.com")
+    access_token = login_resp.json()["access_token"]
+    auth_headers = {"Authorization": f"Bearer {access_token}"}
+
+    # Enable 2FA first.
+    setup_resp = await client.post("/api/v1/auth/2fa/setup", headers=auth_headers)
+    secret = setup_resp.json()["secret"]
+    totp = pyotp.TOTP(secret)
+    await client.post(
+        "/api/v1/auth/2fa/confirm",
+        headers=auth_headers,
+        json={"totp_code": totp.now(), "password": _VALID_PASSWORD},
+    )
+
+    # Missing password → 422.
+    missing = await client.post(
+        "/api/v1/auth/2fa/disable",
+        headers=auth_headers,
+        json={"totp_code": totp.now()},
+    )
+    assert missing.status_code == 422
+
+    # Wrong password → 401.
+    wrong = await client.post(
+        "/api/v1/auth/2fa/disable",
+        headers=auth_headers,
+        json={"totp_code": totp.now(), "password": "WrongPassword1!"},
+    )
+    assert wrong.status_code == 401
+
+    # Correct password + valid TOTP → 200.
+    ok = await client.post(
+        "/api/v1/auth/2fa/disable",
+        headers=auth_headers,
+        json={"totp_code": totp.now(), "password": _VALID_PASSWORD},
+    )
+    assert ok.status_code == 200
+
+
 @pytest.mark.asyncio
 async def test_recovery_endpoint_rate_limits_per_partial_token_across_ips(client: AsyncClient):
     """Same partial_token hitting 3+ distinct IPs still trips the token-scoped limit."""
