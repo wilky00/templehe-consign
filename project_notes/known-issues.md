@@ -62,6 +62,13 @@
 **Was:** `NOW()` returns transaction start time — INSERT + UPDATE in same transaction get identical timestamps, breaking the trigger test
 **Fix:** Migration 002 replaces the function with `clock_timestamp()` (wall clock)
 
+## OPEN — Refresh Token Not Returned to Client
+**Status:** Incomplete — refresh endpoint exists but is unusable
+**Impact:** Users cannot refresh access tokens via the API; sessions expire and require re-login
+**Detail:** `auth_service.login()` generates a refresh token and stores its hash in `user_sessions`. The router (`routers/auth.py:126`) returns only `access_token` in the response body and never sets a cookie. The `TokenResponse` schema has a comment "refresh_token is set as an HttpOnly cookie" but the `set_cookie()` call was never added.
+**Action (Phase 2):** Wire up `response.set_cookie("refresh_token", ..., httponly=True, secure=True, samesite="strict")` in the login router. Update the refresh and logout handlers to read from the cookie instead of the request body. Update E2E tests accordingly.
+**Discovered:** 2026-04-21 during PR #1 coverage work
+
 ## DESIGN CONSTRAINT — R2 Does Not Support Object Versioning
 **Status:** Permanent constraint — not a bug, not fixable
 **Impact:** Any code that uploads to R2 must never overwrite an existing key
