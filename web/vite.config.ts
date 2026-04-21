@@ -1,6 +1,6 @@
 // ABOUTME: Vite build configuration for the React frontend.
 // ABOUTME: Proxies /api requests to the FastAPI server on port 8000 during local dev.
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
 
