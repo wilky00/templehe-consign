@@ -24,6 +24,7 @@ from middleware.rate_limit import (
 )
 from schemas.auth import (
     ChangeEmailRequest,
+    CurrentUser,
     LoginRequest,
     MessageResponse,
     Partial2FAResponse,
@@ -126,6 +127,29 @@ async def resend_verification(
 # ---------------------------------------------------------------------------
 # Login
 # ---------------------------------------------------------------------------
+
+
+@router.get("/me", response_model=CurrentUser)
+async def me(
+    current_user: CurrentUserDep,
+    db: AsyncSession = Depends(get_db),
+) -> CurrentUser:
+    """Return the authenticated user's profile. Phase 2 bootstraps on this."""
+    from sqlalchemy import select
+
+    from database.models import Role
+
+    role_result = await db.execute(select(Role).where(Role.id == current_user.role_id))
+    role = role_result.scalar_one_or_none()
+    return CurrentUser(
+        id=current_user.id,
+        email=current_user.email,
+        role=role.slug if role else "customer",
+        status=current_user.status,
+        first_name=current_user.first_name,
+        last_name=current_user.last_name,
+        totp_enabled=current_user.totp_enabled,
+    )
 
 
 @router.post("/login")

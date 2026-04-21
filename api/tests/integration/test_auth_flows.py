@@ -427,6 +427,31 @@ async def test_password_reset_confirm_weak_password(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_me_without_auth_returns_401(client: AsyncClient):
+    resp = await client.get("/api/v1/auth/me")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_me_returns_current_user_profile(client: AsyncClient, db_session):
+    login = await _verify_and_login(client, db_session, email="me_test@example.com")
+    access_token = login.json()["access_token"]
+
+    resp = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["email"] == "me_test@example.com"
+    assert data["first_name"] == "Test"
+    assert data["last_name"] == "User"
+    assert data["status"] == "active"
+    assert data["role"] == "customer"
+    assert data["totp_enabled"] is False
+
+
+@pytest.mark.asyncio
 async def test_protected_route_without_token(client: AsyncClient):
     """The /2fa/setup endpoint requires auth — should return 401 without a token."""
     resp = await client.post("/api/v1/auth/2fa/setup")
