@@ -22,15 +22,15 @@
 **Impact:** Google SSO (Phase 1 stub, not yet implemented) will need the `hd` (hosted domain) claim value
 **Action:** Provide the Google Workspace domain (e.g. `templehe.com`) before SSO implementation
 
-## OPEN — Fly.io provisioning
-**Status:** Not yet done
-**Impact:** Staging/prod deploys blocked until apps exist
-**Action:** See `docs/fly-provisioning.md` for the step-by-step guide — Jim runs these manually
+## OPEN — Fly.io first deploy
+**Status:** Apps created, secrets staged, pending first `flyctl deploy`
+**Impact:** Staging is not yet live; E2E phase gate cannot run until this fires
+**Action:** Merge PR #17 — CI will trigger `flyctl deploy` on staging automatically, which activates the staged secrets. No manual step needed.
 
-## OPEN — Neon Postgres provisioning
-**Status:** Not yet done
-**Impact:** Staging/prod DB blocked
-**Action:** Create Neon project, three branches (dev/staging/prod), enable PITR on prod branch — see `docs/fly-provisioning.md`
+## OPEN — Neon PITR on prod branch
+**Status:** Neon project + 3 branches (dev/staging/prod) created; PITR not yet enabled
+**Impact:** Prod branch has no point-in-time recovery until upgraded — do not allow real customer data onto prod until this is resolved
+**Action:** Upgrade Neon project to Pro/Scale plan → branch settings on `prod` branch → enable PITR. Must happen before Phase 2 go-live.
 
 ## FIXED — `AnalyticsEvent.metadata` SQLAlchemy reserved name clash
 **Fixed:** 2026-04-20 — `api/database/models.py:700`
