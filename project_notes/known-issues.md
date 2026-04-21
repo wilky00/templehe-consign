@@ -29,8 +29,11 @@
 
 ## OPEN — Neon PITR on prod branch
 **Status:** Neon project + 3 branches (dev/staging/prod) created; PITR not yet enabled
-**Impact:** Prod branch has no point-in-time recovery until upgraded — do not allow real customer data onto prod until this is resolved
-**Action:** Upgrade Neon project to Pro/Scale plan → branch settings on `prod` branch → enable PITR. Must happen before Phase 2 go-live.
+**Impact:** Prod branch has no point-in-time recovery — do not allow real customer data onto prod until resolved
+**Action (two options):**
+1. Upgrade Neon to Pro/Scale (~$19/mo) before Phase 2 go-live — enables PITR on the prod branch
+2. Accelerate GCP migration — Cloud SQL has PITR on by default at no extra cost; Neon can be cancelled
+**Not an immediate blocker** — only matters before real customer data lands on prod. POC dev/staging usage on free tier is fine.
 
 ## FIXED — `AnalyticsEvent.metadata` SQLAlchemy reserved name clash
 **Fixed:** 2026-04-20 — `api/database/models.py:700`
