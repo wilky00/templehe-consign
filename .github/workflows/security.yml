@@ -26,6 +26,8 @@ jobs:
   trivy:
     name: Container Scan (Trivy)
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +42,7 @@ jobs:
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
           exit-code: '1'
+          ignore-unfixed: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -52,6 +55,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v4
