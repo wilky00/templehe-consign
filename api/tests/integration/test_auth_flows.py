@@ -279,6 +279,104 @@ async def test_protected_route_with_invalid_token(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
+# Refresh token — success path (service-layer test; HTTP layer omits token in body)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_refresh_access_token_success(db_session):
+    """Valid refresh token returns new access + refresh tokens."""
+    from sqlalchemy import select
+
+    import services.auth_service as auth_svc
+    import services.session_service as session_svc
+    from database.models import Role, User
+
+    role_result = await db_session.execute(select(Role).where(Role.slug == "customer"))
+    role = role_result.scalar_one_or_none()
+
+    user = User(
+        email="refresh_svc_test@example.com",
+        password_hash=auth_svc.hash_password("TestPassword1!"),
+        first_name="Refresh",
+        last_name="Svc",
+        role_id=role.id,
+        status="active",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    raw_token = await session_svc.issue_refresh_token(user.id, db_session)
+    result = await auth_svc.refresh_access_token(raw_token, db_session)
+    assert "access_token" in result
+    assert "refresh_token" in result
+    assert result["refresh_token"] != raw_token
+
+
+# ---------------------------------------------------------------------------
+# Password reset — full success flow
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_password_reset_full_flow(client: AsyncClient, db_session):
+    """Request reset for active user, capture token, confirm with new password."""
+    email = "reset_flow@example.com"
+    new_password = "NewPassword2@"
+
+    await _verify_and_login(client, db_session, email=email)
+
+    captured_url: list[str] = []
+
+    async def _capture(to: str, subject: str, html: str) -> None:
+        import re
+
+        match = re.search(r'href="([^"]+reset[^"]+)"', html)
+        if match:
+            captured_url.append(match.group(1))
+
+    with patch("services.email_service.send_email", side_effect=_capture):
+        reset_req = await client.post("/api/v1/auth/password-reset-request", json={"email": email})
+    assert reset_req.status_code == 200
+    assert captured_url, "Password reset URL was not captured from email"
+
+    token = captured_url[0].split("token=")[-1]
+    with patch("services.email_service.send_email", new_callable=AsyncMock):
+        confirm_resp = await client.post(
+            "/api/v1/auth/password-reset-confirm",
+            json={"token": token, "new_password": new_password},
+        )
+    assert confirm_resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Resend verification
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_sends_email_for_pending_user(client: AsyncClient):
+    """Pending-verification users should receive a new verification email on resend."""
+    email = "pending_resend@example.com"
+    with patch("services.email_service.send_email", new_callable=AsyncMock):
+        await _register(client, email)
+
+    with patch("services.email_service.send_email", new_callable=AsyncMock) as mock_resend:
+        resp = await client.post("/api/v1/auth/resend-verification", json={"email": email})
+    assert resp.status_code == 200
+    mock_resend.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_silent_for_unknown_email(client: AsyncClient):
+    """Non-existent email should return 200 without sending — no enumeration."""
+    resp = await client.post(
+        "/api/v1/auth/resend-verification", json={"email": "ghost@example.com"}
+    )
+    assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # Health check still works
 # ---------------------------------------------------------------------------
 
