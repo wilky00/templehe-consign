@@ -112,25 +112,31 @@ Spec: Feature 1.1.5 in `dev_plan/01_phase1_infrastructure_auth.md`
 
 ---
 
-### Sprint 5: CI/CD + Fly.io Configs — NOT STARTED
+### Sprint 5: CI/CD + Fly.io Configs — COMPLETE (2026-04-21)
 
 Spec: Feature 1.1.2 + 1.1.3 in `dev_plan/01_phase1_infrastructure_auth.md`
 
-- [ ] infra/fly/temple-api-dev.toml
-- [ ] infra/fly/temple-api-staging.toml
-- [ ] infra/fly/temple-api-prod.toml
-- [ ] infra/fly/temple-web-dev.toml
-- [ ] infra/fly/temple-web-staging.toml
-- [ ] infra/fly/temple-web-prod.toml
-- [ ] .github/workflows/ci.yml — lint → test → security scans → build → deploy
-- [ ] .github/workflows/security.yml — Dependabot + Trivy + gitleaks + pip-audit + npm audit
-- [ ] infra/cloudflare/ — Terraform for WAF + rate limiting + DNS
-- [ ] Fly.io apps provisioned (manual — see Outline Manual Tasks doc)
-- [ ] Neon Postgres provisioned with 3 branches (manual — see Outline Manual Tasks doc)
-- [ ] Cloudflare R2 buckets created (manual — see Outline Manual Tasks doc)
-- [ ] web/e2e/phase1_auth.spec.ts — Playwright E2E for all auth flows
+- [x] infra/fly/temple-api-dev.toml
+- [x] infra/fly/temple-api-staging.toml
+- [x] infra/fly/temple-api-prod.toml
+- [x] infra/fly/temple-web-dev.toml
+- [x] infra/fly/temple-web-staging.toml
+- [x] infra/fly/temple-web-prod.toml
+- [x] .github/workflows/ci.yml — lint → test → staging auto-deploy on push to main, prod deploy via workflow_dispatch
+- [x] .github/workflows/security.yml — Dependabot + Trivy + gitleaks + pip-audit + npm audit
+- [x] infra/cloudflare/ — **intentionally skipped; Cloudflare WAF/CDN configured manually**
+- [x] Fly.io apps provisioned — 6 apps created (temple-{api,web}-{dev,staging,prod}); pending first deploy; secrets staged
+- [x] Neon Postgres provisioned — project created, 3 branches (dev/staging/prod); PITR on prod **requires Neon Pro upgrade before customer data lands** (see known-issues)
+- [x] Cloudflare R2 buckets created
+- [x] Fly secrets staged (will activate on first `flyctl deploy` triggered by CI)
+- [x] web/e2e/phase1_auth.spec.ts — Playwright E2E spec written; staging-dependent tests gated behind `test.skip` pending live staging env
 
-**Phase 1 gate:** E2E tests pass in CI against staging before phase is marked complete.
+**Bugs fixed post-merge (PR #17, 2026-04-21):**
+- `fly` → `flyctl` in all CI deploy commands (binary is named `flyctl`, not `fly`)
+- Added `setup-python@v5` to `pip-audit` job in security.yml
+- Added `permissions: security-events: write` + `ignore-unfixed: true` to Trivy job
+
+**Phase 1 gate status:** E2E gate pending — staging deploy activates on PR #17 merge; `test.skip` guards on E2E tests will be removed once staging is live and test user is seeded.
 
 ---
 
