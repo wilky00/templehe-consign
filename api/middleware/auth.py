@@ -63,6 +63,9 @@ async def get_current_user(
     if user is None or user.status != "active":
         raise HTTPException(status_code=401, detail="Account not found or inactive.")
 
+    # Stash for the structured-logging middleware so it doesn't re-verify the JWT
+    # just to extract a user_id for the log line.
+    request.state.user_id = str(user.id)
     return user
 
 

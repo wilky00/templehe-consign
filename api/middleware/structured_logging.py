@@ -1,29 +1,13 @@
-# ABOUTME: Pure ASGI middleware that emits one structured JSON log line per request via structlog.
-# ABOUTME: Captures method, path, status_code, latency_ms, user_id (JWT, no DB call).
+# ABOUTME: Pure ASGI middleware that emits one structured JSON log line per request.
+# ABOUTME: Reads user_id from request.state (set by auth dep) — never re-verifies the JWT here.
 from __future__ import annotations
 
 import time
 
-import jwt
 import structlog
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from config import settings
-
 logger = structlog.get_logger(__name__)
-
-
-def _extract_user_id(scope: Scope) -> str | None:
-    headers = dict(scope.get("headers", []))
-    auth = headers.get(b"authorization", b"").decode()
-    if not auth.startswith("Bearer "):
-        return None
-    token = auth.removeprefix("Bearer ")
-    try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        return payload.get("sub")
-    except jwt.PyJWTError:
-        return None
 
 
 class StructuredLoggingMiddleware:
@@ -36,7 +20,6 @@ class StructuredLoggingMiddleware:
             return
 
         start = time.perf_counter()
-        user_id = _extract_user_id(scope)
         status_code = 500
         path = scope.get("path", "")
         method = scope.get("method", "")
@@ -49,13 +32,33 @@ class StructuredLoggingMiddleware:
 
         try:
             await self.app(scope, receive, capture_status)
-        finally:
+        except Exception as exc:
+            # Uncaught exception propagating past the app layer. Sentry picks it up,
+            # but add a structured log line so request-level tooling can correlate.
             latency_ms = round((time.perf_counter() - start) * 1000, 1)
-            logger.info(
-                "request",
+            logger.exception(
+                "request_uncaught_exception",
                 method=method,
                 path=path,
-                status_code=status_code,
                 latency_ms=latency_ms,
-                user_id=user_id,
+                user_id=_user_id_from_scope(scope),
+                exception=exc.__class__.__name__,
             )
+            raise
+
+        latency_ms = round((time.perf_counter() - start) * 1000, 1)
+        log_method = logger.error if status_code >= 500 else logger.info
+        log_method(
+            "request",
+            method=method,
+            path=path,
+            status_code=status_code,
+            latency_ms=latency_ms,
+            user_id=_user_id_from_scope(scope),
+        )
+
+
+def _user_id_from_scope(scope: Scope) -> str | None:
+    """Read the user_id stashed by middleware.auth.get_current_user, if any."""
+    state = scope.get("state") or {}
+    return state.get("user_id")
