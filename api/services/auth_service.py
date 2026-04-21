@@ -2,7 +2,6 @@
 # ABOUTME: All business logic lives here; route handlers are thin wrappers that call these.
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import secrets
 import uuid
@@ -13,7 +12,7 @@ import jwt
 import pyotp
 import structlog
 from cryptography.fernet import Fernet
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +21,17 @@ from database.models import AuditLog, KnownDevice, Role, TotpRecoveryCode, User
 from services import email_service, session_service
 
 logger = structlog.get_logger(__name__)
+
+
+async def _send_or_await(background_tasks: BackgroundTasks | None, func, *args) -> None:
+    """Schedule email via BackgroundTasks when called from an HTTP route,
+    or await inline otherwise (tests, scripts). Either way, failures in
+    email_service are already logged and swallowed there."""
+    if background_tasks is not None:
+        background_tasks.add_task(func, *args)
+    else:
+        await func(*args)
+
 
 _BCRYPT_ROUNDS = 12
 
@@ -186,6 +196,7 @@ async def register_user(
     last_name: str,
     db: AsyncSession,
     base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
 ) -> User:
     existing = await db.execute(select(User).where(User.email == email.lower()))
     if existing.scalar_one_or_none() is not None:
@@ -211,8 +222,11 @@ async def register_user(
         {"sub": str(user.id), "type": _TYPE_VERIFY_EMAIL},
         timedelta(hours=24),
     )
-    await email_service.send_verification_email(
-        user.email, f"{base_url}/auth/verify-email?token={token}"
+    await _send_or_await(
+        background_tasks,
+        email_service.send_verification_email,
+        user.email,
+        f"{base_url}/auth/verify-email?token={token}",
     )
     await _audit(db, "user.registered", actor_id=user.id, target_id=user.id, target_type="user")
     return user
@@ -238,7 +252,12 @@ async def verify_email(token: str, db: AsyncSession) -> User:
     return user
 
 
-async def resend_verification(email: str, db: AsyncSession, base_url: str = "") -> None:
+async def resend_verification(
+    email: str,
+    db: AsyncSession,
+    base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
     """Always returns without error — never reveals whether an account exists."""
     result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
@@ -248,8 +267,11 @@ async def resend_verification(email: str, db: AsyncSession, base_url: str = "") 
         {"sub": str(user.id), "type": _TYPE_VERIFY_EMAIL},
         timedelta(hours=24),
     )
-    await email_service.send_verification_email(
-        user.email, f"{base_url}/auth/verify-email?token={token}"
+    await _send_or_await(
+        background_tasks,
+        email_service.send_verification_email,
+        user.email,
+        f"{base_url}/auth/verify-email?token={token}",
     )
 
 
@@ -265,6 +287,7 @@ async def login(
     ip_address: str | None = None,
     user_agent: str | None = None,
     base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
 ) -> dict:
     """
     Returns one of:
@@ -333,12 +356,12 @@ async def login(
 
     is_new_device = await _check_new_device(user, ip_address, user_agent, db)
     if is_new_device:
-        asyncio.create_task(
-            email_service.send_new_device_email(
-                user.email,
-                ip_address or "unknown location",
-                (user_agent or "unknown device")[:80],
-            )
+        await _send_or_await(
+            background_tasks,
+            email_service.send_new_device_email,
+            user.email,
+            ip_address or "unknown location",
+            (user_agent or "unknown device")[:80],
         )
 
     await _audit(
@@ -399,7 +422,12 @@ async def logout(raw_refresh_token: str, db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def request_password_reset(email: str, db: AsyncSession, base_url: str = "") -> None:
+async def request_password_reset(
+    email: str,
+    db: AsyncSession,
+    base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
     result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
     if user is None or user.status not in ("active", "locked"):
@@ -408,8 +436,11 @@ async def request_password_reset(email: str, db: AsyncSession, base_url: str = "
         {"sub": str(user.id), "type": _TYPE_RESET_PASSWORD},
         timedelta(minutes=30),
     )
-    await email_service.send_password_reset_email(
-        user.email, f"{base_url}/auth/reset-password?token={token}"
+    await _send_or_await(
+        background_tasks,
+        email_service.send_password_reset_email,
+        user.email,
+        f"{base_url}/auth/reset-password?token={token}",
     )
     await _audit(
         db,
@@ -420,7 +451,12 @@ async def request_password_reset(email: str, db: AsyncSession, base_url: str = "
     )
 
 
-async def confirm_password_reset(token: str, new_password: str, db: AsyncSession) -> None:
+async def confirm_password_reset(
+    token: str,
+    new_password: str,
+    db: AsyncSession,
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
     try:
         payload = _decode_token(token, _TYPE_RESET_PASSWORD)
     except jwt.PyJWTError as exc:
@@ -444,7 +480,11 @@ async def confirm_password_reset(token: str, new_password: str, db: AsyncSession
     db.add(user)
 
     await session_service.revoke_all_for_user(user.id, db)
-    asyncio.create_task(email_service.send_password_changed_email(user.email))
+    await _send_or_await(
+        background_tasks,
+        email_service.send_password_changed_email,
+        user.email,
+    )
     await _audit(
         db,
         "user.password_reset_confirmed",
@@ -465,6 +505,7 @@ async def initiate_email_change(
     current_password: str,
     db: AsyncSession,
     base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
 ) -> None:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -483,8 +524,18 @@ async def initiate_email_change(
         timedelta(hours=1),
     )
     confirm_url = f"{base_url}/auth/change-email/confirm?token={token}"
-    await email_service.send_email_change_verification(new_email, confirm_url)
-    await email_service.send_email_change_notification(user.email, new_email)
+    await _send_or_await(
+        background_tasks,
+        email_service.send_email_change_verification,
+        new_email,
+        confirm_url,
+    )
+    await _send_or_await(
+        background_tasks,
+        email_service.send_email_change_notification,
+        user.email,
+        new_email,
+    )
     await _audit(
         db,
         "user.email_change_requested",
@@ -604,7 +655,12 @@ async def verify_2fa(partial_token: str, totp_code: str, db: AsyncSession) -> di
     return await _complete_2fa_login(user, db)
 
 
-async def recover_2fa(partial_token: str, recovery_code: str, db: AsyncSession) -> dict:
+async def recover_2fa(
+    partial_token: str,
+    recovery_code: str,
+    db: AsyncSession,
+    background_tasks: BackgroundTasks | None = None,
+) -> dict:
     try:
         payload = _decode_token(partial_token, _TYPE_PARTIAL)
     except jwt.PyJWTError as exc:
@@ -639,7 +695,12 @@ async def recover_2fa(partial_token: str, recovery_code: str, db: AsyncSession) 
         user_result = await db.execute(select(User).where(User.id == user_id))
         u = user_result.scalar_one_or_none()
         if u:
-            asyncio.create_task(email_service.send_2fa_warning_email(u.email, remaining))
+            await _send_or_await(
+                background_tasks,
+                email_service.send_2fa_warning_email,
+                u.email,
+                remaining,
+            )
 
     await _audit(
         db,

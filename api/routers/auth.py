@@ -2,7 +2,7 @@
 # ABOUTME: Route handlers are thin; all business logic lives in services/auth_service.py.
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
@@ -81,6 +81,7 @@ def _clear_refresh_cookie(response: Response) -> None:
 async def register(
     body: RegisterRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(register_ip_limiter),
 ) -> RegisterResponse:
@@ -91,6 +92,7 @@ async def register(
         last_name=body.last_name,
         db=db,
         base_url=_base_url(request),
+        background_tasks=background_tasks,
     )
     return RegisterResponse(
         id=user.id,
@@ -109,10 +111,13 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)) -> Messag
 async def resend_verification(
     body: ResendVerificationRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _: None = Depends(resend_email_limiter),
 ) -> MessageResponse:
-    await auth_service.resend_verification(body.email, db, _base_url(request))
+    await auth_service.resend_verification(
+        body.email, db, _base_url(request), background_tasks=background_tasks
+    )
     return MessageResponse(
         message="If an unverified account exists for that email, a new link has been sent."
     )
@@ -128,6 +133,7 @@ async def login(
     body: LoginRequest,
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _rl_ip: None = Depends(login_ip_limiter),
     _rl_email: None = Depends(login_email_limiter),
@@ -139,6 +145,7 @@ async def login(
         ip_address=get_client_ip(request),
         user_agent=request.headers.get("User-Agent"),
         base_url=_base_url(request),
+        background_tasks=background_tasks,
     )
     if result.get("requires_2fa"):
         return Partial2FAResponse(partial_token=result["partial_token"])
@@ -193,11 +200,14 @@ async def logout(
 async def password_reset_request(
     body: PasswordResetRequestBody,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _rl_ip: None = Depends(reset_ip_limiter),
     _rl_email: None = Depends(reset_email_limiter),
 ) -> MessageResponse:
-    await auth_service.request_password_reset(body.email, db, _base_url(request))
+    await auth_service.request_password_reset(
+        body.email, db, _base_url(request), background_tasks=background_tasks
+    )
     return MessageResponse(
         message="If an account exists for that email, a password reset link has been sent."
     )
@@ -206,9 +216,12 @@ async def password_reset_request(
 @router.post("/password-reset-confirm", response_model=MessageResponse)
 async def password_reset_confirm(
     body: PasswordResetConfirmRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    await auth_service.confirm_password_reset(body.token, body.new_password, db)
+    await auth_service.confirm_password_reset(
+        body.token, body.new_password, db, background_tasks=background_tasks
+    )
     return MessageResponse(message="Password updated. You can now log in with your new password.")
 
 
@@ -217,10 +230,16 @@ async def change_email(
     body: ChangeEmailRequest,
     request: Request,
     current_user: CurrentUserDep,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     await auth_service.initiate_email_change(
-        current_user.id, body.new_email, body.current_password, db, _base_url(request)
+        current_user.id,
+        body.new_email,
+        body.current_password,
+        db,
+        _base_url(request),
+        background_tasks=background_tasks,
     )
     return MessageResponse(message="A confirmation link has been sent to your new email address.")
 
@@ -285,11 +304,14 @@ async def verify_2fa(
 async def recover_2fa(
     body: TwoFARecoveryRequest,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _rl_ip: None = Depends(recovery_ip_limiter),
     _rl_token: None = Depends(recovery_partial_token_limiter),
 ) -> TokenResponse:
-    result = await auth_service.recover_2fa(body.partial_token, body.recovery_code, db)
+    result = await auth_service.recover_2fa(
+        body.partial_token, body.recovery_code, db, background_tasks=background_tasks
+    )
     _set_refresh_cookie(response, result["refresh_token"])
     return TokenResponse(access_token=result["access_token"])
 

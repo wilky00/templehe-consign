@@ -402,6 +402,21 @@ async def test_recovery_endpoint_rate_limits_by_ip(client: AsyncClient):
     assert resp.headers.get("Retry-After") is not None
 
 
+@pytest.mark.asyncio
+async def test_register_succeeds_when_email_send_fails(client: AsyncClient):
+    """Registration must not 500 when the email backend is down — the email
+    is scheduled via BackgroundTasks and its failure is logged, not raised."""
+
+    async def _always_fails(*args, **kwargs):
+        raise RuntimeError("simulated SendGrid outage")
+
+    with patch("services.email_service.send_email", side_effect=_always_fails):
+        resp = await _register(client, email="email_fail@example.com")
+
+    # The user row is created even if the confirmation email fails.
+    assert resp.status_code == 201
+
+
 # ---------------------------------------------------------------------------
 # 2FA — re-auth required on enable / disable
 # ---------------------------------------------------------------------------

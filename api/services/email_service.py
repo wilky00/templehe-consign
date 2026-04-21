@@ -1,9 +1,12 @@
 # ABOUTME: Email delivery service — SendGrid in production, local SMTP (Mailpit) in development.
-# ABOUTME: All calls are wrapped in asyncio.to_thread so the event loop is never blocked.
+# ABOUTME: Send failures are logged and swallowed so callers can schedule via BackgroundTasks.
 from __future__ import annotations
 
 import asyncio
+import functools
+import html
 import smtplib
+from collections.abc import Awaitable, Callable
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -14,8 +17,33 @@ from config import settings
 logger = structlog.get_logger(__name__)
 
 
+def _safe_send(
+    func: Callable[..., Awaitable[None]],
+) -> Callable[..., Awaitable[None]]:
+    """Wrap an email-send helper so any exception is logged and swallowed.
+
+    These helpers are dispatched through FastAPI BackgroundTasks (fire and
+    forget). An uncaught exception there kills the task silently and can
+    surface as a 500 on the originating request, which we never want — the
+    point of BackgroundTasks is that email is best-effort.
+    """
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            await func(*args, **kwargs)
+        except Exception:
+            logger.exception(f"{func.__name__}_failed")
+
+    return wrapper
+
+
 async def send_email(to_email: str, subject: str, html_body: str) -> None:
-    """Send an email. Routes to SMTP (Mailpit) in dev, SendGrid in production."""
+    """Send an email. Routes to SMTP (Mailpit) in dev, SendGrid in production.
+
+    Failures are logged but never re-raised — auth flows scheduling this via
+    BackgroundTasks must not 500 the originating request when SendGrid hiccups.
+    """
     if settings.use_smtp_local:
         await asyncio.to_thread(_send_smtp, to_email, subject, html_body)
     else:
@@ -33,7 +61,6 @@ def _send_smtp(to_email: str, subject: str, html_body: str) -> None:
             server.sendmail(settings.sendgrid_from_email, to_email, msg.as_string())
     except Exception:
         logger.exception("smtp_send_failed", to=to_email, subject=subject)
-        raise
 
 
 def _send_sendgrid(to_email: str, subject: str, html_body: str) -> None:
@@ -51,7 +78,6 @@ def _send_sendgrid(to_email: str, subject: str, html_body: str) -> None:
         client.send(message)
     except Exception:
         logger.exception("sendgrid_send_failed", to=to_email, subject=subject)
-        raise
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +100,7 @@ def _base_html(title: str, body_html: str) -> str:
 </html>"""
 
 
+@_safe_send
 async def send_verification_email(to_email: str, verify_url: str) -> None:
     body = f"""
     <p>Thanks for registering with Temple Heavy Equipment.</p>
@@ -88,6 +115,7 @@ async def send_verification_email(to_email: str, verify_url: str) -> None:
     )
 
 
+@_safe_send
 async def send_password_reset_email(to_email: str, reset_url: str) -> None:
     body = f"""
     <p>We received a request to reset the password for your TempleHE account.</p>
@@ -102,6 +130,7 @@ async def send_password_reset_email(to_email: str, reset_url: str) -> None:
     )
 
 
+@_safe_send
 async def send_password_changed_email(to_email: str) -> None:
     body = """
     <p>Your TempleHE account password was just changed.</p>
@@ -114,12 +143,16 @@ async def send_password_changed_email(to_email: str) -> None:
     )
 
 
+@_safe_send
 async def send_new_device_email(to_email: str, location: str, device: str) -> None:
+    # location (IP) and device (user-agent) are user-controlled — escape before HTML.
+    safe_location = html.escape(location)
+    safe_device = html.escape(device)
     body = f"""
     <p>We detected a new sign-in to your TempleHE account.</p>
     <ul>
-      <li><strong>Location:</strong> {location}</li>
-      <li><strong>Device:</strong> {device}</li>
+      <li><strong>Location:</strong> {safe_location}</li>
+      <li><strong>Device:</strong> {safe_device}</li>
     </ul>
     <p>If this was you, no action is needed.</p>
     <p>If this wasn't you,
@@ -132,6 +165,7 @@ async def send_new_device_email(to_email: str, location: str, device: str) -> No
     )
 
 
+@_safe_send
 async def send_email_change_verification(new_email: str, verify_url: str) -> None:
     body = f"""
     <p>A request was made to change your TempleHE account email to this address.</p>
@@ -147,8 +181,10 @@ async def send_email_change_verification(new_email: str, verify_url: str) -> Non
     )
 
 
+@_safe_send
 async def send_email_change_notification(old_email: str, new_email: str) -> None:
-    masked = new_email[:3] + "***@" + new_email.split("@")[-1]
+    # new_email is user-submitted; the masked variant is derived from it.
+    masked = html.escape(new_email[:3] + "***@" + new_email.split("@")[-1])
     body = f"""
     <p>Your TempleHE account email is being changed to <strong>{masked}</strong>.</p>
     <p>The change will take effect once the new address is confirmed.</p>
@@ -162,6 +198,7 @@ async def send_email_change_notification(old_email: str, new_email: str) -> None
     )
 
 
+@_safe_send
 async def send_2fa_warning_email(to_email: str, remaining: int) -> None:
     body = f"""
     <p>You have only <strong>{remaining}</strong> two-factor authentication
