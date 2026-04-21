@@ -78,25 +78,11 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    # refresh_token is set as an HttpOnly cookie — not in this body
 
 
 class Partial2FAResponse(BaseModel):
     requires_2fa: bool = True
     partial_token: str
-
-
-# ---------------------------------------------------------------------------
-# Token refresh / logout
-# ---------------------------------------------------------------------------
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
-
-
-class LogoutRequest(BaseModel):
-    refresh_token: str
 
 
 # ---------------------------------------------------------------------------

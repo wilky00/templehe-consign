@@ -207,21 +207,115 @@ async def test_login_account_lockout(client: AsyncClient, db_session):
 
 
 # ---------------------------------------------------------------------------
-# Refresh / Logout
+# Refresh / Logout (cookie-based)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_refresh_invalid_token(client: AsyncClient):
-    resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": "fakehex" * 10})
+async def test_refresh_without_cookie_returns_401(client: AsyncClient):
+    resp = await client.post("/api/v1/auth/refresh")
     assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_logout_invalid_token(client: AsyncClient):
-    # Should succeed gracefully (idempotent)
-    resp = await client.post("/api/v1/auth/logout", json={"refresh_token": "fakehex" * 10})
+async def test_refresh_with_invalid_cookie_returns_401(client: AsyncClient):
+    resp = await client.post(
+        "/api/v1/auth/refresh",
+        cookies={"refresh_token": "fakehex" * 10},
+    )
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_without_cookie_is_idempotent(client: AsyncClient):
+    resp = await client.post("/api/v1/auth/logout")
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_login_sets_refresh_cookie(client: AsyncClient, db_session):
+    """Successful login sets an HttpOnly refresh_token cookie."""
+    login_resp = await _verify_and_login(client, db_session, email="cookie_login@example.com")
+    assert login_resp.status_code == 200
+
+    set_cookie = login_resp.headers.get("set-cookie", "")
+    assert "refresh_token=" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "SameSite=strict" in set_cookie
+    assert "Path=/api/v1/auth" in set_cookie
+    # httpx stores the cookie in its jar
+    assert "refresh_token" in login_resp.cookies
+
+
+@pytest.mark.asyncio
+async def test_refresh_cookie_full_cycle(client: AsyncClient, db_session):
+    """login → cookie → refresh → new cookie → logout clears cookie."""
+    login_resp = await _verify_and_login(client, db_session, email="cookie_cycle@example.com")
+    assert login_resp.status_code == 200
+    original_cookie = login_resp.cookies.get("refresh_token")
+    assert original_cookie
+
+    # Refresh: send the cookie, expect a new access token + a new refresh cookie.
+    refresh_resp = await client.post(
+        "/api/v1/auth/refresh",
+        cookies={"refresh_token": original_cookie},
+    )
+    assert refresh_resp.status_code == 200
+    assert "access_token" in refresh_resp.json()
+    rotated_cookie = refresh_resp.cookies.get("refresh_token")
+    assert rotated_cookie and rotated_cookie != original_cookie
+
+    # Reusing the original (now-rotated-away) cookie must fail.
+    replay_resp = await client.post(
+        "/api/v1/auth/refresh",
+        cookies={"refresh_token": original_cookie},
+    )
+    assert replay_resp.status_code == 401
+
+    # Logout with the current cookie clears it and revokes the session.
+    logout_resp = await client.post(
+        "/api/v1/auth/logout",
+        cookies={"refresh_token": rotated_cookie},
+    )
+    assert logout_resp.status_code == 200
+    cleared = logout_resp.headers.get("set-cookie", "")
+    assert 'refresh_token=""' in cleared or "refresh_token=;" in cleared
+
+    # The rotated cookie no longer refreshes.
+    post_logout = await client.post(
+        "/api/v1/auth/refresh",
+        cookies={"refresh_token": rotated_cookie},
+    )
+    assert post_logout.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_login_produces_exactly_one_active_session(client: AsyncClient, db_session):
+    """Regression: the refresh-token-dropped bug created orphan sessions per login."""
+    from sqlalchemy import select
+
+    from database.models import User, UserSession
+
+    await _verify_and_login(client, db_session, email="one_session@example.com")
+
+    user = (
+        await db_session.execute(select(User).where(User.email == "one_session@example.com"))
+    ).scalar_one_or_none()
+    assert user is not None
+
+    active = (
+        (
+            await db_session.execute(
+                select(UserSession).where(
+                    UserSession.user_id == user.id,
+                    UserSession.revoked_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(active) == 1
 
 
 # ---------------------------------------------------------------------------
