@@ -1,0 +1,22 @@
+# ABOUTME: Files excluded from the Docker build context for the API image.
+# ABOUTME: Keeps the image lean and prevents dev tooling from affecting runtime behavior.
+
+# Python version pin — for local dev and CI only; Docker uses the base image Python
+.python-version
+
+# Dev/test artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# uv cache
+.venv/
