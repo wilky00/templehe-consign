@@ -417,3 +417,40 @@ The items above integrate into the existing phase files as follows:
 | §11 Staff departure handoff | 4 | Feature 4.2.2 added to Phase 4 |
 
 Phase 1 will be updated in a separate edit pass to include the new auth hardening features listed above.
+
+---
+
+## 14. Deferred Items — Phase 1 Hardening (2026-04-21)
+
+The post-Sprint-5 code review (`project_notes/code_review_phase1.md`, Outline: https://kb.saltrun.net/doc/baXdhfglbk) triaged 35 findings. Most were remediated on branch `phase1-hardening` (see ADR-012). The following were intentionally deferred; this section is their canonical home so a future session knows the deferral is deliberate.
+
+### 14.1 TOTP `MultiFernet` rotation (→ Phase 5 Sprint 0)
+
+**Why deferred:** Phase 1 has a single `totp_encryption_key` Fernet key. Key leakage decrypts all stored TOTP secrets. Rotation path requires `MultiFernet`: a primary key for encryption + a list of legacy keys for decrypt-only. Phase 1's 2FA volume doesn't justify the complexity — no real users have enabled TOTP yet.
+
+**Action in Phase 5:** Before iOS 2FA opens up at volume:
+- `api/config.py` — replace `totp_encryption_key: str` with `totp_encryption_keys: str` (comma-separated; first is primary).
+- `api/services/auth_service.py` — wrap `Fernet` in `MultiFernet(fernets)` for decrypt; always encrypt with primary.
+- Rotation runbook: set new primary, leave old as secondary, redeploy. Re-encrypt legacy `totp_secret_enc` rows over a weekend window via an ad-hoc script, then drop the old key.
+
+### 14.2 Application-level `/metrics` endpoint
+
+**Why deferred:** Fly metrics cover host-level (CPU, RAM, network). Application counters (auth failures, rate-limit hits, 2FA attempts) are visible via audit log today — acceptable for Phase 1. An in-process Prometheus exposition would require a scraper (Fly doesn't run one by default) or an export to BetterStack metrics.
+
+**Reconsider when:** a security or reliability question can't be answered by audit log + BetterStack logs, or when the GCP migration lands Cloud Monitoring as the default surface.
+
+### 14.3 `boto3` → `aioboto3` evaluation
+
+**Why deferred:** `boto3` is sync-only (wrapped with `asyncio.to_thread` today). Not hot in Phase 1. For R2 photo uploads in Phase 2+ that could matter, but `aioboto3` has its own maintenance story and the R2 S3-compatible API works identically.
+
+**Reconsider when:** R2 calls appear in latency-sensitive request paths (Phase 2 photo presign flow). Measure first; don't churn preemptively.
+
+### 14.4 `trust_proxy` CIDR allowlist (optional hardening)
+
+**Why deferred:** `middleware.rate_limit.get_client_ip` prefers `CF-Connecting-IP` → `X-Forwarded-For` → socket peer. A request that bypasses both Cloudflare and Fly's proxy could forge these headers. At POC scale, the bypass only affects the forger's own rate-limit bucket.
+
+**Reconsider when:** the API is exposed on a direct endpoint (post-GCP migration with Cloud Load Balancer, or if Cloudflare is bypassed for some internal integration). At that point, verify the peer IP is in Cloudflare's published CIDR list before trusting the `CF-Connecting-IP` header.
+
+### 14.5 PII retention (row-level)
+
+**Why split:** §7 of this document already specifies the retention schedule (login logs 30 days, audit logs 18 months, customer PII per request). Phase 1 ships partitioning + the sweeper scaffold; row-level retention on `audit_logs` / `user_sessions` / `known_devices` lands with the Phase 2 data export & deletion epic so it's decided before real customer data arrives on prod.
