@@ -121,16 +121,18 @@ async def _audit(
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> None:
-    db.add(AuditLog(
-        event_type=event_type,
-        actor_id=actor_id,
-        actor_role=actor_role,
-        target_id=target_id,
-        target_type=target_type,
-        after_state=after_state,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    ))
+    db.add(
+        AuditLog(
+            event_type=event_type,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            target_id=target_id,
+            target_type=target_type,
+            after_state=after_state,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    )
     await db.flush()
 
 
@@ -278,15 +280,23 @@ async def login(
             return
         user.failed_login_count = (user.failed_login_count or 0) + 1
         await _audit(
-            db, "user.login_failed", actor_id=user.id,
-            target_id=user.id, target_type="user", ip_address=ip_address,
+            db,
+            "user.login_failed",
+            actor_id=user.id,
+            target_id=user.id,
+            target_type="user",
+            ip_address=ip_address,
         )
         if user.failed_login_count >= 5:
             user.locked_until = now + timedelta(minutes=30)
             user.failed_login_count = 0
             await _audit(
-                db, "user.account_locked", actor_id=user.id,
-                target_id=user.id, target_type="user", ip_address=ip_address,
+                db,
+                "user.account_locked",
+                actor_id=user.id,
+                target_id=user.id,
+                target_type="user",
+                ip_address=ip_address,
             )
         db.add(user)
         await db.flush()
@@ -332,9 +342,14 @@ async def login(
         )
 
     await _audit(
-        db, "user.login", actor_id=user.id, actor_role=role_slug,
-        target_id=user.id, target_type="user",
-        ip_address=ip_address, user_agent=user_agent,
+        db,
+        "user.login",
+        actor_id=user.id,
+        actor_role=role_slug,
+        target_id=user.id,
+        target_type="user",
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
 
     if user.totp_enabled:
@@ -397,8 +412,11 @@ async def request_password_reset(email: str, db: AsyncSession, base_url: str = "
         user.email, f"{base_url}/auth/reset-password?token={token}"
     )
     await _audit(
-        db, "user.password_reset_requested",
-        actor_id=user.id, target_id=user.id, target_type="user",
+        db,
+        "user.password_reset_requested",
+        actor_id=user.id,
+        target_id=user.id,
+        target_type="user",
     )
 
 
@@ -428,8 +446,11 @@ async def confirm_password_reset(token: str, new_password: str, db: AsyncSession
     await session_service.revoke_all_for_user(user.id, db)
     asyncio.create_task(email_service.send_password_changed_email(user.email))
     await _audit(
-        db, "user.password_reset_confirmed",
-        actor_id=user.id, target_id=user.id, target_type="user",
+        db,
+        "user.password_reset_confirmed",
+        actor_id=user.id,
+        target_id=user.id,
+        target_type="user",
     )
 
 
@@ -465,8 +486,11 @@ async def initiate_email_change(
     await email_service.send_email_change_verification(new_email, confirm_url)
     await email_service.send_email_change_notification(user.email, new_email)
     await _audit(
-        db, "user.email_change_requested",
-        actor_id=user_id, target_id=user_id, target_type="user",
+        db,
+        "user.email_change_requested",
+        actor_id=user_id,
+        target_id=user_id,
+        target_type="user",
     )
 
 
@@ -492,8 +516,11 @@ async def confirm_email_change(token: str, db: AsyncSession) -> None:
     user.email = new_email
     db.add(user)
     await _audit(
-        db, "user.email_changed",
-        actor_id=user_id, target_id=user_id, target_type="user",
+        db,
+        "user.email_changed",
+        actor_id=user_id,
+        target_id=user_id,
+        target_type="user",
         after_state={"new_email": new_email},
     )
 
@@ -516,7 +543,9 @@ async def setup_2fa(user_id: uuid.UUID, db: AsyncSession) -> dict:
     user.totp_secret_enc = _encrypt_totp_secret(secret)
     db.add(user)
     await db.flush()
-    await _audit(db, "user.2fa_setup_initiated", actor_id=user_id, target_id=user_id, target_type="user")
+    await _audit(
+        db, "user.2fa_setup_initiated", actor_id=user_id, target_id=user_id, target_type="user"
+    )
     return {"secret": secret, "qr_uri": qr_uri}
 
 
@@ -601,8 +630,11 @@ async def recover_2fa(partial_token: str, recovery_code: str, db: AsyncSession) 
             asyncio.create_task(email_service.send_2fa_warning_email(u.email, remaining))
 
     await _audit(
-        db, "user.2fa_recovery_used",
-        actor_id=user_id, target_id=user_id, target_type="user",
+        db,
+        "user.2fa_recovery_used",
+        actor_id=user_id,
+        target_id=user_id,
+        target_type="user",
     )
     user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
@@ -633,6 +665,9 @@ async def disable_2fa(user_id: uuid.UUID, totp_code: str, db: AsyncSession) -> N
     db.add(user)
     await db.execute(delete(TotpRecoveryCode).where(TotpRecoveryCode.user_id == user_id))
     await _audit(
-        db, "user.2fa_disabled",
-        actor_id=user_id, target_id=user_id, target_type="user",
+        db,
+        "user.2fa_disabled",
+        actor_id=user_id,
+        target_id=user_id,
+        target_type="user",
     )
