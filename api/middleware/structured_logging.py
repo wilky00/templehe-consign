@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import time
 
+import jwt
 import structlog
-from jose import JWTError, jwt
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from config import settings
@@ -22,7 +22,7 @@ def _extract_user_id(scope: Scope) -> str | None:
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         return payload.get("sub")
-    except JWTError:
+    except jwt.PyJWTError:
         return None
 
 

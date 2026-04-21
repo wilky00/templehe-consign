@@ -9,11 +9,11 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import bcrypt as _bcrypt
+import jwt
 import pyotp
 import structlog
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
-from jose import JWTError, jwt
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,10 +77,10 @@ def _create_signed_token(payload: dict, expiry: timedelta) -> str:
 def _decode_token(token: str, expected_type: str) -> dict:
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-    except JWTError as exc:
-        raise JWTError("invalid token") from exc
+    except jwt.PyJWTError as exc:
+        raise jwt.InvalidTokenError("invalid token") from exc
     if payload.get("type") != expected_type:
-        raise JWTError("wrong token type")
+        raise jwt.InvalidTokenError("wrong token type")
     return payload
 
 
@@ -221,7 +221,7 @@ async def register_user(
 async def verify_email(token: str, db: AsyncSession) -> User:
     try:
         payload = _decode_token(token, _TYPE_VERIFY_EMAIL)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=400, detail="Verification link is invalid or has expired."
         ) from exc
@@ -423,7 +423,7 @@ async def request_password_reset(email: str, db: AsyncSession, base_url: str = "
 async def confirm_password_reset(token: str, new_password: str, db: AsyncSession) -> None:
     try:
         payload = _decode_token(token, _TYPE_RESET_PASSWORD)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=400, detail="Password reset link is invalid or has expired."
         ) from exc
@@ -497,7 +497,7 @@ async def initiate_email_change(
 async def confirm_email_change(token: str, db: AsyncSession) -> None:
     try:
         payload = _decode_token(token, _TYPE_CHANGE_EMAIL)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=400, detail="Email change link is invalid or has expired."
         ) from exc
@@ -574,7 +574,7 @@ async def confirm_2fa(user_id: uuid.UUID, totp_code: str, db: AsyncSession) -> l
 async def verify_2fa(partial_token: str, totp_code: str, db: AsyncSession) -> dict:
     try:
         payload = _decode_token(partial_token, _TYPE_PARTIAL)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=401, detail="Session expired. Please log in again."
         ) from exc
@@ -595,7 +595,7 @@ async def verify_2fa(partial_token: str, totp_code: str, db: AsyncSession) -> di
 async def recover_2fa(partial_token: str, recovery_code: str, db: AsyncSession) -> dict:
     try:
         payload = _decode_token(partial_token, _TYPE_PARTIAL)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=401, detail="Session expired. Please log in again."
         ) from exc
