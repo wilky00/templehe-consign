@@ -155,9 +155,20 @@ async def test_login_unverified_account(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_login_wrong_password(client: AsyncClient):
+async def test_login_wrong_password(client: AsyncClient, db_session):
+    """Active user + wrong password → 401 (and the counter increments)."""
+    from sqlalchemy import select
+
+    from database.models import User
+
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         await _register(client)
+    user = (
+        await db_session.execute(select(User).where(User.email == _VALID_EMAIL))
+    ).scalar_one_or_none()
+    user.status = "active"
+    await db_session.flush()
+
     resp = await client.post(
         "/api/v1/auth/login",
         json={"email": _VALID_EMAIL, "password": "WrongPassword1!"},
@@ -459,6 +470,89 @@ async def test_recovery_endpoint_rate_limits_by_ip(client: AsyncClient):
     )
     assert resp.status_code == 429
     assert resp.headers.get("Retry-After") is not None
+
+
+@pytest.mark.asyncio
+async def test_request_body_too_large_returns_413(client: AsyncClient):
+    """Bodies over 1 MB are rejected by the MaxBodySizeMiddleware before they
+    reach FastAPI's validator (and before bcrypt gets a chance to burn CPU)."""
+    oversized = {
+        "email": "big@example.com",
+        "password": _VALID_PASSWORD,
+        "first_name": "X" * (1024 * 1024 + 1024),
+        "last_name": "User",
+    }
+    resp = await client.post("/api/v1/auth/register", json=oversized)
+    assert resp.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_cors_preflight_rejects_disallowed_method(client: AsyncClient):
+    """CORS preflight should only advertise the methods we actually expose —
+    allow_methods=['*'] was the pre-hardening default."""
+    origin = "http://localhost:5173"
+    resp = await client.options(
+        "/api/v1/health",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "TRACE",
+            "Access-Control-Request-Headers": "Authorization",
+        },
+    )
+    # CORS middleware returns the allowed methods list; TRACE must not appear.
+    allowed = resp.headers.get("access-control-allow-methods", "")
+    assert "TRACE" not in allowed
+    assert "GET" in allowed
+    assert "POST" in allowed
+
+
+@pytest.mark.asyncio
+async def test_pending_verification_user_recovers_via_password_reset(
+    client: AsyncClient, db_session
+):
+    """A pending-verification user who can't find the verify email should be
+    able to recover via password reset — the token proves email ownership and
+    transitions them to active."""
+    import re
+
+    from sqlalchemy import select
+
+    from database.models import User
+
+    email = "pending_recovers@example.com"
+    with patch("services.email_service.send_email", new_callable=AsyncMock):
+        await _register(client, email)
+
+    # Request password reset — pending_verification now receives the email.
+    captured: list[str] = []
+
+    async def _capture(to: str, subject: str, html: str) -> None:
+        match = re.search(r'href="([^"]+reset[^"]+)"', html)
+        if match:
+            captured.append(match.group(1))
+
+    with patch("services.email_service.send_email", side_effect=_capture):
+        req = await client.post(
+            "/api/v1/auth/password-reset-request",
+            json={"email": email},
+        )
+    assert req.status_code == 200
+    assert captured, "pending-verification user should receive a reset email"
+
+    token = captured[0].split("token=")[-1]
+    with patch("services.email_service.send_email", new_callable=AsyncMock):
+        confirm = await client.post(
+            "/api/v1/auth/password-reset-confirm",
+            json={"token": token, "new_password": "NewPassword1!xx"},
+        )
+    assert confirm.status_code == 200
+
+    # User was transitioned to active by the reset flow.
+    await db_session.commit()
+    user = (await db_session.execute(select(User).where(User.email == email))).scalar_one_or_none()
+    # db_session has committed; re-read from the same session still sees the row.
+    assert user is not None
+    assert user.status == "active"
 
 
 @pytest.mark.asyncio

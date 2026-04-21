@@ -14,6 +14,7 @@ import structlog
 from cryptography.fernet import Fernet
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
@@ -163,19 +164,23 @@ async def _check_new_device(
     user_agent: str | None,
     db: AsyncSession,
 ) -> bool:
-    """Returns True and records the device if this is a new fingerprint for the user."""
+    """Record the device atomically and return whether it was newly seen.
+
+    Uses INSERT ... ON CONFLICT DO NOTHING on the (user_id, device_fingerprint)
+    unique constraint to avoid a SELECT-then-INSERT race: two concurrent first
+    logins from the same browser would otherwise both pass the SELECT and the
+    second INSERT would 500 the request.
+    """
     fp = _device_fingerprint(user_agent, ip_address)
-    result = await db.execute(
-        select(KnownDevice).where(
-            KnownDevice.user_id == user.id,
-            KnownDevice.device_fingerprint == fp,
-        )
+    stmt = (
+        pg_insert(KnownDevice)
+        .values(user_id=user.id, device_fingerprint=fp)
+        .on_conflict_do_nothing(index_elements=["user_id", "device_fingerprint"])
+        .returning(KnownDevice.id)
     )
-    if result.scalar_one_or_none() is not None:
-        return False
-    db.add(KnownDevice(user_id=user.id, device_fingerprint=fp))
-    await db.flush()
-    return True
+    result = await db.execute(stmt)
+    inserted = result.scalar_one_or_none()
+    return inserted is not None
 
 
 async def _get_role_slug(user: User, db: AsyncSession) -> str:
@@ -336,10 +341,9 @@ async def login(
             ),
         )
 
-    if not user.password_hash or not verify_password(password, user.password_hash):
-        await _record_failed_attempt()
-        raise HTTPException(status_code=401, detail="Incorrect email or password.")
-
+    # Short-circuit on non-active status BEFORE touching the failed-login counter,
+    # so a pending-verification account cannot be brute-forced into the 5-strike
+    # lockout state and left unrecoverable.
     if user.status == "pending_verification":
         raise HTTPException(
             status_code=403,
@@ -347,6 +351,10 @@ async def login(
         )
     if user.status != "active":
         raise HTTPException(status_code=403, detail="Your account is not active. Contact support.")
+
+    if not user.password_hash or not verify_password(password, user.password_hash):
+        await _record_failed_attempt()
+        raise HTTPException(status_code=401, detail="Incorrect email or password.")
 
     user.failed_login_count = 0
     user.locked_until = None
@@ -430,7 +438,11 @@ async def request_password_reset(
 ) -> None:
     result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
-    if user is None or user.status not in ("active", "locked"):
+    # Allow pending-verification accounts to reset so a user who lost the
+    # verification email can still recover via password reset (the token
+    # proves email ownership; confirm_password_reset transitions them to
+    # active below).
+    if user is None or user.status not in ("active", "locked", "pending_verification"):
         return
     token = _create_signed_token(
         {"sub": str(user.id), "type": _TYPE_RESET_PASSWORD},
@@ -475,7 +487,9 @@ async def confirm_password_reset(
     user.password_hash = hash_password(new_password)
     user.failed_login_count = 0
     user.locked_until = None
-    if user.status == "locked":
+    # Successful token confirmation proves email ownership — transition
+    # both locked and pending_verification accounts to active.
+    if user.status in ("locked", "pending_verification"):
         user.status = "active"
     db.add(user)
 
