@@ -2,19 +2,19 @@
 # ABOUTME: All business logic lives here; route handlers are thin wrappers that call these.
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import bcrypt as _bcrypt
+import jwt
 import pyotp
 import structlog
 from cryptography.fernet import Fernet
-from fastapi import HTTPException
-from jose import JWTError, jwt
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
@@ -22,6 +22,17 @@ from database.models import AuditLog, KnownDevice, Role, TotpRecoveryCode, User
 from services import email_service, session_service
 
 logger = structlog.get_logger(__name__)
+
+
+async def _send_or_await(background_tasks: BackgroundTasks | None, func, *args) -> None:
+    """Schedule email via BackgroundTasks when called from an HTTP route,
+    or await inline otherwise (tests, scripts). Either way, failures in
+    email_service are already logged and swallowed there."""
+    if background_tasks is not None:
+        background_tasks.add_task(func, *args)
+    else:
+        await func(*args)
+
 
 _BCRYPT_ROUNDS = 12
 
@@ -77,10 +88,10 @@ def _create_signed_token(payload: dict, expiry: timedelta) -> str:
 def _decode_token(token: str, expected_type: str) -> dict:
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-    except JWTError as exc:
-        raise JWTError("invalid token") from exc
+    except jwt.PyJWTError as exc:
+        raise jwt.InvalidTokenError("invalid token") from exc
     if payload.get("type") != expected_type:
-        raise JWTError("wrong token type")
+        raise jwt.InvalidTokenError("wrong token type")
     return payload
 
 
@@ -153,19 +164,23 @@ async def _check_new_device(
     user_agent: str | None,
     db: AsyncSession,
 ) -> bool:
-    """Returns True and records the device if this is a new fingerprint for the user."""
+    """Record the device atomically and return whether it was newly seen.
+
+    Uses INSERT ... ON CONFLICT DO NOTHING on the (user_id, device_fingerprint)
+    unique constraint to avoid a SELECT-then-INSERT race: two concurrent first
+    logins from the same browser would otherwise both pass the SELECT and the
+    second INSERT would 500 the request.
+    """
     fp = _device_fingerprint(user_agent, ip_address)
-    result = await db.execute(
-        select(KnownDevice).where(
-            KnownDevice.user_id == user.id,
-            KnownDevice.device_fingerprint == fp,
-        )
+    stmt = (
+        pg_insert(KnownDevice)
+        .values(user_id=user.id, device_fingerprint=fp)
+        .on_conflict_do_nothing(index_elements=["user_id", "device_fingerprint"])
+        .returning(KnownDevice.id)
     )
-    if result.scalar_one_or_none() is not None:
-        return False
-    db.add(KnownDevice(user_id=user.id, device_fingerprint=fp))
-    await db.flush()
-    return True
+    result = await db.execute(stmt)
+    inserted = result.scalar_one_or_none()
+    return inserted is not None
 
 
 async def _get_role_slug(user: User, db: AsyncSession) -> str:
@@ -186,6 +201,7 @@ async def register_user(
     last_name: str,
     db: AsyncSession,
     base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
 ) -> User:
     existing = await db.execute(select(User).where(User.email == email.lower()))
     if existing.scalar_one_or_none() is not None:
@@ -211,8 +227,11 @@ async def register_user(
         {"sub": str(user.id), "type": _TYPE_VERIFY_EMAIL},
         timedelta(hours=24),
     )
-    await email_service.send_verification_email(
-        user.email, f"{base_url}/auth/verify-email?token={token}"
+    await _send_or_await(
+        background_tasks,
+        email_service.send_verification_email,
+        user.email,
+        f"{base_url}/auth/verify-email?token={token}",
     )
     await _audit(db, "user.registered", actor_id=user.id, target_id=user.id, target_type="user")
     return user
@@ -221,7 +240,7 @@ async def register_user(
 async def verify_email(token: str, db: AsyncSession) -> User:
     try:
         payload = _decode_token(token, _TYPE_VERIFY_EMAIL)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=400, detail="Verification link is invalid or has expired."
         ) from exc
@@ -238,7 +257,12 @@ async def verify_email(token: str, db: AsyncSession) -> User:
     return user
 
 
-async def resend_verification(email: str, db: AsyncSession, base_url: str = "") -> None:
+async def resend_verification(
+    email: str,
+    db: AsyncSession,
+    base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
     """Always returns without error — never reveals whether an account exists."""
     result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
@@ -248,8 +272,11 @@ async def resend_verification(email: str, db: AsyncSession, base_url: str = "") 
         {"sub": str(user.id), "type": _TYPE_VERIFY_EMAIL},
         timedelta(hours=24),
     )
-    await email_service.send_verification_email(
-        user.email, f"{base_url}/auth/verify-email?token={token}"
+    await _send_or_await(
+        background_tasks,
+        email_service.send_verification_email,
+        user.email,
+        f"{base_url}/auth/verify-email?token={token}",
     )
 
 
@@ -265,6 +292,7 @@ async def login(
     ip_address: str | None = None,
     user_agent: str | None = None,
     base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
 ) -> dict:
     """
     Returns one of:
@@ -313,10 +341,9 @@ async def login(
             ),
         )
 
-    if not user.password_hash or not verify_password(password, user.password_hash):
-        await _record_failed_attempt()
-        raise HTTPException(status_code=401, detail="Incorrect email or password.")
-
+    # Short-circuit on non-active status BEFORE touching the failed-login counter,
+    # so a pending-verification account cannot be brute-forced into the 5-strike
+    # lockout state and left unrecoverable.
     if user.status == "pending_verification":
         raise HTTPException(
             status_code=403,
@@ -324,6 +351,10 @@ async def login(
         )
     if user.status != "active":
         raise HTTPException(status_code=403, detail="Your account is not active. Contact support.")
+
+    if not user.password_hash or not verify_password(password, user.password_hash):
+        await _record_failed_attempt()
+        raise HTTPException(status_code=401, detail="Incorrect email or password.")
 
     user.failed_login_count = 0
     user.locked_until = None
@@ -333,12 +364,12 @@ async def login(
 
     is_new_device = await _check_new_device(user, ip_address, user_agent, db)
     if is_new_device:
-        asyncio.create_task(
-            email_service.send_new_device_email(
-                user.email,
-                ip_address or "unknown location",
-                (user_agent or "unknown device")[:80],
-            )
+        await _send_or_await(
+            background_tasks,
+            email_service.send_new_device_email,
+            user.email,
+            ip_address or "unknown location",
+            (user_agent or "unknown device")[:80],
         )
 
     await _audit(
@@ -399,17 +430,29 @@ async def logout(raw_refresh_token: str, db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def request_password_reset(email: str, db: AsyncSession, base_url: str = "") -> None:
+async def request_password_reset(
+    email: str,
+    db: AsyncSession,
+    base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
     result = await db.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
-    if user is None or user.status not in ("active", "locked"):
+    # Allow pending-verification accounts to reset so a user who lost the
+    # verification email can still recover via password reset (the token
+    # proves email ownership; confirm_password_reset transitions them to
+    # active below).
+    if user is None or user.status not in ("active", "locked", "pending_verification"):
         return
     token = _create_signed_token(
         {"sub": str(user.id), "type": _TYPE_RESET_PASSWORD},
         timedelta(minutes=30),
     )
-    await email_service.send_password_reset_email(
-        user.email, f"{base_url}/auth/reset-password?token={token}"
+    await _send_or_await(
+        background_tasks,
+        email_service.send_password_reset_email,
+        user.email,
+        f"{base_url}/auth/reset-password?token={token}",
     )
     await _audit(
         db,
@@ -420,10 +463,15 @@ async def request_password_reset(email: str, db: AsyncSession, base_url: str = "
     )
 
 
-async def confirm_password_reset(token: str, new_password: str, db: AsyncSession) -> None:
+async def confirm_password_reset(
+    token: str,
+    new_password: str,
+    db: AsyncSession,
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
     try:
         payload = _decode_token(token, _TYPE_RESET_PASSWORD)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=400, detail="Password reset link is invalid or has expired."
         ) from exc
@@ -439,12 +487,18 @@ async def confirm_password_reset(token: str, new_password: str, db: AsyncSession
     user.password_hash = hash_password(new_password)
     user.failed_login_count = 0
     user.locked_until = None
-    if user.status == "locked":
+    # Successful token confirmation proves email ownership — transition
+    # both locked and pending_verification accounts to active.
+    if user.status in ("locked", "pending_verification"):
         user.status = "active"
     db.add(user)
 
     await session_service.revoke_all_for_user(user.id, db)
-    asyncio.create_task(email_service.send_password_changed_email(user.email))
+    await _send_or_await(
+        background_tasks,
+        email_service.send_password_changed_email,
+        user.email,
+    )
     await _audit(
         db,
         "user.password_reset_confirmed",
@@ -465,6 +519,7 @@ async def initiate_email_change(
     current_password: str,
     db: AsyncSession,
     base_url: str = "",
+    background_tasks: BackgroundTasks | None = None,
 ) -> None:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -483,8 +538,18 @@ async def initiate_email_change(
         timedelta(hours=1),
     )
     confirm_url = f"{base_url}/auth/change-email/confirm?token={token}"
-    await email_service.send_email_change_verification(new_email, confirm_url)
-    await email_service.send_email_change_notification(user.email, new_email)
+    await _send_or_await(
+        background_tasks,
+        email_service.send_email_change_verification,
+        new_email,
+        confirm_url,
+    )
+    await _send_or_await(
+        background_tasks,
+        email_service.send_email_change_notification,
+        user.email,
+        new_email,
+    )
     await _audit(
         db,
         "user.email_change_requested",
@@ -497,7 +562,7 @@ async def initiate_email_change(
 async def confirm_email_change(token: str, db: AsyncSession) -> None:
     try:
         payload = _decode_token(token, _TYPE_CHANGE_EMAIL)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=400, detail="Email change link is invalid or has expired."
         ) from exc
@@ -515,6 +580,10 @@ async def confirm_email_change(token: str, db: AsyncSession) -> None:
 
     user.email = new_email
     db.add(user)
+    # Changing the email on an account is an identity shift — all outstanding
+    # sessions (browsers, mobile) must be invalidated so they re-authenticate
+    # under the new identity.
+    await session_service.revoke_all_for_user(user_id, db)
     await _audit(
         db,
         "user.email_changed",
@@ -549,11 +618,23 @@ async def setup_2fa(user_id: uuid.UUID, db: AsyncSession) -> dict:
     return {"secret": secret, "qr_uri": qr_uri}
 
 
-async def confirm_2fa(user_id: uuid.UUID, totp_code: str, db: AsyncSession) -> list[str]:
+async def confirm_2fa(
+    user_id: uuid.UUID, totp_code: str, password: str, db: AsyncSession
+) -> list[str]:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.totp_secret_enc:
         raise HTTPException(status_code=400, detail="2FA setup has not been initiated.")
+
+    if not user.password_hash or not verify_password(password, user.password_hash):
+        await _audit(
+            db,
+            "user.2fa_reauth_failed",
+            actor_id=user_id,
+            target_id=user_id,
+            target_type="user",
+        )
+        raise HTTPException(status_code=401, detail="Current password is incorrect.")
 
     secret = _decrypt_totp_secret(user.totp_secret_enc)
     if not pyotp.TOTP(secret).verify(totp_code, valid_window=1):
@@ -574,7 +655,7 @@ async def confirm_2fa(user_id: uuid.UUID, totp_code: str, db: AsyncSession) -> l
 async def verify_2fa(partial_token: str, totp_code: str, db: AsyncSession) -> dict:
     try:
         payload = _decode_token(partial_token, _TYPE_PARTIAL)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=401, detail="Session expired. Please log in again."
         ) from exc
@@ -592,10 +673,15 @@ async def verify_2fa(partial_token: str, totp_code: str, db: AsyncSession) -> di
     return await _complete_2fa_login(user, db)
 
 
-async def recover_2fa(partial_token: str, recovery_code: str, db: AsyncSession) -> dict:
+async def recover_2fa(
+    partial_token: str,
+    recovery_code: str,
+    db: AsyncSession,
+    background_tasks: BackgroundTasks | None = None,
+) -> dict:
     try:
         payload = _decode_token(partial_token, _TYPE_PARTIAL)
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=401, detail="Session expired. Please log in again."
         ) from exc
@@ -627,7 +713,12 @@ async def recover_2fa(partial_token: str, recovery_code: str, db: AsyncSession) 
         user_result = await db.execute(select(User).where(User.id == user_id))
         u = user_result.scalar_one_or_none()
         if u:
-            asyncio.create_task(email_service.send_2fa_warning_email(u.email, remaining))
+            await _send_or_await(
+                background_tasks,
+                email_service.send_2fa_warning_email,
+                u.email,
+                remaining,
+            )
 
     await _audit(
         db,
@@ -650,11 +741,21 @@ async def _complete_2fa_login(user: User, db: AsyncSession) -> dict:
     return {"access_token": access_token, "refresh_token": refresh_token}
 
 
-async def disable_2fa(user_id: uuid.UUID, totp_code: str, db: AsyncSession) -> None:
+async def disable_2fa(user_id: uuid.UUID, totp_code: str, password: str, db: AsyncSession) -> None:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.totp_enabled or not user.totp_secret_enc:
         raise HTTPException(status_code=400, detail="Two-factor authentication is not enabled.")
+
+    if not user.password_hash or not verify_password(password, user.password_hash):
+        await _audit(
+            db,
+            "user.2fa_reauth_failed",
+            actor_id=user_id,
+            target_id=user_id,
+            target_type="user",
+        )
+        raise HTTPException(status_code=401, detail="Current password is incorrect.")
 
     secret = _decrypt_totp_secret(user.totp_secret_enc)
     if not pyotp.TOTP(secret).verify(totp_code, valid_window=1):

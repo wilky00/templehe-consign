@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 
+import sentry_sdk
 import structlog
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -20,6 +21,7 @@ class RequestIDMiddleware:
         headers = dict(scope.get("headers", []))
         request_id = headers.get(b"x-request-id", b"").decode() or str(uuid.uuid4())
         structlog.contextvars.bind_contextvars(request_id=request_id)
+        sentry_sdk.set_tag("request_id", request_id)
 
         async def send_with_request_id(message: Message) -> None:
             if message["type"] == "http.response.start":

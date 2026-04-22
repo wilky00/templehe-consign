@@ -10,14 +10,22 @@ import uuid
 # Allow running from project root or scripts/ directly
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise SystemExit(
+        "DATABASE_URL is required. Export it or run via `make seed`, which sources .env."
+    )
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_BCRYPT_ROUNDS = 12
+
+
+def _hash_password(plain: str) -> str:
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)).decode()
 
 # --------------------------------------------------------------------------- #
 # Seed data
@@ -131,7 +139,7 @@ async def seed(session: AsyncSession) -> None:
             print("ERROR: admin role not found — run seed after roles are committed")
             return
 
-        password_hash = pwd_context.hash(admin_password)
+        password_hash = _hash_password(admin_password)
         await session.execute(
             text(
                 "INSERT INTO users "

@@ -1,11 +1,19 @@
 # Phase 5 — iOS Appraiser App
 
-> **Prerequisite reading:** `00_overview.md`, `01_phase1_infrastructure_auth.md`, `04_phase4_admin_panel.md`
+> **Prerequisite reading:** `00_overview.md`, `01_phase1_infrastructure_auth.md`, `04_phase4_admin_panel.md`, `project_notes/decisions.md` (ADR-012), `dev_plan/11_security_baseline.md §14`
 > **Reference data:** `01_checklists/` (all category checklists), `02_schema_and_dictionary/01_normalized_app_field_schema_v1.md`, `03_implementation_package/06_scoring_and_rules_logic.csv`
 > **Platform:** SwiftUI, iOS 16+, iPad and iPhone
 > **Distribution:** TestFlight (immediate) + App Store (post-launch review)
 > **Estimated scope:** 6–8 weeks
 > **Deliverable:** Fully functional iOS appraiser app with offline sync, dynamic checklists, photo capture, GPS/EXIF enforcement, and valuation lookup
+
+---
+
+## Sprint 0 — Pre-flight from Phase 1 Hardening
+
+Before any iOS-surface work begins:
+
+- **TOTP `MultiFernet` rotation must ship first.** Phase 1 Hardening intentionally deferred this (`project_notes/code_review_phase1.md §5 Medium`) because no iOS volume existed yet. Before the iOS app starts writing TOTP-protected sessions at scale, `api/config.py` needs a `totp_encryption_keys: list[str]` (primary + rotating keys) and `api/services/auth_service.py` needs to wrap `Fernet` in `MultiFernet` for decrypt + encrypt-to-primary semantics. One migration to re-encrypt existing `totp_secret_enc` rows with the new primary if the key was ever rotated. Tracked in `dev_plan/11_security_baseline.md §14`.
 
 ---
 

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
+from middleware.body_size import MaxBodySizeMiddleware
 from middleware.request_id import RequestIDMiddleware
 from middleware.security_headers import SecurityHeadersMiddleware
 from middleware.structured_logging import StructuredLoggingMiddleware
@@ -32,16 +33,18 @@ app = FastAPI(
 )
 
 # Middleware is applied in reverse registration order (last registered = outermost).
-# Desired order: RequestID → StructuredLogging → SecurityHeaders → CORS → route handler
+# Desired order: RequestID → StructuredLogging → SecurityHeaders → MaxBodySize →
+# CORS → route handler. Body-size check sits inside CORS so preflights are cheap.
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(StructuredLoggingMiddleware)
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(MaxBodySizeMiddleware, max_bytes=1024 * 1024)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 
 

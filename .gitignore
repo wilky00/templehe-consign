@@ -91,6 +91,8 @@ out/
 .turbo/
 storybook-static/
 
+*.tsbuildinfo
+
 # Vitest / Jest
 coverage/
 

@@ -40,7 +40,14 @@ TestAsyncSessionLocal = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency — yields an async DB session and commits on success."""
+    """FastAPI dependency — yields an async DB session and commits on success.
+
+    One transaction per request. Services that need multiple transaction
+    boundaries (commit → emit event → open new tx) must manage sessions
+    explicitly via AsyncSessionLocal() rather than relying on this dep,
+    per ADR-012. Kept this shape because it's the right default for
+    simple CRUD; the explicit pattern is available where it's needed.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session

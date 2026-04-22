@@ -1,21 +1,14 @@
 # Known Issues & Blockers
 
-## BLOCKING — Twilio A2P 10DLC Registration
-**Status:** Action required immediately (Jim)
-**Impact:** SMS notifications will not work until carrier approval (~2–4 weeks)
-**Action:** Register TempleHE brand + campaign at twilio.com/console/sms/a2p-10dlc
-- Required info: business EIN, legal name, website, use case description, sample messages
-- Do this on Day 1 of Phase 1 — approval window is outside our control
+## PENDING CONFIRMATION — Twilio A2P 10DLC Registration
+**Status:** Registration submitted, appears approved — awaiting Jim's confirmation (2026-04-21)
+**Impact:** SMS notifications come online once the brand + campaign show "Approved" in the Twilio console
+**Action:** Jim — check twilio.com/console/sms/a2p-10dlc and update this entry to FIXED once the approval is confirmed
 
-## BLOCKING — SendGrid DNS Records (SPF / DKIM / DMARC)
-**Status:** Awaiting TempleHE domain admin action
-**Impact:** Transactional email (verification, reset, notifications) will only work via Mailpit locally until DNS is set
-**Action:**
-1. Log in to SendGrid → Settings → Sender Authentication
-2. Add SPF: `v=spf1 include:sendgrid.net ~all`
-3. Add two DKIM CNAME records (from SendGrid dashboard)
-4. Add DMARC: `v=DMARC1; p=none; rua=mailto:dmarc@saltrun.net` (start at p=none for 2 weeks, then quarantine, then reject)
-5. Validate at mail-tester.com
+## FIXED — SendGrid DNS Records (SPF / DKIM / DMARC)
+**Fixed:** 2026-04-21 — DNS records added for `saltrun.net` (Jim confirmed)
+**Was:** SPF / two DKIM CNAMEs / DMARC (p=none) were missing; transactional email via SendGrid would only reach recipients whose providers didn't enforce DMARC
+**Fix:** Records added via saltrun.net DNS admin. Run mail-tester.com once before Phase 2 go-live to verify the full SPF + DKIM + DMARC chain. DMARC policy is `p=none` per the soft-launch plan — tighten to `quarantine` 2 weeks post-launch, then `reject`.
 
 ## OPEN — Google OAuth workspace domain
 **Status:** Not yet configured
@@ -65,12 +58,10 @@
 **Was:** `NOW()` returns transaction start time — INSERT + UPDATE in same transaction get identical timestamps, breaking the trigger test
 **Fix:** Migration 002 replaces the function with `clock_timestamp()` (wall clock)
 
-## OPEN — Refresh Token Not Returned to Client
-**Status:** Incomplete — refresh endpoint exists but is unusable
-**Impact:** Users cannot refresh access tokens via the API; sessions expire and require re-login
-**Detail:** `auth_service.login()` generates a refresh token and stores its hash in `user_sessions`. The router (`routers/auth.py:126`) returns only `access_token` in the response body and never sets a cookie. The `TokenResponse` schema has a comment "refresh_token is set as an HttpOnly cookie" but the `set_cookie()` call was never added.
-**Action (Phase 2):** Wire up `response.set_cookie("refresh_token", ..., httponly=True, secure=True, samesite="strict")` in the login router. Update the refresh and logout handlers to read from the cookie instead of the request body. Update E2E tests accordingly.
-**Discovered:** 2026-04-21 during PR #1 coverage work
+## FIXED — Refresh Token Not Returned to Client
+**Fixed:** 2026-04-21 on branch `phase1-hardening` (commit eaf82d4, WS3)
+**Was:** `auth_service.login()` generated a refresh token and stored its hash in `user_sessions`, but the router (`routers/auth.py:126`) returned only `access_token` and never set a cookie. `/refresh` and `/logout` read from a body field no client could populate.
+**Fix:** Login, `/2fa/verify`, and `/2fa/recovery` now set the refresh token as an HttpOnly + SameSite=Strict cookie scoped to `/api/v1/auth`. `/refresh` and `/logout` read from the cookie; `/logout` clears it. Dead `LogoutRequest` / `RefreshRequest` schemas removed. Full HTTP cycle test added.
 
 ## DESIGN CONSTRAINT — R2 Does Not Support Object Versioning
 **Status:** Permanent constraint — not a bug, not fixable
@@ -83,7 +74,10 @@
 **Recovery:** Neon PITR is the primary DB recovery path. R2 backups are supplementary.
 **Note:** ADR-001 previously said "versioning enabled" — that was incorrect and has been corrected.
 
-## OPEN — Category components / prompts / scoring rules
-**Status:** Placeholder data only
-**Impact:** Scoring engine (Phase 6) will need real component weights and red flag rules per category
-**Action:** Populate `category_components`, `category_inspection_prompts`, and `category_red_flag_rules` tables with business data from internal checklists before Phase 5/6. This is an Admin Panel (Phase 4) task.
+## PENDING — Category components / prompts / photo slots / red flag rules
+**Status:** Jim has the seed data ready (2026-04-21). Not yet imported — was missed during Phase 1 Sprint 1 seed.
+**Impact:** Phase 2 intake form needs category-specific fields to render; Phase 6 scoring engine needs real component weights and red flag rules per category
+**Action at Phase 2 `/phase-start`:**
+1. Jim provides the seed CSV / JSON (per-category components with weights, inspection prompts, photo slots, red flag rules) for the default 15 categories.
+2. Extend `scripts/seed.py` to import those tables idempotently, or ship a one-off Alembic data migration.
+3. Keep the Admin Panel (Phase 4) as the long-term CRUD surface — this import is the bootstrap, not the ongoing management path.

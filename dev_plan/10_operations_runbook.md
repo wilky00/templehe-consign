@@ -1299,3 +1299,25 @@ Per ADR-001, the trigger to lift to GCP is **any one of**:
 - Total monthly Fly + Neon cost exceeds $150 (cost-parity inflection point)
 
 When triggered, follow `13_hosting_migration_plan.md` end-to-end. The target architecture is documented in `12_gcp_production_target.md`.
+
+---
+
+## 16. Code Review Remediations (Phase 1 Hardening)
+
+Post-Sprint-5 code review produced `project_notes/code_review_phase1.md` (also published to Outline at https://kb.saltrun.net/doc/baXdhfglbk). 14 workstreams shipped on branch `phase1-hardening`; the resolution table and per-finding `Resolved` / `Deferred` markers live in that document. ADR-012 in `project_notes/decisions.md` codifies the cross-cutting design decisions.
+
+Operational items worth surfacing here:
+
+- **`temple-sweeper` Fly Machine.** New scheduled machine runs `scripts/sweep_retention.py` hourly. Must be provisioned once via `fly machine run . --app temple-sweeper --schedule hourly` — not part of the CI-driven deploy. Monitor via `fly logs -a temple-sweeper`. See §7 for retention-sweep alerting.
+- **Health check R2 semantics changed.** `/api/v1/health` now returns 503 in production when R2 is `unconfigured` — this is the rotated-key detection signal. Confirm staging and prod both pass the probe after any R2 credential rotation.
+- **`audit_logs` is now partitioned monthly.** Any ops procedure that directly touches the table (pg_dump, backup, reindex) must account for monthly child tables. Default `pg_dump` captures the parent + all children; targeted dumps by partition name (e.g. `audit_logs_2026_07`) are available.
+- **Trivy CI lane tightened.** `ignore-unfixed: false` means unfixed CRITICAL/HIGH CVEs fail the scan. If a failure is justified (upstream no-fix, acceptable risk), add a per-CVE entry to `.trivyignore` with written justification — don't re-flip the policy.
+
+**Items deferred from the review** (documented, not implemented in Phase 1 Hardening):
+
+| Item | Deferred to | Document |
+|---|---|---|
+| TOTP `MultiFernet` rotation | Phase 5 Sprint 0 | `dev_plan/05_phase5_ios_app.md` + `11_security_baseline.md §14` |
+| Prometheus `/metrics` | Later phase | `11_security_baseline.md §14` |
+| boto3 → aioboto3 | Not planned | `11_security_baseline.md §14` |
+| PII retention (row-level on `audit_logs`, `user_sessions`, `known_devices`) | Phase 2 data export/deletion | `11_security_baseline.md §7` |

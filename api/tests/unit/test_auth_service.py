@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 from datetime import timedelta
 
+import jwt
 import pytest
-from jose import jwt
 
 from config import settings
 from services.auth_service import (
@@ -78,20 +78,17 @@ def test_create_partial_token_has_correct_type():
 def test_decode_token_rejects_wrong_type():
     user_id = uuid.uuid4()
     token = create_partial_token(user_id)
-    from jose import JWTError
 
-    with pytest.raises(JWTError):
+    with pytest.raises(jwt.PyJWTError):
         _decode_token(token, _TYPE_ACCESS)
 
 
 def test_decode_token_rejects_expired():
-    from jose import JWTError
-
     expired_token = _create_signed_token(
         {"sub": str(uuid.uuid4()), "type": _TYPE_VERIFY_EMAIL},
         timedelta(seconds=-1),
     )
-    with pytest.raises(JWTError):
+    with pytest.raises(jwt.PyJWTError):
         _decode_token(expired_token, _TYPE_VERIFY_EMAIL)
 
 
@@ -103,6 +100,18 @@ def test_decode_token_accepts_valid():
     )
     payload = _decode_token(token, _TYPE_RESET_PASSWORD)
     assert payload["sub"] == str(user_id)
+
+
+def test_decode_token_rejects_alg_none():
+    # PyJWT must refuse unsigned tokens even if the header claims alg=none.
+    # Forged via jwt.encode with algorithm="none" and empty key.
+    unsigned = jwt.encode(
+        {"sub": str(uuid.uuid4()), "type": _TYPE_ACCESS},
+        key="",
+        algorithm="none",
+    )
+    with pytest.raises(jwt.PyJWTError):
+        _decode_token(unsigned, _TYPE_ACCESS)
 
 
 # ---------------------------------------------------------------------------

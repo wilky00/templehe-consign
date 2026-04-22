@@ -1,9 +1,28 @@
 # Phase 2 — Customer Portal & Equipment Intake
 
-> **Prerequisite reading:** `00_overview.md`, `01_phase1_infrastructure_auth.md`
+> **Prerequisite reading:** `00_overview.md`, `01_phase1_infrastructure_auth.md`, `project_notes/decisions.md` (ADR-012), `project_notes/code_review_phase1.md`
 > **Reference data:** `02_schema_and_dictionary/01_normalized_app_field_schema_v1.md`, `03_implementation_package/04_app_input_fields_only.csv`, `03_implementation_package/05_reference_tables.csv`
 > **Estimated scope:** 3–4 weeks
 > **Deliverable:** Fully functional customer portal — registration, equipment intake, status dashboard, change requests, notifications
+
+---
+
+## Phase 1 Carry-Forward / Fragility Assumptions
+
+Phase 2 builds on the hardened Phase 1 surface documented in `project_notes/code_review_phase1.md`. The following assumptions are now safe to make; each is load-bearing for at least one Phase 2 feature.
+
+- **Refresh token via cookie.** Frontend fetches to auth endpoints must use `credentials: "include"` / `withCredentials: true`. The cookie is HttpOnly + SameSite=Strict, scoped to `/api/v1/auth`. See ADR-012.
+- **Rate limiter keyed on the real client IP.** Any new Phase 2 rate-limited endpoint can reuse `middleware.rate_limit.rate_limit_by_ip` / `rate_limit_by_email` without the "everyone shares the edge IP" bug.
+- **`GET /api/v1/auth/me`** is live — use it as the bootstrap call for client-side state.
+- **Email dispatch is non-blocking.** FastAPI `BackgroundTasks` is the Phase-1 stopgap. Feature 2.2.2 (Submission Confirmation Email) should use the `NotificationService` + `notification_jobs` queue per ADR-001 instead — durability matters once it's customer-facing. Treat `BackgroundTasks` as a temporary bridge for auth flows only.
+- **`audit_logs` partitioning + hourly retention sweeper** are live. Schema churn in Phase 2 should keep the `created_at` partition key intact.
+- **`get_db` is one-transaction-per-request.** Intake flows that need commit-then-emit semantics instantiate `AsyncSessionLocal()` directly; see ADR-012.
+
+Items still open that touch Phase 2:
+
+- **Equipment category seed data** (`category_components`, `category_inspection_prompts`, `category_photo_slots`, `category_red_flag_rules`) — intake form must either stay category-agnostic until Phase 4 Admin Panel lands or Phase 2 ships partial seeds for the two or three categories needed on day 1. Tracked in `project_notes/known-issues.md`.
+- **Content sanitization for user-submitted free-text fields** — `bleach` was removed during Phase 1 hardening because no Phase 1 code consumed it. Phase 2 intake (notes fields on `EquipmentRecord`, `ChangeRequest`, etc.) must re-add `bleach` and call it on write, per `dev_plan/11_security_baseline.md §3`.
+- **PII retention / row-level `audit_logs` retention** — deferred to Phase 2 data export & deletion work (`11_security_baseline.md §7`). Row-level retention on `audit_logs` and `user_sessions` / `known_devices` must be decided before real customer data lands on prod.
 
 ---
 

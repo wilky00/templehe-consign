@@ -2,6 +2,7 @@
 # ABOUTME: Use as a FastAPI dependency; raises 429 when the limit is exceeded.
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -10,6 +11,24 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.base import get_db
+
+
+def get_client_ip(request: Request) -> str:
+    """Return the real client IP, honouring the Cloudflare → Fly proxy chain.
+
+    Prefers ``CF-Connecting-IP`` (set by Cloudflare for traffic that passed
+    the WAF), then falls back to the first entry of ``X-Forwarded-For``
+    (set by Fly's edge proxy), then the socket peer. Direct traffic that
+    bypasses both proxies can forge these headers, but a forger can only
+    affect their own rate-limit bucket — no cross-user impact.
+    """
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip.strip()
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 async def _check_rate_limit(
@@ -66,10 +85,10 @@ async def _check_rate_limit(
 
 
 def rate_limit_by_ip(limit: int, window_seconds: int, endpoint: str):
-    """Dependency: limit requests per IP address."""
+    """Dependency: limit requests per client IP (via get_client_ip)."""
 
     async def _dep(request: Request, db: AsyncSession = Depends(get_db)) -> None:
-        ip = request.client.host if request.client else "unknown"
+        ip = get_client_ip(request)
         await _check_rate_limit(f"{endpoint}_ip:{ip}", limit, window_seconds, db)
 
     return _dep
@@ -90,6 +109,28 @@ def rate_limit_by_email(limit: int, window_seconds: int, endpoint: str):
     return _dep
 
 
+def rate_limit_by_partial_token(limit: int, window_seconds: int, endpoint: str):
+    """Dependency: limit 2FA attempts per partial_token, independent of IP.
+
+    Prevents a distributed attacker from spreading TOTP or recovery-code
+    guesses across many IPs while holding a single stolen partial_token.
+    The token is SHA-256 hashed before use as a counter key so raw tokens
+    never land in rate_limit_counters.
+    """
+
+    async def _dep(request: Request, db: AsyncSession = Depends(get_db)) -> None:
+        try:
+            body = await request.json()
+            partial_token = str(body.get("partial_token", ""))
+        except Exception:
+            partial_token = ""
+        if partial_token:
+            key_suffix = hashlib.sha256(partial_token.encode()).hexdigest()[:16]
+            await _check_rate_limit(f"{endpoint}_token:{key_suffix}", limit, window_seconds, db)
+
+    return _dep
+
+
 # ---------------------------------------------------------------------------
 # Pre-configured limiters for auth endpoints (per security baseline §2)
 # ---------------------------------------------------------------------------
@@ -106,8 +147,20 @@ register_ip_limiter = rate_limit_by_ip(limit=5, window_seconds=3600, endpoint="r
 reset_ip_limiter = rate_limit_by_ip(limit=10, window_seconds=3600, endpoint="password_reset")
 reset_email_limiter = rate_limit_by_email(limit=3, window_seconds=3600, endpoint="password_reset")
 
-# POST /auth/2fa/verify: 10/min per IP, 5 per 15 min per... we use IP only (no email in body)
+# POST /auth/2fa/verify: 10/min per IP + 5 per 5-min partial-token lifetime per token
+# Partial tokens live 5 minutes (see create_partial_token), so 5 attempts per
+# token is the natural ceiling before a genuine user would need to re-login.
 totp_ip_limiter = rate_limit_by_ip(limit=10, window_seconds=60, endpoint="2fa_verify")
+totp_partial_token_limiter = rate_limit_by_partial_token(
+    limit=5, window_seconds=300, endpoint="2fa_verify"
+)
+
+# POST /auth/2fa/recovery: 5 per hour per IP + 3 per partial-token lifetime per token
+# Recovery codes skip TOTP entirely, so stricter caps than regular 2FA verify.
+recovery_ip_limiter = rate_limit_by_ip(limit=5, window_seconds=3600, endpoint="2fa_recovery")
+recovery_partial_token_limiter = rate_limit_by_partial_token(
+    limit=3, window_seconds=300, endpoint="2fa_recovery"
+)
 
 # POST /auth/refresh: 60/min per IP
 refresh_ip_limiter = rate_limit_by_ip(limit=60, window_seconds=60, endpoint="refresh")

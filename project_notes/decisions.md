@@ -262,6 +262,59 @@ Use **Neon Postgres** for the POC, not Fly Postgres.
 
 ---
 
+## ADR-012: Phase 1 Hardening — Remediations from Pre-Phase-2 Review
+
+**Date:** 2026-04-21
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+After Phase 1 Sprint 5 landed the full infrastructure + auth stack, a triaged code review (`project_notes/code_review_phase1.md`) surfaced 35 findings across auth, validation, error handling, state, secrets, observability, dependencies, and dead code. Several were ship-stoppers for Phase 2 (refresh tokens not delivered, rate limiter keyed on the wrong IP, 2FA enable/disable required no password re-auth, python-jose CVEs, email sends blocking the request path). This ADR records the design decisions made while hardening Phase 1 before Phase 2 begins.
+
+### Decisions
+
+1. **Refresh tokens are delivered via an HttpOnly + SameSite=Strict cookie scoped to `/api/v1/auth`.** Not a bearer body field. `/refresh` and `/logout` read the cookie; `/logout` clears it. `/2fa/verify` and `/2fa/recovery` also set the cookie on successful elevation from partial token. Cookie `secure` is toggled on `settings.is_production`.
+
+2. **JWT signing moves from `python-jose` to `PyJWT`.** python-jose is effectively unmaintained with two open CVEs (algorithm confusion, JWT bomb DoS). PyJWT defaults to rejecting `alg=none` and is actively maintained. All JWT call sites (auth service, auth middleware, structured-logging middleware, tests) migrated in one pass.
+
+3. **Email dispatch is non-blocking via FastAPI `BackgroundTasks`, with a `_safe_send` decorator that logs-and-swallows.** This is a Phase-1 stopgap — not a durable queue. Phase 2's intake confirmation email (feature 2.2.2) uses `NotificationService` via the `notification_jobs` Postgres queue per ADR-001. Service functions that dispatch email take an optional `background_tasks: BackgroundTasks | None` and fall back to inline `await` for tests and scripts.
+
+4. **2FA enable and disable require the current password in addition to the TOTP code.** A stolen access token alone is no longer sufficient to bind or unbind the account from an authenticator. Wrong password emits a `user.2fa_reauth_failed` audit event.
+
+5. **Client IP resolution prefers `CF-Connecting-IP` (Cloudflare) → `X-Forwarded-For` first entry → socket peer.** Centralized as `middleware.rate_limit.get_client_ip()`. Documented trust boundary: requests that bypass both Cloudflare and Fly's proxy can forge these headers, but only affect their own rate-limit bucket. No cross-user impact.
+
+6. **Observability: the logging middleware never re-verifies JWTs.** Instead, `middleware.auth.get_current_user` stashes `user_id` on `request.state` after successful decode; the logging middleware reads it from the ASGI scope. `request_id.py` sets a Sentry tag per request. 5xx responses log at `error`; uncaught exceptions get `logger.exception` with class + traceback.
+
+7. **`audit_logs` is partitioned monthly on `created_at`.** Migration 003 rewrites the flat table. In PG 16 the parent trigger and indexes propagate to all partitions. Migration 004 adds `fn_sweep_retention()` (deletes stale `rate_limit_counters`, `webhook_events_seen`, long-expired/revoked `user_sessions`) and `fn_ensure_audit_partitions()` (creates partitions for current + next two months, advisory-locked). A `temple-sweeper` Fly Machine invokes both hourly via `scripts/sweep_retention.py`.
+
+8. **`get_db` auto-commit behavior is kept and documented.** One DB transaction per request is the right default for simple CRUD. Services that need multi-step work (commit record → fire event → open new tx) must instantiate `AsyncSessionLocal()` directly rather than relying on the FastAPI dependency. Comment in `api/database/base.py:42-50`.
+
+9. **CORS locked to explicit methods and headers.** `allow_methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"]`, `allow_headers=["Authorization","Content-Type","X-Request-ID"]`. Credentials still allowed since the origin list is constrained.
+
+10. **Trivy scanner: `ignore-unfixed: false`.** Suppressions require per-CVE entries in `.trivyignore` with justification. Unfixed-but-exploitable CVEs surface instead of silently suppressing.
+
+### Deferred items (recorded here for provenance)
+
+- **TOTP `MultiFernet` rotation** → Phase 5 sprint 0 (`dev_plan/05_phase5_ios_app.md`, `dev_plan/11_security_baseline.md §14`).
+- **Prometheus `/metrics` endpoint** → later phase (`11_security_baseline.md §14`).
+- **boto3 → aioboto3 evaluation** → not planned; flagged for reconsideration if R2 becomes hot.
+- **PII retention for `user_sessions`, `known_devices`, `audit_logs` row-level** → Phase 2 data export/deletion work (`11_security_baseline.md §7`).
+
+### Consequences
+
+- `.env.example`, README, `docs/fly-provisioning.md`, CI `$GITHUB_ENV` no longer reference `JWT_REFRESH_SECRET`. Deployments can drop the secret next rotation.
+- Web frontend uses `withCredentials: true` on auth-adjacent fetches so the cookie rides along. If staging origin ≠ API origin, verify `SameSite=Strict` doesn't break the cross-origin cookie during staging smoke.
+- The hourly `temple-sweeper` machine must be provisioned via `fly machine run . --app temple-sweeper --schedule hourly` before Phase 2 traffic exercises the rate limiter or the webhook dedup table.
+
+### References
+
+- Working branch: `phase1-hardening` (14 commits; single PR to `main`).
+- Code review: `project_notes/code_review_phase1.md` + Outline https://kb.saltrun.net/doc/baXdhfglbk.
+- Resolution table: same document, "Remediation status" section.
+
+---
+
 ## ADR-010: Session and Rate Limiting Storage — Postgres Tables in POC
 
 **Date:** 2026-04-20

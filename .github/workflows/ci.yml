@@ -96,7 +96,6 @@ jobs:
       - name: Generate CI secrets
         run: |
           echo "JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(64))')" >> $GITHUB_ENV
-          echo "JWT_REFRESH_SECRET=$(python3 -c 'import secrets; print(secrets.token_hex(64))')" >> $GITHUB_ENV
           cd api && echo "TOTP_ENCRYPTION_KEY=$(uv run python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> $GITHUB_ENV
 
       - name: Create test database
@@ -144,28 +143,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          version: '0.5.4'
-
-      - name: Install API deps
-        run: cd api && uv sync
-
-      - name: Generate CI secrets
-        run: |
-          echo "JWT_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(64))')" >> $GITHUB_ENV
-          echo "JWT_REFRESH_SECRET=$(python3 -c 'import secrets; print(secrets.token_hex(64))')" >> $GITHUB_ENV
-          cd api && echo "TOTP_ENCRYPTION_KEY=$(uv run python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> $GITHUB_ENV
-
-      - name: Run test suite against staging DB
-        run: echo "Skipping — staging deploy already passed CI. Prod deploys from the same SHA."
 
       - name: Set up flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master

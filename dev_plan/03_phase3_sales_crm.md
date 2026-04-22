@@ -1,8 +1,15 @@
 # Phase 3 — Sales CRM, Lead Routing & Shared Calendar
 
-> **Prerequisite reading:** `00_overview.md`, `01_phase1_infrastructure_auth.md`, `02_phase2_customer_portal.md`
+> **Prerequisite reading:** `00_overview.md`, `01_phase1_infrastructure_auth.md`, `02_phase2_customer_portal.md`, `project_notes/decisions.md` (ADR-012)
 > **Estimated scope:** 4–5 weeks
 > **Deliverable:** Sales rep dashboard, lead routing engine with waterfall rules, shared calendar with automated conflict resolution and drive time buffering, click-to-call, automated notifications
+
+---
+
+## Phase 1 Carry-Forward Notes
+
+- **`audit_logs` is already monthly-range-partitioned on `created_at`** as of Phase 1 hardening (migration 003, ADR-012). Phase 3's high-volume audit traffic (lead routing, calendar events, lock overrides) uses the partitioned table unchanged — nothing to do here beyond normal `_audit()` calls.
+- **Hourly retention sweeper** (`temple-sweeper` Fly Machine) keeps `rate_limit_counters` / `webhook_events_seen` / expired `user_sessions` in check. If Phase 3 adds new ephemeral tables, extend `fn_sweep_retention()` and include them in `scripts/sweep_retention.py` rather than spinning up another cron.
 
 ---
 
