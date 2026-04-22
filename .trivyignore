@@ -1,0 +1,55 @@
+# ABOUTME: Per-CVE Trivy suppressions with written justification, per ADR-012 /
+# ABOUTME: dev_plan/10_operations_runbook.md §16. Review every entry quarterly.
+#
+# Policy: security.yml sets `ignore-unfixed: false` so unfixed CRITICAL/HIGH
+# CVEs fail the scan by default. To suppress a CVE here, you MUST include:
+#   1. The affected package(s) and Debian tracker link.
+#   2. Whether the vulnerable code path is reachable from our runtime.
+#   3. A review trigger (base-image bump, upstream patch, etc.).
+# Blanket suppressions are not allowed.
+
+# -----------------------------------------------------------------------------
+# CVE-2023-45853 — CRITICAL — zlib1g 1:1.2.13 MiniZip integer overflow
+# Packages: zlib1g (base image python:3.12.7-slim → Debian 12 bookworm)
+# Tracker:  https://security-tracker.debian.org/tracker/CVE-2023-45853
+# Stance:   Debian marks this no-DSA / end-of-life because the vulnerable
+#           MiniZip code lives in zlib's contrib/ subdirectory and is NOT
+#           compiled into the distro package. Our application does not
+#           invoke MiniZip directly (no zip-handling code path).
+# Review:   Drop this entry when we bump base to Debian 13 (trixie) — planned
+#           as a Phase 2 follow-up since the trixie image ships newer zlib.
+CVE-2023-45853
+
+# -----------------------------------------------------------------------------
+# CVE-2025-69720 — HIGH — ncurses 6.4-4 memory safety
+# Packages: ncurses-bin, ncurses-base, libtinfo6, libncursesw6
+# Tracker:  https://security-tracker.debian.org/tracker/CVE-2025-69720
+# Stance:   Unfixed in Debian 12 bookworm; Debian 12 LTS backport pending.
+#           The API container runs uvicorn non-interactively — no stdin TTY,
+#           no readline usage in app code (verified: no `import readline` or
+#           `import curses` in api/). Library is present purely as a
+#           transitive dependency of Python's build (not consumed at
+#           runtime).
+# Review:   Re-evaluate on Debian 12 LTS backport or trixie upgrade.
+CVE-2025-69720
+
+# -----------------------------------------------------------------------------
+# CVE-2026-29111 — HIGH — systemd 252.31-1~deb12u1
+# Packages: libsystemd0, libudev1
+# Tracker:  https://security-tracker.debian.org/tracker/CVE-2026-29111
+# Stance:   Unfixed in Debian 12 bookworm. Our container does not run
+#           systemd and app code does not link libsystemd at runtime. These
+#           libraries are transitive deps of other base-image packages only.
+# Review:   Re-evaluate on Debian 12 LTS backport or trixie upgrade.
+CVE-2026-29111
+
+# -----------------------------------------------------------------------------
+# CVE-2025-7458 — HIGH — sqlite3 3.40.1 integer overflow
+# Packages: libsqlite3-0
+# Tracker:  https://security-tracker.debian.org/tracker/CVE-2025-7458
+# Stance:   Application uses Postgres via asyncpg; Python stdlib `sqlite3`
+#           is not imported anywhere in api/ (verified:
+#           `grep -r "import sqlite3" api/` = 0 hits). The library ships
+#           with CPython but is never loaded. Unfixed upstream.
+# Review:   Re-evaluate on upstream SQLite fix or base-image bump.
+CVE-2025-7458
