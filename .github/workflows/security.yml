@@ -47,6 +47,9 @@ jobs:
           # written justification; silencing the whole class hides exploitable
           # bugs that upstream hasn't patched yet.
           ignore-unfixed: false
+          # Explicit path to the suppression file — the action doesn't pass
+          # --ignorefile unless this is set, even if .trivyignore is at repo root.
+          trivyignores: .trivyignore
 
       - name: Upload Trivy results to GitHub Security
         if: always()
