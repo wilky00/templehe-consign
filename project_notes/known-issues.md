@@ -28,6 +28,24 @@
 2. Accelerate GCP migration — Cloud SQL has PITR on by default at no extra cost; Neon can be cancelled
 **Not an immediate blocker** — only matters before real customer data lands on prod. POC dev/staging usage on free tier is fine.
 
+## OPEN — Neon `neondb_owner` password leaked in chat (2026-04-22)
+**Status:** Credential exposed in a Claude Code conversation + local shell history; not rotated yet
+**Impact:** Holder of the credential has read/write to one Neon branch. Dev/staging hold test data only; prod is not yet live with customer data.
+**Action:** Rotate the `neondb_owner` password in the Neon console, update `fly secrets` on `temple-api-{dev,staging,prod}`, update `.env`. Bundle with the Neon Pro / PITR activation above — same gate: before real customer data lands on prod.
+**Not an immediate blocker** — same risk profile as the PITR gap; both get resolved together in the "prod go-live readiness" checklist.
+
+## OPEN — Fly app `temple-sweeper` not yet created
+**Status:** `infra/fly/temple-sweeper.toml` committed (WS13), but the Fly app itself hasn't been created — `fly secrets` / `fly deploy` fail with "Could not find App".
+**Impact:** Hourly retention sweep (rate_limit_counters, webhook_events_seen, expired user_sessions) + monthly audit-log partition bootstrap don't run. Tables grow unbounded.
+**Action (same Phase 2 go-live gate):**
+```
+fly apps create temple-sweeper --org <org-slug>
+fly secrets set -a temple-sweeper DATABASE_URL="<prod pooler url>"
+fly machine run . --app temple-sweeper \
+  --config infra/fly/temple-sweeper.toml --schedule hourly --region iad
+```
+**Not an immediate blocker** — POC staging/dev traffic is a handful of rows/day from CI. Provision alongside Neon Pro upgrade + password rotation as one bundle.
+
 ## FIXED — `AnalyticsEvent.metadata` SQLAlchemy reserved name clash
 **Fixed:** 2026-04-20 — `api/database/models.py:700`
 **Was:** `metadata: Mapped[dict | None]` — conflicts with `DeclarativeBase.metadata`
