@@ -50,6 +50,11 @@ jobs:
           # Explicit path to the suppression file — the action doesn't pass
           # --ignorefile unless this is set, even if .trivyignore is at repo root.
           trivyignores: .trivyignore
+          # Without this, the action writes every LOW/MEDIUM/HIGH/CRITICAL to
+          # the SARIF regardless of `severity`, and its exit-code logic trips
+          # on those. With it, SARIF matches the severity filter and the
+          # .trivyignore suppressions actually translate to exit 0.
+          limit-severities-for-sarif: 'true'
 
       - name: Upload Trivy results to GitHub Security
         if: always()
