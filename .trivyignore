@@ -44,12 +44,26 @@ CVE-2025-69720
 CVE-2026-29111
 
 # -----------------------------------------------------------------------------
-# CVE-2025-7458 — HIGH — sqlite3 3.40.1 integer overflow
+# CVE-2026-0861 — HIGH — glibc 2.36 integer overflow in memalign
+# Packages: libc-bin, libc6
+# Tracker:  https://security-tracker.debian.org/tracker/CVE-2026-0861
+# Stance:   Unfixed in Debian 12. glibc is required by Python; the vulnerable
+#           code path is `memalign()` with attacker-controlled size values.
+#           Python's stdlib does not expose memalign, and none of our deps
+#           (bcrypt, cryptography, asyncpg) call it directly. No user input
+#           reaches a memalign call at runtime.
+# Review:   Re-evaluate on Debian 12 LTS backport or trixie upgrade.
+CVE-2026-0861
+
+# -----------------------------------------------------------------------------
+# CVE-2025-7458 — CRITICAL — sqlite3 integer overflow
 # Packages: libsqlite3-0
 # Tracker:  https://security-tracker.debian.org/tracker/CVE-2025-7458
 # Stance:   Application uses Postgres via asyncpg; Python stdlib `sqlite3`
 #           is not imported anywhere in api/ (verified:
 #           `grep -r "import sqlite3" api/` = 0 hits). The library ships
-#           with CPython but is never loaded. Unfixed upstream.
-# Review:   Re-evaluate on upstream SQLite fix or base-image bump.
+#           with CPython but is never loaded. apt-get upgrade brings us to
+#           libsqlite3-0 3.40.1-2+deb12u2 but Trivy marks that version as
+#           still affected; awaiting a Debian patch or trixie upgrade.
+# Review:   Re-evaluate on next base-image / sqlite version bump.
 CVE-2025-7458

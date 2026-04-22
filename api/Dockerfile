@@ -7,7 +7,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_NO_CACHE=1 \
     UV_PYTHON_DOWNLOADS=never \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    DEBIAN_FRONTEND=noninteractive
+
+# Pull Debian security updates on every build. python:3.12.7-slim is an
+# immutable tag frozen in time; upstream rebuilds don't reach it. Without
+# this step Trivy surfaces openssl / sqlite / perl CVEs that already have
+# Debian 12 fixes published — they just aren't in the base image yet.
+RUN apt-get update \
+    && apt-get -y --no-install-recommends upgrade \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /usr/local/bin/uv
