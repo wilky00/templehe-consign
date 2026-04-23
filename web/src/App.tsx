@@ -1,10 +1,20 @@
-// ABOUTME: Root application component — sets up routing for all TempleHE frontend views.
-// ABOUTME: Phase 1 placeholder; full routes are built per phase (Portal=2, CRM=3, Admin=4).
-import { Routes, Route } from "react-router-dom";
+// ABOUTME: Top-level routes — public auth pages + the protected customer portal.
+// ABOUTME: Sales CRM (Phase 3) and Admin Panel (Phase 4) remain placeholders until those phases land.
+import { Navigate, Route, Routes } from "react-router-dom";
+import { Layout } from "./components/Layout";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AccountPage } from "./pages/Account";
+import { DashboardPage } from "./pages/Dashboard";
+import { EquipmentDetailPage } from "./pages/EquipmentDetail";
+import { IntakeFormPage } from "./pages/IntakeForm";
+import { LoginPage } from "./pages/Login";
+import { NotFoundPage } from "./pages/NotFound";
+import { RegisterPage } from "./pages/Register";
+import { VerifyEmailPage } from "./pages/VerifyEmail";
 
-function Placeholder({ title }: { title: string }) {
+function PhasePlaceholder({ title }: { title: string }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="text-center">
         <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
         <p className="mt-2 text-gray-500">Coming in a future phase.</p>
@@ -16,12 +26,55 @@ function Placeholder({ title }: { title: string }) {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Placeholder title="Temple Heavy Equipment" />} />
-      <Route path="/login" element={<Placeholder title="Login" />} />
-      <Route path="/portal/*" element={<Placeholder title="Customer Portal" />} />
-      <Route path="/sales/*" element={<Placeholder title="Sales CRM" />} />
-      <Route path="/admin/*" element={<Placeholder title="Admin Panel" />} />
-      <Route path="*" element={<Placeholder title="404 — Page Not Found" />} />
+      <Route path="/" element={<Navigate to="/portal" replace />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+
+      <Route
+        path="/portal"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <DashboardPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/portal/submit"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <IntakeFormPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/portal/equipment/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <EquipmentDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/portal/account"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AccountPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="/sales/*" element={<PhasePlaceholder title="Sales CRM" />} />
+      <Route path="/admin/*" element={<PhasePlaceholder title="Admin Panel" />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

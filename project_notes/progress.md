@@ -318,4 +318,80 @@ Spec: Epic 2.5 + security baseline §7 in `dev_plan/11_security_baseline.md`
 
 ---
 
+### Sprint 5: Web Frontend (Customer Portal) — COMPLETE (verified green 2026-04-23)
+
+Spec: Epic 2.1–2.6 (customer-facing UI) in `dev_plan/02_phase2_customer_portal.md`
+
+Every Phase 2 backend endpoint now has a working UI path. Design is workmanlike Tailwind utility classes — visual polish + design-system tokens can iterate once UAT surfaces what needs attention.
+
+**API client + state (6 files):**
+- [x] `web/src/api/client.ts` — fetch wrapper with Bearer header, `credentials: "include"` for the refresh cookie, auto `401 → /auth/refresh → retry` dance, typed `ApiError` with `status` + `detail`
+- [x] `web/src/api/types.ts` — TypeScript shapes mirroring every backend schema
+- [x] `web/src/api/auth.ts`, `legal.ts`, `equipment.ts`, `account.ts` — typed wrappers per domain
+- [x] `web/src/state/auth.ts` — Zustand store for the access token (sessionStorage-backed; refresh is HttpOnly cookie)
+- [x] `web/src/hooks/useMe.ts` — React Query hook against `/auth/me`, gated on token presence
+
+**Design-system atoms (6 files):**
+- [x] `web/src/components/ui/Button.tsx` — 4 variants (primary/secondary/ghost/danger), 3 sizes, accessible focus ring
+- [x] `web/src/components/ui/Input.tsx` — `TextInput`, `Select`, `Textarea`, `Checkbox` — consistent labels + errors + aria-invalid
+- [x] `web/src/components/ui/Alert.tsx` — 4 tones, role=alert on errors/warnings
+- [x] `web/src/components/ui/Card.tsx` — simple bordered container
+- [x] `web/src/components/ui/Spinner.tsx` — css-only animated loader with aria-label
+- [x] `web/src/components/ui/StatusBadge.tsx` — colored badge mapping the 8 Phase 2 equipment statuses
+
+**Shell (3 files):**
+- [x] `web/src/components/Layout.tsx` — header + nav + logout + ToS interstitial wrapper for every authenticated page
+- [x] `web/src/components/ProtectedRoute.tsx` — redirects to /login on no-token or /auth/me failure
+- [x] `web/src/components/ToSInterstitial.tsx` — full-screen modal driven by `CurrentUser.requires_terms_reaccept`; re-accept triggers `POST /legal/accept` then invalidates the `me` query
+
+**Customer portal pages (8 files):**
+- [x] `web/src/pages/Register.tsx` — pulls current ToS + Privacy versions, requires the consent checkbox, echoes versions on `POST /auth/register`; success shows the "check your inbox" state
+- [x] `web/src/pages/Login.tsx` — simple email+password, sets the access token, honors `Location.state.from` for a post-login redirect
+- [x] `web/src/pages/VerifyEmail.tsx` — reads `?token=…`, calls `GET /auth/verify-email`, surfaces success/error
+- [x] `web/src/pages/Dashboard.tsx` — lists submissions with status badges + a "Submit new equipment" CTA; empty state links to intake
+- [x] `web/src/pages/IntakeForm.tsx` — category dropdown (new `GET /me/equipment/categories` backend endpoint added for this), all customer-supplied fields, multi-photo picker; submits record with `photos=[]` then runs the 3-step signed-URL upload per file and partials any failures back as a warning
+- [x] `web/src/pages/EquipmentDetail.tsx` — details card, timeline card, photo grid (reads from `VITE_R2_PUBLIC_URL` when set; otherwise shows storage_key as placeholder), and an inline change-request form that shows prior requests
+- [x] `web/src/pages/Account.tsx` — email preferences (save-on-click), data export (request + latest job state + download link), account deletion (confirmation checkbox → request; pending_deletion users see the cancel button)
+- [x] `web/src/pages/NotFound.tsx` — catch-all 404
+- [x] `web/src/App.tsx` — real routes for `/login`, `/register`, `/auth/verify-email`, `/portal`, `/portal/submit`, `/portal/equipment/:id`, `/portal/account`; Sales CRM + Admin Panel stay as placeholders
+
+**Supporting (2 files):**
+- [x] `web/src/hooks/usePhotoUpload.ts` — orchestrates `upload-url → PUT (direct to R2 via fetch) → finalize` for a single file
+- [x] `web/src/vite-env.d.ts` — ImportMeta typings for `VITE_API_BASE_URL` and `VITE_R2_PUBLIC_URL`
+
+**Backend side-car:**
+- [x] `api/routers/equipment.py` — new `GET /me/equipment/categories` endpoint returning active categories ordered by display_order (customer role required; existing tests unaffected)
+
+**Env:**
+- [x] `web/.env.example` — documents `VITE_API_BASE_URL` (defaults to vite proxy → `:8000`) and `VITE_R2_PUBLIC_URL` for photo thumbnails
+
+**Full stack gates:** `npm run build` clean (119 modules, 249 KB main JS), `npm run lint` clean, backend 195/195 tests green, ruff clean. No frontend unit tests this sprint — that's Sprint 6's Playwright + axe + Lighthouse territory.
+
+**Bugs fixed during sprint:**
+- TypeScript build initially failed with `Property 'env' does not exist on type 'ImportMeta'` — added `web/src/vite-env.d.ts` with the standard Vite augmentation so `VITE_*` reads type-check.
+
+**Deliberately deferred (flagged, not regressed):**
+- 2FA setup/verify/disable UI — all backend endpoints exist and the `CurrentUser.totp_enabled` flag is in the types; the Phase 5 iOS sprint will need the UI and can build it then.
+- Password reset + change email full UI — backend endpoints shipped in Phase 1; the front-end flow is one more pair of pages that Phase 6 polish can pick up.
+- Polished design system (color tokens, type ramp, spacing scale) — minimal Tailwind utility classes today. Phase 6 design pass handles the visual refresh.
+- Frontend unit tests (Vitest + Testing Library) — Sprint 6 delivers E2E + axe + Lighthouse as the gate; component-level unit tests come alongside if useful.
+
+**Flows working end-to-end against local stack (`make dev` + `npm run dev`):**
+1. Register → ToS/Privacy consent → verification email → verify → login
+2. Dashboard → Submit equipment (incl. photos via signed-URL direct to R2 when configured) → detail page → THE-XXXXXXXX reference visible
+3. Detail page → change request → sales notification queued in `notification_jobs`
+4. Account page → email prefs → save
+5. Account page → data export → 7-day download URL surfaced (and emailed via NotificationService)
+6. Account page → delete account → 30-day grace → cancel
+7. Version bump in `app_config.tos_current_version` → ToSInterstitial blocks every route until re-accept
+
+**Endpoints surfaced this sprint (new):**
+- `GET /api/v1/me/equipment/categories` — ordered list of active categories for the intake form dropdown
+
+**Routes (new in the web app):**
+- `/register`, `/login`, `/auth/verify-email`
+- `/portal` (dashboard), `/portal/submit` (intake), `/portal/equipment/:id` (detail + change-request), `/portal/account`
+
+---
+
 ## Phase 3–8 — Not started

@@ -5,10 +5,11 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.base import get_db
-from database.models import EquipmentRecord, User
+from database.models import EquipmentCategory, EquipmentRecord, User
 from middleware.rbac import require_roles
 from schemas.change_request import ChangeRequestCreate, ChangeRequestOut
 from schemas.equipment import (
@@ -69,6 +70,29 @@ def _serialize(record: EquipmentRecord) -> EquipmentRecordOut:
             for e in sorted(record.status_events, key=lambda e: e.created_at)
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# Category catalog (for the intake form dropdown)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/categories")
+async def list_categories(
+    _current_user: User = Depends(_require_customer),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Active equipment categories in display_order, for the customer intake form."""
+    result = await db.execute(
+        select(EquipmentCategory)
+        .where(
+            EquipmentCategory.status == "active",
+            EquipmentCategory.deleted_at.is_(None),
+        )
+        .order_by(EquipmentCategory.display_order, EquipmentCategory.name)
+    )
+    cats = result.scalars().all()
+    return [{"id": str(c.id), "name": c.name, "slug": c.slug} for c in cats]
 
 
 # ---------------------------------------------------------------------------
