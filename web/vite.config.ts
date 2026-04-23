@@ -15,7 +15,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        // 127.0.0.1 not localhost — on macOS the resolver tries ::1 first
+        // and Node's proxy blocks ~35s falling back to IPv4 when the API
+        // listens on 0.0.0.0. Same trap as SMTP to Mailpit.
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
       },
     },

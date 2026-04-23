@@ -38,7 +38,9 @@ class Settings(BaseSettings):
     sendgrid_api_key: str = ""
     sendgrid_from_email: str = "noreply@saltrun.net"
     sendgrid_from_name: str = "Temple Heavy Equipment"
-    smtp_host: str = "localhost"
+    # 127.0.0.1 not "localhost" — on macOS the resolver tries IPv6 ::1 first and
+    # blocks ~35s before falling back to IPv4 when Mailpit only binds to 0.0.0.0.
+    smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
 
     # SMS — A2P 10DLC dispatch goes through a Messaging Service SID; the

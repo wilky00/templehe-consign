@@ -1,8 +1,7 @@
 // ABOUTME: Email verification landing page — reads token from query string and calls /auth/verify-email.
 // ABOUTME: Renders success/failure and a link back to login; idempotent on refresh (same token, same result).
-import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { verifyEmail } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Alert } from "../components/ui/Alert";
@@ -13,13 +12,18 @@ export function VerifyEmailPage() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
 
-  const mutation = useMutation({ mutationFn: verifyEmail });
-
-  useEffect(() => {
-    if (token) {
-      mutation.mutate(token);
-    }
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+  // useQuery rather than useMutation so React Query's built-in dedup
+  // prevents the token from being consumed twice. Plain useMutation inside
+  // a useEffect double-fires under StrictMode (fresh useRef per remount),
+  // which would succeed-then-fail as the account flips pending→active.
+  const query = useQuery({
+    queryKey: ["verify-email", token],
+    queryFn: () => verifyEmail(token),
+    enabled: !!token,
+    retry: false,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
 
   if (!token) {
     return (
@@ -39,12 +43,12 @@ export function VerifyEmailPage() {
 
   return (
     <AuthShell title="Verifying your email">
-      {mutation.isPending && (
+      {query.isLoading && (
         <div className="flex items-center justify-center py-6">
           <Spinner />
         </div>
       )}
-      {mutation.isSuccess && (
+      {query.isSuccess && (
         <>
           <Alert tone="success" title="Email verified">
             Your account is active. You can now log in.
@@ -56,12 +60,12 @@ export function VerifyEmailPage() {
           </p>
         </>
       )}
-      {mutation.isError && (
+      {query.isError && (
         <>
           <Alert tone="error" title="Verification failed">
-            {mutation.error instanceof ApiError
-              ? mutation.error.detail
-              : (mutation.error as Error).message}
+            {query.error instanceof ApiError
+              ? query.error.detail
+              : (query.error as Error).message}
           </Alert>
           <p className="mt-6 text-center text-sm text-gray-600">
             <Link to="/login" className="font-medium text-gray-900 underline">

@@ -234,7 +234,11 @@ export function IntakeFormPage() {
                 visible damage. JPG, PNG, or WebP, up to 20 photos.
               </p>
             </div>
+            <label htmlFor="intake-photos" className="sr-only">
+              Select intake photos
+            </label>
             <input
+              id="intake-photos"
               type="file"
               multiple
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif"

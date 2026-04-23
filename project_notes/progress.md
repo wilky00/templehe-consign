@@ -394,4 +394,59 @@ Every Phase 2 backend endpoint now has a working UI path. Design is workmanlike 
 
 ---
 
+### Sprint 6: Phase 2 Gate — Playwright + axe + Lighthouse — COMPLETE (verified green 2026-04-23)
+
+Spec: `dev_plan/09_testing_strategy.md` §4, §7
+
+Every Phase 2 customer flow is now exercised in a real browser against a real stack. Accessibility is enforced by axe-core (zero Critical/Serious); Lighthouse CI pins Accessibility + Best Practices ≥ 0.9 on the public auth pages.
+
+- [x] `web/package.json` — added `@playwright/test ^1.59`, `@axe-core/playwright ^4.11`, `@lhci/cli ^0.15` dev deps; new scripts: `e2e`, `e2e:ui`, `lhci`
+- [x] `web/playwright.config.ts` — auto-starts `npm run dev` unless `E2E_SKIP_WEBSERVER=1`; trace on first retry, screenshot + video on failure; `fullyParallel: false` + `workers: 1` so per-user rate-limit counters don't cross-contaminate tests
+- [x] `web/e2e/helpers/api.ts` — `makeTestUser` (unique `e2e+slug@example.com` + random TEST-NET-1 fake IP), `apiRegister` / `apiLogin` / `apiVerifyEmail` with the fake IP as `CF-Connecting-IP`, `applyFakeIp` helper to thread the same header onto the browser context (sidesteps the 5-registrations/hour IP limiter)
+- [x] `web/e2e/helpers/mailpit.ts` — polls Mailpit's HTTP API for a verify email by recipient + subject; extracts the JWT token from the HTML body
+- [x] `web/e2e/helpers/axe.ts` — `@axe-core/playwright` wrapper tagged `wcag2a / aa wcag21a / aa`; asserts zero Critical/Serious
+- [x] `web/e2e/phase2_register_verify_login.spec.ts` — register form → Mailpit token → verify page → login → dashboard; plus wrong-password surfaces the error banner
+- [x] `web/e2e/phase2_intake_flow.spec.ts` — intake form → detail page with `THE-XXXXXXXX` → dashboard shows the row + status badge
+- [x] `web/e2e/phase2_change_request.spec.ts` — change request from detail → success banner + appears in prior-requests list
+- [x] `web/e2e/phase2_account.spec.ts` — email prefs save roundtrip (reload preserves), delete → pending_deletion → cancel, data export button renders (R2 happy path left to backend tests)
+- [x] `web/e2e/phase2_tos_interstitial.spec.ts` — Playwright route interceptor flips `requires_terms_reaccept` on `/auth/me` → full-screen modal blocks every route
+- [x] `web/e2e/phase2_accessibility.spec.ts` — axe sweep across public routes (login, register, verify-email) + authenticated routes (dashboard, submit, detail, account); zero Critical/Serious required
+- [x] `web/lighthouserc.cjs` — `/login` and `/register` served from `dist/`; Accessibility + Best Practices ≥ 0.9 gated; Performance kept at a warning (cold-boot CI is noisy)
+- [x] `.github/workflows/ci.yml` — new `e2e` job: Postgres service, Mailpit via `docker run`, uvicorn + vite preview backgrounded, `npx playwright test`, `lhci autorun`; uploads the Playwright report + API log on failure; `deploy-staging` now depends on `e2e` passing
+
+**Frontend/UI fixes discovered by axe + E2E:**
+
+- `web/src/pages/Register.tsx` — `AuthShell` promotes page-specific title to `<h1>` with the brand as supplementary text above; gives every auth page one real landmark so axe heading-order is happy.
+- `web/src/pages/IntakeForm.tsx` — the multi-file photo picker had no label; added a visually-hidden `<label for="intake-photos">` so axe "label" rule passes (was 97 matching nodes).
+- `web/src/pages/VerifyEmail.tsx` — switched from `useMutation` inside `useEffect` to `useQuery`. StrictMode's dev-mode double-mount was firing the verify mutation twice — success the first, 400 the second (status flipped to `active` between calls) — and leaving `mutation.isError` true. `useQuery` dedupes by key and is the right primitive for a token-gated one-shot read anyway.
+
+**Backend + infra fixes discovered by real SMTP round-trip:**
+
+- `api/services/email_service.py` — `smtplib.SMTP(...)` now passes `local_hostname="localhost"` and `timeout=10`. Default invocation calls `socket.getfqdn()`, which on macOS hangs ~35s on an mDNS lookup with no responder. Explicit hostname skips it.
+- `api/config.py` + `.env` + `.env.example` — `smtp_host` default `localhost` → `127.0.0.1`. `localhost` resolves to `::1` first on macOS; Mailpit binds IPv4 only, so the resolver takes ~35s to fall back. 127.0.0.1 is unambiguous.
+- `web/vite.config.ts` — Vite dev proxy `target` `localhost` → `127.0.0.1`. Same IPv6-first trap from the Node side.
+
+**Full local E2E: 12/12 passing in ~15s** against `make dev` + API + Playwright's auto-started vite.
+
+**Bugs fixed during sprint:**
+- Pydantic `email_validator` rejects `.test` TLD (reserved); switched `makeTestUser` to `e2e+<slug>@example.com` (example.com is the reserved documentation domain, passes deliverability check).
+- Per-IP register rate limit (5/hr) blew up fast across repeat runs; random TEST-NET-1 fake IP per test via `CF-Connecting-IP` header (backend's `get_client_ip` already honors it, no API change).
+
+**Deferred (out of scope for Phase 2 gate):**
+- Photo upload E2E through real R2 — backend integration tests already cover `upload-url` + `finalize`; the full UI path needs R2 creds and lives in a manual smoke on staging.
+- Password reset + change email E2E — UIs deferred per Sprint 5 scope note; E2E follows the UI work.
+- 2FA E2E — follows the Phase 5 iOS TOTP work.
+- Lighthouse Performance budget — left as a warning; cold-boot CI scores are too noisy to gate on.
+
+**Phase 2 PR from `phase2-customer-portal` → `main` is ready to open** after this commit. Full Phase 2 scope delivered:
+
+- Sprint 1: ToS + Privacy + consent capture
+- Sprint 2: Equipment intake + durable notification queue + category bundle
+- Sprint 3: Photo upload + status timeline + change requests
+- Sprint 4: GDPR-lite data export + 30-day grace deletion + audit PII scrubber
+- Sprint 5: Web frontend — every endpoint has a UI path
+- Sprint 6: E2E gate green, axe zero Critical/Serious, Lighthouse CI wired
+
+---
+
 ## Phase 3–8 — Not started

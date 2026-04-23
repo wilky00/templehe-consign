@@ -146,13 +146,18 @@ export function AuthShell({
   title: string;
   children: React.ReactNode;
 }) {
+  // Page-specific title becomes the h1 so each auth page has one real
+  // landmark (and axe-core doesn't flag heading-order). The brand stays
+  // above as a smaller supplementary line.
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-md">
-        <h1 className="text-center text-2xl font-semibold text-gray-900">
+        <p className="text-center text-sm font-medium uppercase tracking-wide text-gray-500">
           Temple Heavy Equipment
+        </p>
+        <h1 className="mt-1 text-center text-2xl font-semibold text-gray-900">
+          {title}
         </h1>
-        <p className="mt-1 text-center text-sm text-gray-600">{title}</p>
         <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           {children}
         </div>
