@@ -184,4 +184,56 @@ Spec: Epic 2.1 in `dev_plan/02_phase2_customer_portal.md`
 
 ---
 
+### Sprint 2: Equipment Intake + NotificationService + Bundle Seed — COMPLETE (verified green 2026-04-23)
+
+Spec: Epic 2.2 in `dev_plan/02_phase2_customer_portal.md`
+
+- [x] `api/alembic/versions/006_phase2_intake_and_notifications.py` — adds 12 customer-intake columns + reference_number + category_id FK on `equipment_records`; `customer_intake_photos` child table; `notification_jobs` durable queue with CHECK constraints, partial pending-ready index, and set_updated_at trigger reuse
+- [x] `api/database/models.py` — `EquipmentRecord` intake columns + `category` + `intake_photos` relationships; new `CustomerIntakePhoto` and `NotificationJob` models
+- [x] `api/pyproject.toml` — `bleach>=6.1` re-added (per security baseline §3), `twilio>=9.3` added for A2P 10DLC dispatch
+- [x] `api/config.py` — `twilio_messaging_service_sid` setting; if empty, SMS dispatch is skipped + audited
+- [x] `api/services/sanitization.py` — `sanitize_plain` strips all markup, `sanitize_html` keeps a narrow inline allowlist and blocks `javascript:` / `data:` URIs
+- [x] `api/services/notification_service.py` — `enqueue` (idempotent on key), `claim_next_batch` via `FOR UPDATE SKIP LOCKED`, `process_job` with exponential backoff (30s → 6h) and 5 max attempts; DB-default `scheduled_for` so Python-host clock drift doesn't race `clock_timestamp()`
+- [x] `api/services/equipment_service.py` — `submit_intake` creates record, generates `THE-XXXXXXXX` via Crockford-32 secrets, attaches photos via relationship, enqueues intake confirmation through NotificationService; `list_records_for_user` / `get_record_for_user` use `selectinload` to avoid async lazy-load traps
+- [x] `api/schemas/equipment.py` — `IntakeSubmission` (running_status + ownership_type enums, photo cap=20, year/hours bounds), `IntakePhotoIn/Out`, `EquipmentRecordOut`
+- [x] `api/routers/equipment.py` — `POST /me/equipment`, `POST /me/equipment/batch` → 501 placeholder, `GET /me/equipment`, `GET /me/equipment/{id}`; all gated to `customer` role
+- [x] `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` bumped to `"006"`
+- [x] `scripts/import_category_bundle.py` — imports Dozers, Backhoe Loaders, and Articulated Dump Trucks with full components (weights from `06_scoring_and_rules_logic.csv`), inspection prompts, photo slots, attachments, and red-flag rules (from the per-category checklist markdown)
+- [x] `scripts/seed.py` — trimmed stub category list to the 12 remaining categories and hooked `import_bundle()` so `make seed` ships the three complete categories
+- [x] `scripts/notification_worker.py` — long-running drainer loop with `SELECT ... FOR UPDATE SKIP LOCKED`, signal-handled shutdown, and a `WORKER_SINGLE_PASS` env toggle for ad-hoc runs
+- [x] `infra/fly/temple-notifications.toml` — worker Fly Machine config mirroring the `temple-sweeper` shape
+- [x] `project_notes/known-issues.md` — added a pre-launch-gate entry for provisioning `temple-notifications`
+- [x] `api/tests/conftest.py` — seeds the starter bundle on test DB bootstrap so Phase 2+ tests have real category data
+- [x] `api/tests/unit/test_sanitization.py` — 6 tests: plain-strip, html-allowlist, script/iframe/javascript/data-URI blocks
+- [x] `api/tests/integration/test_equipment_intake.py` — 11 tests: happy path, bleach, running-status/ownership validation, unknown category 422, photo cap, unauth 401, batch 501, list isolation, detail cross-customer 404, reference-number uniqueness
+- [x] `api/tests/integration/test_notification_service.py` — 8 tests: enqueue writes pending, idempotency-key dedup, unknown channel rejected, claim_next_batch marks processing + skips future, delivered on success, retry on exception, failed after max_attempts, SMS skipped when not configured, SMS failed on missing payload fields
+- [x] `api/tests/integration/test_category_bundle_import.py` — 5 tests: 3 starter categories seeded, Dozers child tables populated (8 components + 10 prompts + 10 photos + 8 attachments + 5 red-flag rules), re-import no-ops, unknown-slug ignored, component weights sum to ~100%
+
+**Full test gate: 154/154 green, 94.98% coverage (85% floor)**
+
+**Bugs fixed during sprint:**
+- Test DB never ran the category bundle importer → extended `conftest.py` `setup_test_db` to invoke `import_bundle` after role seed.
+- `EquipmentRecord.intake_photos` triggered a greenlet-less lazy load when the router serialized a newly-created record → populate the collection via `record.intake_photos.append(...)` + `await db.refresh(record, attribute_names=["intake_photos"])`; list/detail paths use `selectinload`.
+- `test_claim_batch_marks_processing_and_skips_future` was flaky because Python on macOS host and Postgres in Docker Desktop VM can drift by hundreds of ms → enqueue now lets the DB default fire on `scheduled_for` when no explicit value is supplied, keeping the insert clock and the claim query's `clock_timestamp()` on the same source. `SELECT ... SKIP LOCKED` query changed `NOW()` → `clock_timestamp()` so jobs enqueued in the same transaction become visible to the worker in the same tx (matters for tests; prod is unaffected).
+- Migration 005 colon-bind trip already captured in Sprint 1, but a similar issue almost re-appeared in 006's test data — avoided by using the ORM throughout.
+
+**Sanitization policy (security baseline §3):**
+- Every customer-supplied free-text field (make, model, serial, location, description, photo caption) runs through `sanitize_plain` before the DB write.
+- `sanitize_html` is reserved for paths that render rich HTML (email templates) — not used in Sprint 2; will come online with status-update emails in Sprint 3.
+
+**Deferred to later Phase 2 sprints:**
+- Photo blob upload (signed R2 URLs + client-side multipart) — Sprint 3. Sprint 2 persists `storage_key` metadata only; the R2 object is assumed to already exist via an out-of-band path.
+- Change request API + status update emails — Sprint 3.
+- GDPR-lite data export + deletion + row-level `audit_logs` PII scrubber — Sprint 4.
+- Web frontend (sign-up, dashboard, intake form, detail timeline) — Sprint 5.
+- Phase 2 E2E (Playwright + axe-core + Lighthouse ≥ 90) — Sprint 6.
+
+**Endpoints (new in Sprint 2):**
+- `POST /api/v1/me/equipment` — submit intake; returns `THE-XXXXXXXX` reference
+- `POST /api/v1/me/equipment/batch` — 501 placeholder for Phase 4/5 bulk import
+- `GET  /api/v1/me/equipment` — list the caller's intakes
+- `GET  /api/v1/me/equipment/{id}` — detail; cross-customer is 404 (not 403 — no ID-space leak)
+
+---
+
 ## Phase 3–8 — Not started

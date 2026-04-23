@@ -71,7 +71,9 @@ async def setup_test_db():
     if result.returncode != 0:
         pytest.fail(f"Alembic migration failed:\n{result.stdout}\n{result.stderr}")
 
-    # Seed roles so auth_service can look up role_id by slug.
+    # Seed roles so auth_service can look up role_id by slug, and the starter
+    # category bundle so Phase 2+ tests have dozers / backhoe-loaders / adt
+    # with full components + prompts + photos + red flag rules.
     engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with session_factory() as session:
@@ -84,6 +86,20 @@ async def setup_test_db():
                 ),
                 {"id": str(uuid.uuid4()), "slug": slug, "display_name": display_name},
             )
+
+        # Import the category bundle. The scripts/ dir is a sibling of api/;
+        # insert it into sys.path just for this import.
+        import os as _os
+        import sys as _sys
+
+        scripts_dir = _os.path.abspath(
+            _os.path.join(_os.path.dirname(__file__), "..", "..", "scripts")
+        )
+        if scripts_dir not in _sys.path:
+            _sys.path.insert(0, scripts_dir)
+        from import_category_bundle import import_bundle  # noqa: E402
+
+        await import_bundle(session)
         await session.commit()
     await engine.dispose()
 

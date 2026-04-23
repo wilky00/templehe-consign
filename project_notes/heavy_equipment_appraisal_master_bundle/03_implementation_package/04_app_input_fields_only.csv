@@ -1,0 +1,301 @@
+section,category,field_name,field_label,data_type,required,ui_control,conditional_rule,help_text
+core_intake,all,appraisal_id,Appraisal Id,string,required,text,,Unique appraisal record ID
+core_intake,all,appraisal_date,Appraisal Date,date,required,date,,Date of site visit
+core_intake,all,appraiser_name,Appraiser Name,string,required,text,,Field tech/appraiser name
+core_intake,all,customer_name,Customer Name,string,required,text,,Owner or seller
+core_intake,all,customer_contact,Customer Contact,string,optional,text,,Primary contact details
+core_intake,all,site_name,Site Name,string,optional,text,,"Jobsite, yard, or farm name"
+core_intake,all,site_address,Site Address,string,required,text,,Inspection location
+core_intake,all,asset_category,Asset Category,enum,required,dropdown,,Machine category selected from master list
+core_intake,all,make,Make,string,required,text,,Manufacturer
+core_intake,all,model,Model,string,required,text,,Model designation
+core_intake,all,serial_number,Serial Number,string,required,text,,Serial or PIN
+core_intake,all,year,Year,integer,optional,number,,Model year if confirmed
+core_intake,all,hours_meter,Hours Meter,decimal,required,number,,Displayed operating hours
+core_intake,all,hours_verified,Hours Verified,boolean,required,checkbox,,Whether meter believed accurate
+core_intake,all,ownership_type,Ownership Type,enum,required,dropdown,,"Owned, financed, leased, unknown"
+core_intake,all,lien_status,Lien Status,enum,optional,dropdown,,"Clear, lien reported, unknown"
+core_intake,all,acquisition_path,Acquisition Path,enum,required,dropdown,,Consignment or direct purchase candidate
+core_intake,all,running_status,Running Status,enum,required,dropdown,,"Running, partial, non-running"
+core_intake,all,can_cold_start,Can Cold Start,boolean,required,checkbox,,Was cold start observed
+core_intake,all,emissions_tier,Emissions Tier,enum,optional,dropdown,,Tier/Stage label if visible
+core_intake,all,cab_type,Cab Type,enum,required,dropdown,,"Open station, canopy, enclosed cab"
+core_intake,all,rops_present,Rops Present,boolean,required,checkbox,,ROPS/FOPS present if applicable
+core_intake,all,transport_notes,Transport Notes,text,optional,text,,Only key issues affecting pickup to yard
+core_intake,all,service_records_available,Service Records Available,boolean,required,checkbox,,Maintenance records available
+core_intake,all,major_rebuild_history,Major Rebuild History,text,optional,text,,"Engine, transmission, hydraulic, UC rebuilds"
+core_intake,all,overall_cosmetic_condition,Overall Cosmetic Condition,enum,required,dropdown,,Excellent/Good/Fair/Poor/Inoperable/Not Verified
+core_intake,all,marketability_rating,Marketability Rating,enum,required,dropdown,,"Fast sell, average, slow sell, salvage risk"
+core_intake,all,photo_set_complete,Photo Set Complete,boolean,required,checkbox,,Required photos captured
+core_intake,all,listing_notes,Listing Notes,text,optional,text,,Market-facing descriptive notes
+core_intake,all,red_flags_summary,Red Flags Summary,text,optional,text,,Major issues affecting value or listing
+component_scoring,Articulated Dump Trucks,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Articulated Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Articulated Dump Trucks,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Articulated Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Articulated Dump Trucks,transmission_score,Transmission Score,integer,required,dropdown,show when asset_category = Articulated Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Articulated Dump Trucks,transmission_notes,Transmission Notes,text,optional,textarea,show when asset_category = Articulated Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Articulated Dump Trucks,center_hitch_articulation_score,Center hitch/articulation Score,integer,required,dropdown,show when asset_category = Articulated Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Articulated Dump Trucks,center_hitch_articulation_notes,Center hitch/articulation Notes,text,optional,textarea,show when asset_category = Articulated Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Articulated Dump Trucks,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Articulated Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Articulated Dump Trucks,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Articulated Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Articulated Dump Trucks,axles_differentials_score,Axles/differentials Score,integer,required,dropdown,show when asset_category = Articulated Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Articulated Dump Trucks,axles_differentials_notes,Axles/differentials Notes,text,optional,textarea,show when asset_category = Articulated Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Articulated Dump Trucks,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Articulated Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Articulated Dump Trucks,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Articulated Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Articulated Dump Trucks,cab_interior_score,Cab/interior Score,integer,required,dropdown,show when asset_category = Articulated Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Articulated Dump Trucks,cab_interior_notes,Cab/interior Notes,text,optional,textarea,show when asset_category = Articulated Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Articulated Dump Trucks,body_chassis_score,Body/chassis Score,integer,required,dropdown,show when asset_category = Articulated Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Articulated Dump Trucks,body_chassis_notes,Body/chassis Notes,text,optional,textarea,show when asset_category = Articulated Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Articulated Dump Trucks,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Articulated Dump Trucks,Select all observed attachments/options
+photos,Articulated Dump Trucks,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Articulated Dump Trucks,Complete all required photos before submission
+component_scoring,Rigid Frame Dump Trucks,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Rigid Frame Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Rigid Frame Dump Trucks,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Rigid Frame Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rigid Frame Dump Trucks,transmission_score,Transmission Score,integer,required,dropdown,show when asset_category = Rigid Frame Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Rigid Frame Dump Trucks,transmission_notes,Transmission Notes,text,optional,textarea,show when asset_category = Rigid Frame Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rigid Frame Dump Trucks,hydraulic_hoist_score,Hydraulic hoist Score,integer,required,dropdown,show when asset_category = Rigid Frame Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Rigid Frame Dump Trucks,hydraulic_hoist_notes,Hydraulic hoist Notes,text,optional,textarea,show when asset_category = Rigid Frame Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rigid Frame Dump Trucks,axles_suspension_score,Axles/suspension Score,integer,required,dropdown,show when asset_category = Rigid Frame Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Rigid Frame Dump Trucks,axles_suspension_notes,Axles/suspension Notes,text,optional,textarea,show when asset_category = Rigid Frame Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rigid Frame Dump Trucks,frame_chassis_score,Frame/chassis Score,integer,required,dropdown,show when asset_category = Rigid Frame Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Rigid Frame Dump Trucks,frame_chassis_notes,Frame/chassis Notes,text,optional,textarea,show when asset_category = Rigid Frame Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rigid Frame Dump Trucks,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Rigid Frame Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Rigid Frame Dump Trucks,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Rigid Frame Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rigid Frame Dump Trucks,cab_interior_score,Cab/interior Score,integer,required,dropdown,show when asset_category = Rigid Frame Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Rigid Frame Dump Trucks,cab_interior_notes,Cab/interior Notes,text,optional,textarea,show when asset_category = Rigid Frame Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rigid Frame Dump Trucks,body_score,Body Score,integer,required,dropdown,show when asset_category = Rigid Frame Dump Trucks,Use shared 0 to 5 condition scale
+component_notes,Rigid Frame Dump Trucks,body_notes,Body Notes,text,optional,textarea,show when asset_category = Rigid Frame Dump Trucks,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Rigid Frame Dump Trucks,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Rigid Frame Dump Trucks,Select all observed attachments/options
+photos,Rigid Frame Dump Trucks,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Rigid Frame Dump Trucks,Complete all required photos before submission
+component_scoring,Backhoe Loaders,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Backhoe Loaders,Use shared 0 to 5 condition scale
+component_notes,Backhoe Loaders,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Backhoe Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Backhoe Loaders,transmission_driveline_score,Transmission/driveline Score,integer,required,dropdown,show when asset_category = Backhoe Loaders,Use shared 0 to 5 condition scale
+component_notes,Backhoe Loaders,transmission_driveline_notes,Transmission/driveline Notes,text,optional,textarea,show when asset_category = Backhoe Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Backhoe Loaders,loader_assembly_score,Loader assembly Score,integer,required,dropdown,show when asset_category = Backhoe Loaders,Use shared 0 to 5 condition scale
+component_notes,Backhoe Loaders,loader_assembly_notes,Loader assembly Notes,text,optional,textarea,show when asset_category = Backhoe Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Backhoe Loaders,backhoe_assembly_score,Backhoe assembly Score,integer,required,dropdown,show when asset_category = Backhoe Loaders,Use shared 0 to 5 condition scale
+component_notes,Backhoe Loaders,backhoe_assembly_notes,Backhoe assembly Notes,text,optional,textarea,show when asset_category = Backhoe Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Backhoe Loaders,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Backhoe Loaders,Use shared 0 to 5 condition scale
+component_notes,Backhoe Loaders,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Backhoe Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Backhoe Loaders,pins_bushings_score,Pins/bushings Score,integer,required,dropdown,show when asset_category = Backhoe Loaders,Use shared 0 to 5 condition scale
+component_notes,Backhoe Loaders,pins_bushings_notes,Pins/bushings Notes,text,optional,textarea,show when asset_category = Backhoe Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Backhoe Loaders,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Backhoe Loaders,Use shared 0 to 5 condition scale
+component_notes,Backhoe Loaders,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Backhoe Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Backhoe Loaders,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Backhoe Loaders,Use shared 0 to 5 condition scale
+component_notes,Backhoe Loaders,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Backhoe Loaders,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Backhoe Loaders,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Backhoe Loaders,Select all observed attachments/options
+photos,Backhoe Loaders,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Backhoe Loaders,Complete all required photos before submission
+component_scoring,Dozers,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Dozers,Use shared 0 to 5 condition scale
+component_notes,Dozers,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Dozers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Dozers,transmission_steering_score,Transmission/steering Score,integer,required,dropdown,show when asset_category = Dozers,Use shared 0 to 5 condition scale
+component_notes,Dozers,transmission_steering_notes,Transmission/steering Notes,text,optional,textarea,show when asset_category = Dozers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Dozers,final_drives_score,Final drives Score,integer,required,dropdown,show when asset_category = Dozers,Use shared 0 to 5 condition scale
+component_notes,Dozers,final_drives_notes,Final drives Notes,text,optional,textarea,show when asset_category = Dozers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Dozers,undercarriage_score,Undercarriage Score,integer,required,dropdown,show when asset_category = Dozers,Use shared 0 to 5 condition scale
+component_notes,Dozers,undercarriage_notes,Undercarriage Notes,text,optional,textarea,show when asset_category = Dozers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Dozers,blade_assembly_score,Blade assembly Score,integer,required,dropdown,show when asset_category = Dozers,Use shared 0 to 5 condition scale
+component_notes,Dozers,blade_assembly_notes,Blade assembly Notes,text,optional,textarea,show when asset_category = Dozers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Dozers,ripper_assembly_score,Ripper assembly Score,integer,required,dropdown,show when asset_category = Dozers,Use shared 0 to 5 condition scale
+component_notes,Dozers,ripper_assembly_notes,Ripper assembly Notes,text,optional,textarea,show when asset_category = Dozers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Dozers,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Dozers,Use shared 0 to 5 condition scale
+component_notes,Dozers,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Dozers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Dozers,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Dozers,Use shared 0 to 5 condition scale
+component_notes,Dozers,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Dozers,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Dozers,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Dozers,Select all observed attachments/options
+photos,Dozers,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Dozers,Complete all required photos before submission
+component_scoring,Excavators,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Excavators,Use shared 0 to 5 condition scale
+component_notes,Excavators,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Excavators,hydraulic_pumps_system_score,Hydraulic pumps/system Score,integer,required,dropdown,show when asset_category = Excavators,Use shared 0 to 5 condition scale
+component_notes,Excavators,hydraulic_pumps_system_notes,Hydraulic pumps/system Notes,text,optional,textarea,show when asset_category = Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Excavators,swing_system_score,Swing system Score,integer,required,dropdown,show when asset_category = Excavators,Use shared 0 to 5 condition scale
+component_notes,Excavators,swing_system_notes,Swing system Notes,text,optional,textarea,show when asset_category = Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Excavators,boom_stick_bucket_score,Boom/stick/bucket Score,integer,required,dropdown,show when asset_category = Excavators,Use shared 0 to 5 condition scale
+component_notes,Excavators,boom_stick_bucket_notes,Boom/stick/bucket Notes,text,optional,textarea,show when asset_category = Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Excavators,undercarriage_score,Undercarriage Score,integer,required,dropdown,show when asset_category = Excavators,Use shared 0 to 5 condition scale
+component_notes,Excavators,undercarriage_notes,Undercarriage Notes,text,optional,textarea,show when asset_category = Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Excavators,travel_motors_drives_score,Travel motors/drives Score,integer,required,dropdown,show when asset_category = Excavators,Use shared 0 to 5 condition scale
+component_notes,Excavators,travel_motors_drives_notes,Travel motors/drives Notes,text,optional,textarea,show when asset_category = Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Excavators,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Excavators,Use shared 0 to 5 condition scale
+component_notes,Excavators,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Excavators,attachments_score,Attachments Score,integer,required,dropdown,show when asset_category = Excavators,Use shared 0 to 5 condition scale
+component_notes,Excavators,attachments_notes,Attachments Notes,text,optional,textarea,show when asset_category = Excavators,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Excavators,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Excavators,Select all observed attachments/options
+photos,Excavators,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Excavators,Complete all required photos before submission
+component_scoring,Mini Excavators,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Mini Excavators,Use shared 0 to 5 condition scale
+component_notes,Mini Excavators,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Mini Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Mini Excavators,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Mini Excavators,Use shared 0 to 5 condition scale
+component_notes,Mini Excavators,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Mini Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Mini Excavators,swing_system_score,Swing system Score,integer,required,dropdown,show when asset_category = Mini Excavators,Use shared 0 to 5 condition scale
+component_notes,Mini Excavators,swing_system_notes,Swing system Notes,text,optional,textarea,show when asset_category = Mini Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Mini Excavators,boom_stick_bucket_score,Boom/stick/bucket Score,integer,required,dropdown,show when asset_category = Mini Excavators,Use shared 0 to 5 condition scale
+component_notes,Mini Excavators,boom_stick_bucket_notes,Boom/stick/bucket Notes,text,optional,textarea,show when asset_category = Mini Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Mini Excavators,tracks_undercarriage_score,Tracks/undercarriage Score,integer,required,dropdown,show when asset_category = Mini Excavators,Use shared 0 to 5 condition scale
+component_notes,Mini Excavators,tracks_undercarriage_notes,Tracks/undercarriage Notes,text,optional,textarea,show when asset_category = Mini Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Mini Excavators,blade_score,Blade Score,integer,required,dropdown,show when asset_category = Mini Excavators,Use shared 0 to 5 condition scale
+component_notes,Mini Excavators,blade_notes,Blade Notes,text,optional,textarea,show when asset_category = Mini Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Mini Excavators,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Mini Excavators,Use shared 0 to 5 condition scale
+component_notes,Mini Excavators,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Mini Excavators,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Mini Excavators,attachments_score,Attachments Score,integer,required,dropdown,show when asset_category = Mini Excavators,Use shared 0 to 5 condition scale
+component_notes,Mini Excavators,attachments_notes,Attachments Notes,text,optional,textarea,show when asset_category = Mini Excavators,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Mini Excavators,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Mini Excavators,Select all observed attachments/options
+photos,Mini Excavators,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Mini Excavators,Complete all required photos before submission
+component_scoring,Wheel Loaders,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Wheel Loaders,Use shared 0 to 5 condition scale
+component_notes,Wheel Loaders,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Wheel Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel Loaders,transmission_score,Transmission Score,integer,required,dropdown,show when asset_category = Wheel Loaders,Use shared 0 to 5 condition scale
+component_notes,Wheel Loaders,transmission_notes,Transmission Notes,text,optional,textarea,show when asset_category = Wheel Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel Loaders,hydraulics_score,Hydraulics Score,integer,required,dropdown,show when asset_category = Wheel Loaders,Use shared 0 to 5 condition scale
+component_notes,Wheel Loaders,hydraulics_notes,Hydraulics Notes,text,optional,textarea,show when asset_category = Wheel Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel Loaders,articulation_frame_score,Articulation/frame Score,integer,required,dropdown,show when asset_category = Wheel Loaders,Use shared 0 to 5 condition scale
+component_notes,Wheel Loaders,articulation_frame_notes,Articulation/frame Notes,text,optional,textarea,show when asset_category = Wheel Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel Loaders,axles_score,Axles Score,integer,required,dropdown,show when asset_category = Wheel Loaders,Use shared 0 to 5 condition scale
+component_notes,Wheel Loaders,axles_notes,Axles Notes,text,optional,textarea,show when asset_category = Wheel Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel Loaders,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Wheel Loaders,Use shared 0 to 5 condition scale
+component_notes,Wheel Loaders,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Wheel Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel Loaders,loader_arms_bucket_score,Loader arms/bucket Score,integer,required,dropdown,show when asset_category = Wheel Loaders,Use shared 0 to 5 condition scale
+component_notes,Wheel Loaders,loader_arms_bucket_notes,Loader arms/bucket Notes,text,optional,textarea,show when asset_category = Wheel Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel Loaders,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Wheel Loaders,Use shared 0 to 5 condition scale
+component_notes,Wheel Loaders,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Wheel Loaders,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Wheel Loaders,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Wheel Loaders,Select all observed attachments/options
+photos,Wheel Loaders,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Wheel Loaders,Complete all required photos before submission
+component_scoring,Skid Steers,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Skid Steers,Use shared 0 to 5 condition scale
+component_notes,Skid Steers,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Skid Steers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Skid Steers,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Skid Steers,Use shared 0 to 5 condition scale
+component_notes,Skid Steers,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Skid Steers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Skid Steers,drive_system_score,Drive system Score,integer,required,dropdown,show when asset_category = Skid Steers,Use shared 0 to 5 condition scale
+component_notes,Skid Steers,drive_system_notes,Drive system Notes,text,optional,textarea,show when asset_category = Skid Steers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Skid Steers,lift_arms_frame_score,Lift arms/frame Score,integer,required,dropdown,show when asset_category = Skid Steers,Use shared 0 to 5 condition scale
+component_notes,Skid Steers,lift_arms_frame_notes,Lift arms/frame Notes,text,optional,textarea,show when asset_category = Skid Steers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Skid Steers,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Skid Steers,Use shared 0 to 5 condition scale
+component_notes,Skid Steers,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Skid Steers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Skid Steers,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Skid Steers,Use shared 0 to 5 condition scale
+component_notes,Skid Steers,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Skid Steers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Skid Steers,quick_attach_score,Quick attach Score,integer,required,dropdown,show when asset_category = Skid Steers,Use shared 0 to 5 condition scale
+component_notes,Skid Steers,quick_attach_notes,Quick attach Notes,text,optional,textarea,show when asset_category = Skid Steers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Skid Steers,attachments_score,Attachments Score,integer,required,dropdown,show when asset_category = Skid Steers,Use shared 0 to 5 condition scale
+component_notes,Skid Steers,attachments_notes,Attachments Notes,text,optional,textarea,show when asset_category = Skid Steers,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Skid Steers,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Skid Steers,Select all observed attachments/options
+photos,Skid Steers,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Skid Steers,Complete all required photos before submission
+component_scoring,Compact Track Loaders,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Compact Track Loaders,Use shared 0 to 5 condition scale
+component_notes,Compact Track Loaders,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Compact Track Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Compact Track Loaders,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Compact Track Loaders,Use shared 0 to 5 condition scale
+component_notes,Compact Track Loaders,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Compact Track Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Compact Track Loaders,drive_system_score,Drive system Score,integer,required,dropdown,show when asset_category = Compact Track Loaders,Use shared 0 to 5 condition scale
+component_notes,Compact Track Loaders,drive_system_notes,Drive system Notes,text,optional,textarea,show when asset_category = Compact Track Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Compact Track Loaders,tracks_undercarriage_score,Tracks/undercarriage Score,integer,required,dropdown,show when asset_category = Compact Track Loaders,Use shared 0 to 5 condition scale
+component_notes,Compact Track Loaders,tracks_undercarriage_notes,Tracks/undercarriage Notes,text,optional,textarea,show when asset_category = Compact Track Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Compact Track Loaders,lift_arms_frame_score,Lift arms/frame Score,integer,required,dropdown,show when asset_category = Compact Track Loaders,Use shared 0 to 5 condition scale
+component_notes,Compact Track Loaders,lift_arms_frame_notes,Lift arms/frame Notes,text,optional,textarea,show when asset_category = Compact Track Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Compact Track Loaders,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Compact Track Loaders,Use shared 0 to 5 condition scale
+component_notes,Compact Track Loaders,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Compact Track Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Compact Track Loaders,quick_attach_score,Quick attach Score,integer,required,dropdown,show when asset_category = Compact Track Loaders,Use shared 0 to 5 condition scale
+component_notes,Compact Track Loaders,quick_attach_notes,Quick attach Notes,text,optional,textarea,show when asset_category = Compact Track Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Compact Track Loaders,attachments_score,Attachments Score,integer,required,dropdown,show when asset_category = Compact Track Loaders,Use shared 0 to 5 condition scale
+component_notes,Compact Track Loaders,attachments_notes,Attachments Notes,text,optional,textarea,show when asset_category = Compact Track Loaders,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Compact Track Loaders,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Compact Track Loaders,Select all observed attachments/options
+photos,Compact Track Loaders,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Compact Track Loaders,Complete all required photos before submission
+component_scoring,Motor Graders,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Motor Graders,Use shared 0 to 5 condition scale
+component_notes,Motor Graders,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Motor Graders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Motor Graders,transmission_score,Transmission Score,integer,required,dropdown,show when asset_category = Motor Graders,Use shared 0 to 5 condition scale
+component_notes,Motor Graders,transmission_notes,Transmission Notes,text,optional,textarea,show when asset_category = Motor Graders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Motor Graders,circle_drawbar_moldboard_score,Circle/drawbar/moldboard Score,integer,required,dropdown,show when asset_category = Motor Graders,Use shared 0 to 5 condition scale
+component_notes,Motor Graders,circle_drawbar_moldboard_notes,Circle/drawbar/moldboard Notes,text,optional,textarea,show when asset_category = Motor Graders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Motor Graders,articulation_steering_score,Articulation/steering Score,integer,required,dropdown,show when asset_category = Motor Graders,Use shared 0 to 5 condition scale
+component_notes,Motor Graders,articulation_steering_notes,Articulation/steering Notes,text,optional,textarea,show when asset_category = Motor Graders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Motor Graders,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Motor Graders,Use shared 0 to 5 condition scale
+component_notes,Motor Graders,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Motor Graders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Motor Graders,axles_tandems_score,Axles/tandems Score,integer,required,dropdown,show when asset_category = Motor Graders,Use shared 0 to 5 condition scale
+component_notes,Motor Graders,axles_tandems_notes,Axles/tandems Notes,text,optional,textarea,show when asset_category = Motor Graders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Motor Graders,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Motor Graders,Use shared 0 to 5 condition scale
+component_notes,Motor Graders,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Motor Graders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Motor Graders,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Motor Graders,Use shared 0 to 5 condition scale
+component_notes,Motor Graders,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Motor Graders,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Motor Graders,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Motor Graders,Select all observed attachments/options
+photos,Motor Graders,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Motor Graders,Complete all required photos before submission
+component_scoring,Telehandlers,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Telehandlers,Use shared 0 to 5 condition scale
+component_notes,Telehandlers,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Telehandlers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Telehandlers,transmission_score,Transmission Score,integer,required,dropdown,show when asset_category = Telehandlers,Use shared 0 to 5 condition scale
+component_notes,Telehandlers,transmission_notes,Transmission Notes,text,optional,textarea,show when asset_category = Telehandlers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Telehandlers,boom_assembly_score,Boom assembly Score,integer,required,dropdown,show when asset_category = Telehandlers,Use shared 0 to 5 condition scale
+component_notes,Telehandlers,boom_assembly_notes,Boom assembly Notes,text,optional,textarea,show when asset_category = Telehandlers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Telehandlers,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Telehandlers,Use shared 0 to 5 condition scale
+component_notes,Telehandlers,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Telehandlers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Telehandlers,axles_steering_score,Axles/steering Score,integer,required,dropdown,show when asset_category = Telehandlers,Use shared 0 to 5 condition scale
+component_notes,Telehandlers,axles_steering_notes,Axles/steering Notes,text,optional,textarea,show when asset_category = Telehandlers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Telehandlers,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Telehandlers,Use shared 0 to 5 condition scale
+component_notes,Telehandlers,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Telehandlers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Telehandlers,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Telehandlers,Use shared 0 to 5 condition scale
+component_notes,Telehandlers,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Telehandlers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Telehandlers,attachments_stabilizers_score,Attachments/stabilizers Score,integer,required,dropdown,show when asset_category = Telehandlers,Use shared 0 to 5 condition scale
+component_notes,Telehandlers,attachments_stabilizers_notes,Attachments/stabilizers Notes,text,optional,textarea,show when asset_category = Telehandlers,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Telehandlers,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Telehandlers,Select all observed attachments/options
+photos,Telehandlers,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Telehandlers,Complete all required photos before submission
+component_scoring,Wheel / Ag Tractors,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Wheel / Ag Tractors,Use shared 0 to 5 condition scale
+component_notes,Wheel / Ag Tractors,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Wheel / Ag Tractors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel / Ag Tractors,transmission_driveline_score,Transmission/driveline Score,integer,required,dropdown,show when asset_category = Wheel / Ag Tractors,Use shared 0 to 5 condition scale
+component_notes,Wheel / Ag Tractors,transmission_driveline_notes,Transmission/driveline Notes,text,optional,textarea,show when asset_category = Wheel / Ag Tractors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel / Ag Tractors,pto_3_point_score,PTO/3-point Score,integer,required,dropdown,show when asset_category = Wheel / Ag Tractors,Use shared 0 to 5 condition scale
+component_notes,Wheel / Ag Tractors,pto_3_point_notes,PTO/3-point Notes,text,optional,textarea,show when asset_category = Wheel / Ag Tractors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel / Ag Tractors,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Wheel / Ag Tractors,Use shared 0 to 5 condition scale
+component_notes,Wheel / Ag Tractors,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Wheel / Ag Tractors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel / Ag Tractors,axles_score,Axles Score,integer,required,dropdown,show when asset_category = Wheel / Ag Tractors,Use shared 0 to 5 condition scale
+component_notes,Wheel / Ag Tractors,axles_notes,Axles Notes,text,optional,textarea,show when asset_category = Wheel / Ag Tractors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel / Ag Tractors,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Wheel / Ag Tractors,Use shared 0 to 5 condition scale
+component_notes,Wheel / Ag Tractors,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Wheel / Ag Tractors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel / Ag Tractors,loader_assembly_score,Loader assembly Score,integer,required,dropdown,show when asset_category = Wheel / Ag Tractors,Use shared 0 to 5 condition scale
+component_notes,Wheel / Ag Tractors,loader_assembly_notes,Loader assembly Notes,text,optional,textarea,show when asset_category = Wheel / Ag Tractors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Wheel / Ag Tractors,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Wheel / Ag Tractors,Use shared 0 to 5 condition scale
+component_notes,Wheel / Ag Tractors,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Wheel / Ag Tractors,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Wheel / Ag Tractors,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Wheel / Ag Tractors,Select all observed attachments/options
+photos,Wheel / Ag Tractors,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Wheel / Ag Tractors,Complete all required photos before submission
+component_scoring,Crawler Loaders,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Crawler Loaders,Use shared 0 to 5 condition scale
+component_notes,Crawler Loaders,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Crawler Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Crawler Loaders,transmission_steering_score,Transmission/steering Score,integer,required,dropdown,show when asset_category = Crawler Loaders,Use shared 0 to 5 condition scale
+component_notes,Crawler Loaders,transmission_steering_notes,Transmission/steering Notes,text,optional,textarea,show when asset_category = Crawler Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Crawler Loaders,final_drives_score,Final drives Score,integer,required,dropdown,show when asset_category = Crawler Loaders,Use shared 0 to 5 condition scale
+component_notes,Crawler Loaders,final_drives_notes,Final drives Notes,text,optional,textarea,show when asset_category = Crawler Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Crawler Loaders,undercarriage_score,Undercarriage Score,integer,required,dropdown,show when asset_category = Crawler Loaders,Use shared 0 to 5 condition scale
+component_notes,Crawler Loaders,undercarriage_notes,Undercarriage Notes,text,optional,textarea,show when asset_category = Crawler Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Crawler Loaders,loader_assembly_score,Loader assembly Score,integer,required,dropdown,show when asset_category = Crawler Loaders,Use shared 0 to 5 condition scale
+component_notes,Crawler Loaders,loader_assembly_notes,Loader assembly Notes,text,optional,textarea,show when asset_category = Crawler Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Crawler Loaders,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Crawler Loaders,Use shared 0 to 5 condition scale
+component_notes,Crawler Loaders,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Crawler Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Crawler Loaders,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Crawler Loaders,Use shared 0 to 5 condition scale
+component_notes,Crawler Loaders,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Crawler Loaders,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Crawler Loaders,bucket_attachments_score,Bucket/attachments Score,integer,required,dropdown,show when asset_category = Crawler Loaders,Use shared 0 to 5 condition scale
+component_notes,Crawler Loaders,bucket_attachments_notes,Bucket/attachments Notes,text,optional,textarea,show when asset_category = Crawler Loaders,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Crawler Loaders,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Crawler Loaders,Select all observed attachments/options
+photos,Crawler Loaders,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Crawler Loaders,Complete all required photos before submission
+component_scoring,Scrapers,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Scrapers,Use shared 0 to 5 condition scale
+component_notes,Scrapers,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Scrapers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Scrapers,transmission_score,Transmission Score,integer,required,dropdown,show when asset_category = Scrapers,Use shared 0 to 5 condition scale
+component_notes,Scrapers,transmission_notes,Transmission Notes,text,optional,textarea,show when asset_category = Scrapers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Scrapers,bowl_apron_ejector_score,Bowl/apron/ejector Score,integer,required,dropdown,show when asset_category = Scrapers,Use shared 0 to 5 condition scale
+component_notes,Scrapers,bowl_apron_ejector_notes,Bowl/apron/ejector Notes,text,optional,textarea,show when asset_category = Scrapers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Scrapers,hydraulic_system_score,Hydraulic system Score,integer,required,dropdown,show when asset_category = Scrapers,Use shared 0 to 5 condition scale
+component_notes,Scrapers,hydraulic_system_notes,Hydraulic system Notes,text,optional,textarea,show when asset_category = Scrapers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Scrapers,frame_gooseneck_score,Frame/gooseneck Score,integer,required,dropdown,show when asset_category = Scrapers,Use shared 0 to 5 condition scale
+component_notes,Scrapers,frame_gooseneck_notes,Frame/gooseneck Notes,text,optional,textarea,show when asset_category = Scrapers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Scrapers,axles_score,Axles Score,integer,required,dropdown,show when asset_category = Scrapers,Use shared 0 to 5 condition scale
+component_notes,Scrapers,axles_notes,Axles Notes,text,optional,textarea,show when asset_category = Scrapers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Scrapers,tires_score,Tires Score,integer,required,dropdown,show when asset_category = Scrapers,Use shared 0 to 5 condition scale
+component_notes,Scrapers,tires_notes,Tires Notes,text,optional,textarea,show when asset_category = Scrapers,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Scrapers,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Scrapers,Use shared 0 to 5 condition scale
+component_notes,Scrapers,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Scrapers,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Scrapers,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Scrapers,Select all observed attachments/options
+photos,Scrapers,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Scrapers,Complete all required photos before submission
+component_scoring,Rollers / Compactors,engine_score,Engine Score,integer,required,dropdown,show when asset_category = Rollers / Compactors,Use shared 0 to 5 condition scale
+component_notes,Rollers / Compactors,engine_notes,Engine Notes,text,optional,textarea,show when asset_category = Rollers / Compactors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rollers / Compactors,drive_system_score,Drive system Score,integer,required,dropdown,show when asset_category = Rollers / Compactors,Use shared 0 to 5 condition scale
+component_notes,Rollers / Compactors,drive_system_notes,Drive system Notes,text,optional,textarea,show when asset_category = Rollers / Compactors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rollers / Compactors,drum_vibration_score,Drum/vibration Score,integer,required,dropdown,show when asset_category = Rollers / Compactors,Use shared 0 to 5 condition scale
+component_notes,Rollers / Compactors,drum_vibration_notes,Drum/vibration Notes,text,optional,textarea,show when asset_category = Rollers / Compactors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rollers / Compactors,articulation_frame_score,Articulation/frame Score,integer,required,dropdown,show when asset_category = Rollers / Compactors,Use shared 0 to 5 condition scale
+component_notes,Rollers / Compactors,articulation_frame_notes,Articulation/frame Notes,text,optional,textarea,show when asset_category = Rollers / Compactors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rollers / Compactors,water_system_score,Water system Score,integer,required,dropdown,show when asset_category = Rollers / Compactors,Use shared 0 to 5 condition scale
+component_notes,Rollers / Compactors,water_system_notes,Water system Notes,text,optional,textarea,show when asset_category = Rollers / Compactors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rollers / Compactors,tires_if_applicable_score,Tires if applicable Score,integer,required,dropdown,show when asset_category = Rollers / Compactors,Use shared 0 to 5 condition scale
+component_notes,Rollers / Compactors,tires_if_applicable_notes,Tires if applicable Notes,text,optional,textarea,show when asset_category = Rollers / Compactors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rollers / Compactors,cab_controls_score,Cab/controls Score,integer,required,dropdown,show when asset_category = Rollers / Compactors,Use shared 0 to 5 condition scale
+component_notes,Rollers / Compactors,cab_controls_notes,Cab/controls Notes,text,optional,textarea,show when asset_category = Rollers / Compactors,"Record defects, leaks, wear, repairs, or missing items"
+component_scoring,Rollers / Compactors,attachments_score,Attachments Score,integer,required,dropdown,show when asset_category = Rollers / Compactors,Use shared 0 to 5 condition scale
+component_notes,Rollers / Compactors,attachments_notes,Attachments Notes,text,optional,textarea,show when asset_category = Rollers / Compactors,"Record defects, leaks, wear, repairs, or missing items"
+attachments,Rollers / Compactors,attachment_inventory,Attachment Inventory,multi_reference,optional,multi_select,show when asset_category = Rollers / Compactors,Select all observed attachments/options
+photos,Rollers / Compactors,required_photo_capture,Required Photo Capture,image_collection,required,camera,show when asset_category = Rollers / Compactors,Complete all required photos before submission

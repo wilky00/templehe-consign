@@ -20,6 +20,8 @@ dependencies = [
     "structlog>=24.4",
     "sendgrid>=6.11",
     "boto3>=1.35",  # Cloudflare R2 via S3-compatible API
+    "bleach>=6.1",  # HTML/text sanitization for customer-supplied free-text fields
+    "twilio>=9.3",  # SMS dispatch via Messaging Service SID
 ]
 
 [dependency-groups]

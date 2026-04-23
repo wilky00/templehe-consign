@@ -1,0 +1,299 @@
+reference_table,category,value,description
+asset_category,all,,Machine category selected from master list
+ownership_type,all,Owned,"Owned, financed, leased, unknown"
+ownership_type,all,Financed,"Owned, financed, leased, unknown"
+ownership_type,all,Leased,"Owned, financed, leased, unknown"
+ownership_type,all,Unknown,"Owned, financed, leased, unknown"
+lien_status,all,Clear,"Clear, lien reported, unknown"
+lien_status,all,Lien Reported,"Clear, lien reported, unknown"
+lien_status,all,Unknown,"Clear, lien reported, unknown"
+acquisition_path,all,Consignment,Consignment or direct purchase candidate
+acquisition_path,all,Direct Purchase,Consignment or direct purchase candidate
+acquisition_path,all,Both,Consignment or direct purchase candidate
+running_status,all,Running,"Running, partial, non-running"
+running_status,all,Partial,"Running, partial, non-running"
+running_status,all,Non-Running,"Running, partial, non-running"
+emissions_tier,all,Tier 0,Tier/Stage label if visible
+emissions_tier,all,Tier 1,Tier/Stage label if visible
+emissions_tier,all,Tier 2,Tier/Stage label if visible
+emissions_tier,all,Tier 3,Tier/Stage label if visible
+emissions_tier,all,Tier 4 Interim,Tier/Stage label if visible
+emissions_tier,all,Tier 4 Final,Tier/Stage label if visible
+emissions_tier,all,Unknown,Tier/Stage label if visible
+emissions_tier,all,Not Visible,Tier/Stage label if visible
+cab_type,all,Open Station,"Open station, canopy, enclosed cab"
+cab_type,all,Canopy,"Open station, canopy, enclosed cab"
+cab_type,all,Enclosed Cab,"Open station, canopy, enclosed cab"
+overall_cosmetic_condition,all,Excellent,Excellent/Good/Fair/Poor/Inoperable/Not Verified
+overall_cosmetic_condition,all,Good,Excellent/Good/Fair/Poor/Inoperable/Not Verified
+overall_cosmetic_condition,all,Fair,Excellent/Good/Fair/Poor/Inoperable/Not Verified
+overall_cosmetic_condition,all,Poor,Excellent/Good/Fair/Poor/Inoperable/Not Verified
+overall_cosmetic_condition,all,Inoperable,Excellent/Good/Fair/Poor/Inoperable/Not Verified
+overall_cosmetic_condition,all,Not Verified,Excellent/Good/Fair/Poor/Inoperable/Not Verified
+marketability_rating,all,Fast Sell,"Fast sell, average, slow sell, salvage risk"
+marketability_rating,all,Average,"Fast sell, average, slow sell, salvage risk"
+marketability_rating,all,Slow Sell,"Fast sell, average, slow sell, salvage risk"
+marketability_rating,all,Salvage Risk,"Fast sell, average, slow sell, salvage risk"
+asset_category,all,Articulated Dump Trucks,Machine category
+attachment_options,Articulated Dump Trucks,Tailgate,Attachment/option
+attachment_options,Articulated Dump Trucks,Body liner,Attachment/option
+attachment_options,Articulated Dump Trucks,Heated body,Attachment/option
+attachment_options,Articulated Dump Trucks,Payload weighing system,Attachment/option
+attachment_options,Articulated Dump Trucks,Camera system,Attachment/option
+attachment_options,Articulated Dump Trucks,Fire suppression,Attachment/option
+required_photos,Articulated Dump Trucks,4 corner exterior,Required photo
+required_photos,Articulated Dump Trucks,Serial plate,Required photo
+required_photos,Articulated Dump Trucks,Hour meter,Required photo
+required_photos,Articulated Dump Trucks,Cab interior,Required photo
+required_photos,Articulated Dump Trucks,Engine compartment,Required photo
+required_photos,Articulated Dump Trucks,Center hitch close-up,Required photo
+required_photos,Articulated Dump Trucks,All tires,Required photo
+required_photos,Articulated Dump Trucks,Dump body floor,Required photo
+required_photos,Articulated Dump Trucks,Visible leaks/damage,Required photo
+asset_category,all,Rigid Frame Dump Trucks,Machine category
+attachment_options,Rigid Frame Dump Trucks,Tailgate,Attachment/option
+attachment_options,Rigid Frame Dump Trucks,Body liner,Attachment/option
+attachment_options,Rigid Frame Dump Trucks,Canopy,Attachment/option
+attachment_options,Rigid Frame Dump Trucks,Camera system,Attachment/option
+attachment_options,Rigid Frame Dump Trucks,Payload system,Attachment/option
+attachment_options,Rigid Frame Dump Trucks,Fire suppression,Attachment/option
+required_photos,Rigid Frame Dump Trucks,4 corner exterior,Required photo
+required_photos,Rigid Frame Dump Trucks,Serial plate,Required photo
+required_photos,Rigid Frame Dump Trucks,Hour meter,Required photo
+required_photos,Rigid Frame Dump Trucks,Cab interior,Required photo
+required_photos,Rigid Frame Dump Trucks,Engine compartment,Required photo
+required_photos,Rigid Frame Dump Trucks,Frame rails,Required photo
+required_photos,Rigid Frame Dump Trucks,All tires,Required photo
+required_photos,Rigid Frame Dump Trucks,Dump body floor,Required photo
+required_photos,Rigid Frame Dump Trucks,Visible leaks/damage,Required photo
+asset_category,all,Backhoe Loaders,Machine category
+attachment_options,Backhoe Loaders,General purpose bucket,Attachment/option
+attachment_options,Backhoe Loaders,4-in-1 bucket,Attachment/option
+attachment_options,Backhoe Loaders,Extendahoe,Attachment/option
+attachment_options,Backhoe Loaders,Quick coupler,Attachment/option
+attachment_options,Backhoe Loaders,Forks,Attachment/option
+attachment_options,Backhoe Loaders,Hydraulic hammer circuit,Attachment/option
+attachment_options,Backhoe Loaders,Thumb,Attachment/option
+attachment_options,Backhoe Loaders,Auger,Attachment/option
+required_photos,Backhoe Loaders,4 corner exterior,Required photo
+required_photos,Backhoe Loaders,Serial plate,Required photo
+required_photos,Backhoe Loaders,Hour meter,Required photo
+required_photos,Backhoe Loaders,Cab or operator station,Required photo
+required_photos,Backhoe Loaders,Engine compartment,Required photo
+required_photos,Backhoe Loaders,Loader bucket edge,Required photo
+required_photos,Backhoe Loaders,Backhoe bucket teeth,Required photo
+required_photos,Backhoe Loaders,Outriggers,Required photo
+required_photos,Backhoe Loaders,Tires,Required photo
+required_photos,Backhoe Loaders,Visible leaks/damage,Required photo
+asset_category,all,Dozers,Machine category
+attachment_options,Dozers,PAT blade,Attachment/option
+attachment_options,Dozers,SU blade,Attachment/option
+attachment_options,Dozers,U blade,Attachment/option
+attachment_options,Dozers,Winch,Attachment/option
+attachment_options,Dozers,Single shank ripper,Attachment/option
+attachment_options,Dozers,Multi-shank ripper,Attachment/option
+attachment_options,Dozers,Sweeps,Attachment/option
+attachment_options,Dozers,Rear screen,Attachment/option
+required_photos,Dozers,4 corner exterior,Required photo
+required_photos,Dozers,Serial plate,Required photo
+required_photos,Dozers,Hour meter,Required photo
+required_photos,Dozers,Cab interior,Required photo
+required_photos,Dozers,Engine compartment,Required photo
+required_photos,Dozers,Both track sides,Required photo
+required_photos,Dozers,Sprockets/idlers/rollers,Required photo
+required_photos,Dozers,Blade cutting edge,Required photo
+required_photos,Dozers,Ripper,Required photo
+required_photos,Dozers,Visible leaks/damage,Required photo
+asset_category,all,Excavators,Machine category
+attachment_options,Excavators,General purpose bucket,Attachment/option
+attachment_options,Excavators,Ditch bucket,Attachment/option
+attachment_options,Excavators,Hydraulic thumb,Attachment/option
+attachment_options,Excavators,Coupler,Attachment/option
+attachment_options,Excavators,Hammer,Attachment/option
+attachment_options,Excavators,Grapple,Attachment/option
+attachment_options,Excavators,Mulcher head,Attachment/option
+attachment_options,Excavators,Tilt bucket,Attachment/option
+required_photos,Excavators,4 corner exterior,Required photo
+required_photos,Excavators,Serial plate,Required photo
+required_photos,Excavators,Hour meter,Required photo
+required_photos,Excavators,Cab interior,Required photo
+required_photos,Excavators,Engine compartment,Required photo
+required_photos,Excavators,Boom base,Required photo
+required_photos,Excavators,Stick and bucket,Required photo
+required_photos,Excavators,Coupler/thumb,Required photo
+required_photos,Excavators,Undercarriage both sides,Required photo
+required_photos,Excavators,Visible leaks/damage,Required photo
+asset_category,all,Mini Excavators,Machine category
+attachment_options,Mini Excavators,Bucket set,Attachment/option
+attachment_options,Mini Excavators,Thumb,Attachment/option
+attachment_options,Mini Excavators,Coupler,Attachment/option
+attachment_options,Mini Excavators,Auger drive,Attachment/option
+attachment_options,Mini Excavators,Breaker,Attachment/option
+attachment_options,Mini Excavators,Grapple,Attachment/option
+attachment_options,Mini Excavators,Tilt bucket,Attachment/option
+required_photos,Mini Excavators,4 corner exterior,Required photo
+required_photos,Mini Excavators,Serial plate,Required photo
+required_photos,Mini Excavators,Hour meter,Required photo
+required_photos,Mini Excavators,Operator station,Required photo
+required_photos,Mini Excavators,Engine compartment,Required photo
+required_photos,Mini Excavators,Bucket and thumb,Required photo
+required_photos,Mini Excavators,Blade,Required photo
+required_photos,Mini Excavators,Tracks both sides,Required photo
+required_photos,Mini Excavators,Visible leaks/damage,Required photo
+asset_category,all,Wheel Loaders,Machine category
+attachment_options,Wheel Loaders,General purpose bucket,Attachment/option
+attachment_options,Wheel Loaders,Forks,Attachment/option
+attachment_options,Wheel Loaders,Quick coupler,Attachment/option
+attachment_options,Wheel Loaders,High lift arms,Attachment/option
+attachment_options,Wheel Loaders,Scale system,Attachment/option
+attachment_options,Wheel Loaders,Snow pusher,Attachment/option
+attachment_options,Wheel Loaders,Grapple bucket,Attachment/option
+required_photos,Wheel Loaders,4 corner exterior,Required photo
+required_photos,Wheel Loaders,Serial plate,Required photo
+required_photos,Wheel Loaders,Hour meter,Required photo
+required_photos,Wheel Loaders,Cab interior,Required photo
+required_photos,Wheel Loaders,Engine compartment,Required photo
+required_photos,Wheel Loaders,Center articulation,Required photo
+required_photos,Wheel Loaders,Bucket edge,Required photo
+required_photos,Wheel Loaders,All tires,Required photo
+required_photos,Wheel Loaders,Visible leaks/damage,Required photo
+asset_category,all,Skid Steers,Machine category
+attachment_options,Skid Steers,General purpose bucket,Attachment/option
+attachment_options,Skid Steers,Forks,Attachment/option
+attachment_options,Skid Steers,Auger,Attachment/option
+attachment_options,Skid Steers,Grapple,Attachment/option
+attachment_options,Skid Steers,Trencher,Attachment/option
+attachment_options,Skid Steers,Cold planer,Attachment/option
+attachment_options,Skid Steers,Broom,Attachment/option
+attachment_options,Skid Steers,Breaker,Attachment/option
+required_photos,Skid Steers,4 corner exterior,Required photo
+required_photos,Skid Steers,Serial plate,Required photo
+required_photos,Skid Steers,Hour meter,Required photo
+required_photos,Skid Steers,Cab interior,Required photo
+required_photos,Skid Steers,Engine compartment,Required photo
+required_photos,Skid Steers,Quick attach,Required photo
+required_photos,Skid Steers,Bucket cutting edge,Required photo
+required_photos,Skid Steers,All tires,Required photo
+required_photos,Skid Steers,Visible leaks/damage,Required photo
+asset_category,all,Compact Track Loaders,Machine category
+attachment_options,Compact Track Loaders,General purpose bucket,Attachment/option
+attachment_options,Compact Track Loaders,Forks,Attachment/option
+attachment_options,Compact Track Loaders,Mulcher,Attachment/option
+attachment_options,Compact Track Loaders,Brush cutter,Attachment/option
+attachment_options,Compact Track Loaders,Auger,Attachment/option
+attachment_options,Compact Track Loaders,Grapple,Attachment/option
+attachment_options,Compact Track Loaders,Trencher,Attachment/option
+attachment_options,Compact Track Loaders,Breaker,Attachment/option
+required_photos,Compact Track Loaders,4 corner exterior,Required photo
+required_photos,Compact Track Loaders,Serial plate,Required photo
+required_photos,Compact Track Loaders,Hour meter,Required photo
+required_photos,Compact Track Loaders,Cab interior,Required photo
+required_photos,Compact Track Loaders,Engine compartment,Required photo
+required_photos,Compact Track Loaders,Quick attach,Required photo
+required_photos,Compact Track Loaders,Bucket cutting edge,Required photo
+required_photos,Compact Track Loaders,Tracks/rollers both sides,Required photo
+required_photos,Compact Track Loaders,Visible leaks/damage,Required photo
+asset_category,all,Motor Graders,Machine category
+attachment_options,Motor Graders,Front blade,Attachment/option
+attachment_options,Motor Graders,Scarifier,Attachment/option
+attachment_options,Motor Graders,Ripper,Attachment/option
+attachment_options,Motor Graders,Snow wing,Attachment/option
+attachment_options,Motor Graders,GPS mast kit,Attachment/option
+attachment_options,Motor Graders,Cross slope controls,Attachment/option
+required_photos,Motor Graders,4 corner exterior,Required photo
+required_photos,Motor Graders,Serial plate,Required photo
+required_photos,Motor Graders,Hour meter,Required photo
+required_photos,Motor Graders,Cab interior,Required photo
+required_photos,Motor Graders,Engine compartment,Required photo
+required_photos,Motor Graders,Circle and drawbar,Required photo
+required_photos,Motor Graders,Moldboard edge,Required photo
+required_photos,Motor Graders,Tandems,Required photo
+required_photos,Motor Graders,All tires,Required photo
+required_photos,Motor Graders,Visible leaks/damage,Required photo
+asset_category,all,Telehandlers,Machine category
+attachment_options,Telehandlers,Fork carriage,Attachment/option
+attachment_options,Telehandlers,Bucket,Attachment/option
+attachment_options,Telehandlers,Jib,Attachment/option
+attachment_options,Telehandlers,Winch,Attachment/option
+attachment_options,Telehandlers,Personnel basket,Attachment/option
+attachment_options,Telehandlers,Truss boom,Attachment/option
+attachment_options,Telehandlers,Work lights,Attachment/option
+required_photos,Telehandlers,4 corner exterior,Required photo
+required_photos,Telehandlers,Serial plate,Required photo
+required_photos,Telehandlers,Hour meter,Required photo
+required_photos,Telehandlers,Cab interior,Required photo
+required_photos,Telehandlers,Engine compartment,Required photo
+required_photos,Telehandlers,Boom wear pads,Required photo
+required_photos,Telehandlers,Fork carriage or bucket,Required photo
+required_photos,Telehandlers,Tires,Required photo
+required_photos,Telehandlers,Outriggers,Required photo
+required_photos,Telehandlers,Visible leaks/damage,Required photo
+asset_category,all,Wheel / Ag Tractors,Machine category
+attachment_options,Wheel / Ag Tractors,Loader,Attachment/option
+attachment_options,Wheel / Ag Tractors,Bucket,Attachment/option
+attachment_options,Wheel / Ag Tractors,Forks,Attachment/option
+attachment_options,Wheel / Ag Tractors,Rear remotes,Attachment/option
+attachment_options,Wheel / Ag Tractors,Ballast,Attachment/option
+attachment_options,Wheel / Ag Tractors,Quick hitch,Attachment/option
+attachment_options,Wheel / Ag Tractors,Guidance components,Attachment/option
+required_photos,Wheel / Ag Tractors,4 corner exterior,Required photo
+required_photos,Wheel / Ag Tractors,Serial plate,Required photo
+required_photos,Wheel / Ag Tractors,Hour meter,Required photo
+required_photos,Wheel / Ag Tractors,Cab or operator station,Required photo
+required_photos,Wheel / Ag Tractors,Engine compartment,Required photo
+required_photos,Wheel / Ag Tractors,Rear PTO/3-point,Required photo
+required_photos,Wheel / Ag Tractors,Loader and bucket,Required photo
+required_photos,Wheel / Ag Tractors,All tires,Required photo
+required_photos,Wheel / Ag Tractors,Visible leaks/damage,Required photo
+asset_category,all,Crawler Loaders,Machine category
+attachment_options,Crawler Loaders,General purpose bucket,Attachment/option
+attachment_options,Crawler Loaders,Multi-purpose bucket,Attachment/option
+attachment_options,Crawler Loaders,Forks,Attachment/option
+attachment_options,Crawler Loaders,Ripper,Attachment/option
+attachment_options,Crawler Loaders,Winch,Attachment/option
+required_photos,Crawler Loaders,4 corner exterior,Required photo
+required_photos,Crawler Loaders,Serial plate,Required photo
+required_photos,Crawler Loaders,Hour meter,Required photo
+required_photos,Crawler Loaders,Cab or operator station,Required photo
+required_photos,Crawler Loaders,Engine compartment,Required photo
+required_photos,Crawler Loaders,Bucket edge,Required photo
+required_photos,Crawler Loaders,Both track sides,Required photo
+required_photos,Crawler Loaders,Sprockets/idlers/rollers,Required photo
+required_photos,Crawler Loaders,Visible leaks/damage,Required photo
+asset_category,all,Scrapers,Machine category
+attachment_options,Scrapers,Push block,Attachment/option
+attachment_options,Scrapers,Cushion hitch,Attachment/option
+attachment_options,Scrapers,Heaped bowl,Attachment/option
+attachment_options,Scrapers,Automatic controls,Attachment/option
+attachment_options,Scrapers,Camera system,Attachment/option
+required_photos,Scrapers,4 corner exterior,Required photo
+required_photos,Scrapers,Serial plate,Required photo
+required_photos,Scrapers,Hour meter,Required photo
+required_photos,Scrapers,Cab interior,Required photo
+required_photos,Scrapers,Engine compartment,Required photo
+required_photos,Scrapers,Bowl floor,Required photo
+required_photos,Scrapers,Cutting edge,Required photo
+required_photos,Scrapers,Gooseneck/frame,Required photo
+required_photos,Scrapers,All tires,Required photo
+required_photos,Scrapers,Visible leaks/damage,Required photo
+asset_category,all,Rollers / Compactors,Machine category
+attachment_options,Rollers / Compactors,Padfoot shell kit,Attachment/option
+attachment_options,Rollers / Compactors,Blade,Attachment/option
+attachment_options,Rollers / Compactors,Cab package,Attachment/option
+attachment_options,Rollers / Compactors,Edge cutters,Attachment/option
+attachment_options,Rollers / Compactors,Work lights,Attachment/option
+required_photos,Rollers / Compactors,4 corner exterior,Required photo
+required_photos,Rollers / Compactors,Serial plate,Required photo
+required_photos,Rollers / Compactors,Hour meter,Required photo
+required_photos,Rollers / Compactors,Cab or operator station,Required photo
+required_photos,Rollers / Compactors,Engine compartment,Required photo
+required_photos,Rollers / Compactors,Drum(s) close-up,Required photo
+required_photos,Rollers / Compactors,Articulation,Required photo
+required_photos,Rollers / Compactors,Tires if applicable,Required photo
+required_photos,Rollers / Compactors,Visible leaks/damage,Required photo
+condition_scale,all,5 - Excellent,"Low-hour or exceptionally maintained unit. Clean, fully functional, strong cosmetics, no material leaks, no immediate repairs expected."
+condition_scale,all,4 - Good,"Normal used condition for age/hours. Fully operational with minor wear, minor cosmetic flaws, and no major immediate repair needed."
+condition_scale,all,3 - Fair,Operational but shows meaningful wear. Multiple defects or deferred maintenance present. Marketability reduced and buyer likely expects repairs.
+condition_scale,all,2 - Poor,"Runs or partially functions but has major defects, structural concerns, heavy leakage, significant wear, or failed systems. Strong value discount."
+condition_scale,all,1 - Inoperable,"Non-running or unable to demonstrate critical functions. Salvage, parts, or major project unit unless repaired."
+condition_scale,all,0 - Not Verified,Tech could not inspect or confirm. Use sparingly and explain why.

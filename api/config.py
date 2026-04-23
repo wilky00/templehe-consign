@@ -41,10 +41,13 @@ class Settings(BaseSettings):
     smtp_host: str = "localhost"
     smtp_port: int = 1025
 
-    # SMS
+    # SMS — A2P 10DLC dispatch goes through a Messaging Service SID; the
+    # from-number is kept for dev/sandbox testing. If the Messaging Service
+    # SID is empty, NotificationService skips SMS and emits sms_skipped_not_configured.
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
+    twilio_messaging_service_sid: str = ""
 
     # Cloudflare R2
     r2_account_id: str = ""

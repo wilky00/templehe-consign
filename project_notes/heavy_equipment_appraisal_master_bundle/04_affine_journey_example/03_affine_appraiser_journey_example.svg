@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">
+<style>
+.box{fill:#f7f7f7;stroke:#333;stroke-width:2;rx:18;ry:18}
+.text{font-family:Arial, Helvetica, sans-serif;font-size:22px;fill:#111}
+.small{font-family:Arial, Helvetica, sans-serif;font-size:17px;fill:#333}
+.arrow{stroke:#555;stroke-width:3;marker-end:url(#m)}
+.title{font-family:Arial, Helvetica, sans-serif;font-size:34px;font-weight:700;fill:#111}
+</style>
+<defs><marker id="m" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#555"/></marker></defs>
+<text x="600" y="50" text-anchor="middle" class="title">Appraiser Journey Example: Excavator</text>
+<rect x="200" y="100" width="800" height="100" class="box"/>
+<text x="230" y="138" class="text">1. Arrive on Site</text>
+<text x="230" y="170" class="small">Confirm contact, identify unit, assess safety</text>
+<line x1="600" y1="200" x2="600" y2="235" class="arrow"/>
+<rect x="200" y="235" width="800" height="100" class="box"/>
+<text x="230" y="273" class="text">2. Start Shared Intake</text>
+<text x="230" y="305" class="small">Customer, site, make, model, serial, year, hours</text>
+<line x1="600" y1="335" x2="600" y2="370" class="arrow"/>
+<rect x="200" y="370" width="800" height="100" class="box"/>
+<text x="230" y="408" class="text">3. Initial Photos</text>
+<text x="230" y="440" class="small">4 corners, serial plate, hour meter, cab, engine</text>
+<line x1="600" y1="470" x2="600" y2="505" class="arrow"/>
+<rect x="200" y="505" width="800" height="100" class="box"/>
+<text x="230" y="543" class="text">4. Excavator Branch</text>
+<text x="230" y="575" class="small">Bucket, coupler, thumb, aux hydraulics, extra attachments</text>
+<line x1="600" y1="605" x2="600" y2="640" class="arrow"/>
+<rect x="200" y="640" width="800" height="100" class="box"/>
+<text x="230" y="678" class="text">5. Functional Inspection</text>
+<text x="230" y="710" class="small">Cold start, boom/stick/bucket, swing, travel, leaks</text>
+<line x1="600" y1="740" x2="600" y2="775" class="arrow"/>
+<rect x="200" y="775" width="800" height="100" class="box"/>
+<text x="230" y="813" class="text">6. Score Components</text>
+<text x="230" y="845" class="small">Engine, hydraulics, swing, boom/stick/bucket, UC, travel, cab, attachments</text>
+<line x1="600" y1="875" x2="600" y2="910" class="arrow"/>
+<rect x="200" y="910" width="800" height="100" class="box"/>
+<text x="230" y="948" class="text">7. Category Photos</text>
+<text x="230" y="980" class="small">Boom base, stick/bucket, coupler, thumb, UC both sides</text>
+<line x1="600" y1="1010" x2="600" y2="1045" class="arrow"/>
+<rect x="200" y="1045" width="800" height="100" class="box"/>
+<text x="230" y="1083" class="text">8. Review Red Flags</text>
+<text x="230" y="1115" class="small">Structural damage, leaks, non-running, missing serial</text>
+<line x1="600" y1="1145" x2="600" y2="1180" class="arrow"/>
+<rect x="200" y="1180" width="800" height="100" class="box"/>
+<text x="230" y="1218" class="text">9. Generate Summary</text>
+<text x="230" y="1250" class="small">Weighted score, cosmetics, marketability, resale notes</text>
+<line x1="600" y1="1280" x2="600" y2="1315" class="arrow"/>
+<rect x="200" y="1315" width="800" height="100" class="box"/>
+<text x="230" y="1353" class="text">10. Submit</text>
+<text x="230" y="1385" class="small">Validate required fields and photos, then submit</text>
+</svg>

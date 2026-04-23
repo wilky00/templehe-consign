@@ -194,6 +194,41 @@ class NotificationPreference(Base):
     user: Mapped[User] = relationship("User", back_populates="notification_preferences")
 
 
+class NotificationJob(Base):
+    """Durable notification queue. The API enqueues; temple-notifications drains.
+
+    Swaps to Pub/Sub at GCP migration time — the NotificationService interface
+    is stable, only the queue backing moves.
+    """
+
+    __tablename__ = "notification_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Callers compute this (typically "{event}:{entity_id}") — UNIQUE on the
+    # column ensures a retry submits exactly one row per logical event.
+    idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)  # email | sms
+    template: Mapped[str] = mapped_column(String(100), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    scheduled_for: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+
+
 class RateLimitCounter(Base):
     """Per-key rate limit counters. Swaps to Redis on GCP migration."""
 
@@ -253,6 +288,26 @@ class EquipmentRecord(Base):
         UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False
     )
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="new_request")
+    # Public reference e.g. THE-9ZF3K4XA. Generated at intake time; cheap to
+    # quote over phone/email. Never reuse; unique across the platform.
+    reference_number: Mapped[str | None] = mapped_column(String(20), nullable=True, unique=True)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("equipment_categories.id"), nullable=True
+    )
+    # Customer-reported fields. These are the *initial claims*; the
+    # AppraisalSubmission carries the appraiser's verified version.
+    customer_make: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    customer_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    customer_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    customer_serial_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    customer_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    customer_running_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    customer_ownership_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    customer_location_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    customer_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     assigned_sales_rep_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
@@ -268,6 +323,10 @@ class EquipmentRecord(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     customer: Mapped[Customer] = relationship("Customer", back_populates="equipment_records")
+    category: Mapped[EquipmentCategory | None] = relationship("EquipmentCategory")
+    intake_photos: Mapped[list[CustomerIntakePhoto]] = relationship(
+        "CustomerIntakePhoto", back_populates="equipment_record", cascade="all, delete-orphan"
+    )
     appraisal_submissions: Mapped[list[AppraisalSubmission]] = relationship(
         "AppraisalSubmission", back_populates="equipment_record"
     )
@@ -285,6 +344,33 @@ class EquipmentRecord(Base):
     )
     public_listing: Mapped[PublicListing | None] = relationship(
         "PublicListing", back_populates="equipment_record", uselist=False
+    )
+
+
+class CustomerIntakePhoto(Base):
+    """R2 storage metadata for photos a customer uploaded with their intake.
+
+    The actual blob lives in Cloudflare R2 under the key stored here; Sprint 2
+    persists the metadata only. Sprint 3 adds signed-URL upload + AV scanning.
+    """
+
+    __tablename__ = "customer_intake_photos"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    equipment_record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("equipment_records.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    storage_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+
+    equipment_record: Mapped[EquipmentRecord] = relationship(
+        "EquipmentRecord", back_populates="intake_photos"
     )
 
 
