@@ -327,6 +327,12 @@ class EquipmentRecord(Base):
     intake_photos: Mapped[list[CustomerIntakePhoto]] = relationship(
         "CustomerIntakePhoto", back_populates="equipment_record", cascade="all, delete-orphan"
     )
+    status_events: Mapped[list[StatusEvent]] = relationship(
+        "StatusEvent",
+        back_populates="equipment_record",
+        cascade="all, delete-orphan",
+        order_by="StatusEvent.created_at",
+    )
     appraisal_submissions: Mapped[list[AppraisalSubmission]] = relationship(
         "AppraisalSubmission", back_populates="equipment_record"
     )
@@ -350,8 +356,9 @@ class EquipmentRecord(Base):
 class CustomerIntakePhoto(Base):
     """R2 storage metadata for photos a customer uploaded with their intake.
 
-    The actual blob lives in Cloudflare R2 under the key stored here; Sprint 2
-    persists the metadata only. Sprint 3 adds signed-URL upload + AV scanning.
+    The actual blob lives in Cloudflare R2 under ``storage_key``. Sprint 3
+    adds the signed-URL upload + finalize flow and a scan_status scaffold
+    (pending/clean/infected/failed); real ClamAV wiring is deferred.
     """
 
     __tablename__ = "customer_intake_photos"
@@ -368,9 +375,44 @@ class CustomerIntakePhoto(Base):
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
+    # pending | clean | infected | failed — scaffold this sprint; ClamAV deferred.
+    scan_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     equipment_record: Mapped[EquipmentRecord] = relationship(
         "EquipmentRecord", back_populates="intake_photos"
+    )
+
+
+class StatusEvent(Base):
+    """Append-only timeline of equipment_records.status transitions.
+
+    Drives the customer-facing status timeline on /me/equipment/{id}.
+    Blocked from UPDATE at the DB layer; cascades away when the parent
+    record is deleted.
+    """
+
+    __tablename__ = "status_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    equipment_record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("equipment_records.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    from_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(40), nullable=False)
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+
+    equipment_record: Mapped[EquipmentRecord] = relationship(
+        "EquipmentRecord", back_populates="status_events"
     )
 
 

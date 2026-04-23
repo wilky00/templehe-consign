@@ -236,4 +236,44 @@ Spec: Epic 2.2 in `dev_plan/02_phase2_customer_portal.md`
 
 ---
 
+### Sprint 3: Photo Upload + Status Timeline + Change Requests — COMPLETE (verified green 2026-04-23)
+
+Spec: Epic 2.3 + 2.4 in `dev_plan/02_phase2_customer_portal.md`
+
+- [x] `api/alembic/versions/007_phase2_status_events_and_photo_scan.py` — new `status_events` (append-only trigger) + `customer_intake_photos.scan_status` / `content_type` / `sha256` columns with CHECK constraint + partial index for pending scans
+- [x] `api/database/models.py` — new `StatusEvent` model with append-only semantics; `CustomerIntakePhoto` gains scan metadata; `EquipmentRecord.status_events` relationship with `cascade="all, delete-orphan"` and `order_by=StatusEvent.created_at`
+- [x] `api/services/photo_upload_service.py` — presigned R2 URL generator (15-min expiry), immutable key pattern `photos/{equipment_id}/{uuid}.{ext}`, MIME + extension allowlist, finalize-side defense against cross-record storage_key spoofing
+- [x] `api/services/equipment_status_service.py` — single `record_transition()` entry point that writes to status_events, updates the record, and enqueues a customer-facing email on 6 watched destination statuses via NotificationService; narrow forbidden-transition set prevents obvious reversals (sold→new_request etc.)
+- [x] `api/services/change_request_service.py` — customer submission + allowlisted request_types; notifies assigned_sales_rep_id if set, else `settings.sales_ops_email`, else logs silently; notes run through `sanitize_plain`
+- [x] `api/services/equipment_service.py` — `submit_intake` now refreshes both `intake_photos` and `status_events` after flush; list/detail queries add `selectinload` for both collections; new `finalize_intake_photo` helper
+- [x] `api/schemas/photo.py` — `UploadUrlRequest/Response`, `FinalizePhotoRequest` (sha256 optional, hex-64 validated); `api/schemas/change_request.py` — create + out; `api/schemas/equipment.py` — new `StatusEventOut` + timeline on detail; `IntakePhotoOut` gains scan_status + content_type
+- [x] `api/config.py` — `sales_ops_email` setting (empty ⇒ silent)
+- [x] `api/routers/equipment.py` — four new endpoints; detail serializes both collections
+- [x] `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` bumped to `"007"`
+- [x] `api/tests/integration/test_photo_upload.py` — 9 tests: signed URL happy path (boto3 mocked), unknown extension rejected, non-image MIME rejected, cross-customer 404, finalize persists metadata, wrong-prefix rejected, bad sha256 rejected, detail shows finalized photo, unconfigured R2 returns 503
+- [x] `api/tests/integration/test_change_requests.py` — 6 tests: happy path + sales-rep notification enqueue + bleach on notes, ops-email fallback, silent fallback, unknown request_type 422, cross-customer 404, list isolation
+- [x] `api/tests/integration/test_status_events.py` — 7 tests: transition writes event + updates status, email enqueued on customer-facing statuses, internal statuses skip email, same-destination 409 + email idempotency, forbidden edge 409, detail endpoint exposes ordered timeline, DB-level append-only trigger blocks UPDATEs
+
+**Full test gate: 176/176 green, 95.65% coverage (85% floor)**
+
+**Bugs fixed during sprint:**
+- New `EquipmentRecord.status_events` relationship triggered the same async-SA lazy-load trap the `intake_photos` collection hit in Sprint 2 → `submit_intake` now refreshes both collections after flush, and `list`/`get` use `selectinload` on both.
+- Append-only trigger test caught the wrong exception class — Postgres raises asyncpg `RaiseError`, which SQLAlchemy wraps as `DBAPIError`, not `InternalError`/`ProgrammingError`. Test updated to match.
+
+**Deliberately deferred (flagged, not regressed):**
+- Real ClamAV scan integration — `scan_status` column is a scaffold that starts `pending` and never flips. Phase 5 or a dedicated scan-worker sprint adds the actual scanner + queue consumer.
+- PDF placeholder generator scaffold — zero-scope this sprint; Phase 7 will build the full generator.
+- Server-side verification of uploaded blob (sha256 recompute after R2 PUT) — Sprint 3 trusts the client-supplied hash and persists; real verification lives with the scan worker.
+
+**Endpoints (new in Sprint 3):**
+- `POST /api/v1/me/equipment/{id}/photos/upload-url` — short-lived presigned R2 PUT URL + immutable storage_key
+- `POST /api/v1/me/equipment/{id}/photos` — finalize photo metadata (scan_status=pending)
+- `POST /api/v1/me/equipment/{id}/change-requests` — customer submits a change request; enqueues sales notification
+- `GET  /api/v1/me/equipment/{id}/change-requests` — list for that record
+- `GET  /api/v1/me/equipment/{id}` — detail now includes `photos[].scan_status` + ordered `status_events[]` timeline
+
+**Status transition contract:** `equipment_status_service.record_transition()` is the single entry point. Called directly by tests today; Phase 3 sales-rep HTTP endpoints will call the same function. Status-update emails for the six watched destinations (`appraisal_scheduled`, `appraisal_complete`, `offer_ready`, `listed`, `sold`, `declined`) enqueue one message per (record, destination) via an idempotency key — safe against retries, safe against a bounce-back same-status transition (which 409s upstream).
+
+---
+
 ## Phase 3–8 — Not started

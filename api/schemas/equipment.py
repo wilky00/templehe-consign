@@ -83,6 +83,18 @@ class IntakePhotoOut(BaseModel):
     caption: str | None = None
     display_order: int
     uploaded_at: datetime
+    scan_status: str = "pending"
+    content_type: str | None = None
+
+
+class StatusEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    from_status: str | None = None
+    to_status: str
+    note: str | None = None
+    created_at: datetime
 
 
 class EquipmentRecordOut(BaseModel):
@@ -104,3 +116,4 @@ class EquipmentRecordOut(BaseModel):
     submitted_at: datetime | None = None
     created_at: datetime
     photos: list[IntakePhotoOut] = Field(default_factory=list)
+    status_events: list[StatusEventOut] = Field(default_factory=list)

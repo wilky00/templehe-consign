@@ -135,10 +135,11 @@ async def submit_intake(
         )
     db.add(record)
     await db.flush()
-    # Ensure record.intake_photos is populated for serialization — without
-    # this, SQLAlchemy can mark the collection as needing lazy load after
-    # flush, which blows up outside a greenlet-providing context.
-    await db.refresh(record, attribute_names=["intake_photos"])
+    # Ensure record.intake_photos + status_events are populated for
+    # serialization. Without the explicit refresh, SQLAlchemy marks the
+    # collections as needing lazy load on access, which blows up outside
+    # a greenlet-providing context.
+    await db.refresh(record, attribute_names=["intake_photos", "status_events"])
 
     await _enqueue_confirmation(db, user=user, record=record)
     return record
@@ -181,7 +182,10 @@ async def list_records_for_user(db: AsyncSession, user: User) -> list[EquipmentR
         return []
     result = await db.execute(
         select(EquipmentRecord)
-        .options(selectinload(EquipmentRecord.intake_photos))
+        .options(
+            selectinload(EquipmentRecord.intake_photos),
+            selectinload(EquipmentRecord.status_events),
+        )
         .where(EquipmentRecord.customer_id == customer.id)
         .order_by(EquipmentRecord.created_at.desc())
     )
@@ -197,7 +201,10 @@ async def get_record_for_user(
         raise HTTPException(status_code=404, detail="Equipment record not found.")
     result = await db.execute(
         select(EquipmentRecord)
-        .options(selectinload(EquipmentRecord.intake_photos))
+        .options(
+            selectinload(EquipmentRecord.intake_photos),
+            selectinload(EquipmentRecord.status_events),
+        )
         .where(
             EquipmentRecord.id == record_id,
             EquipmentRecord.customer_id == customer.id,
@@ -207,3 +214,28 @@ async def get_record_for_user(
     if record is None:
         raise HTTPException(status_code=404, detail="Equipment record not found.")
     return record
+
+
+async def finalize_intake_photo(
+    db: AsyncSession,
+    *,
+    record: EquipmentRecord,
+    storage_key: str,
+    content_type: str,
+    caption: str | None,
+    display_order: int,
+    sha256: str | None,
+) -> CustomerIntakePhoto:
+    """Persist metadata for a photo the client has already PUT to R2."""
+    photo = CustomerIntakePhoto(
+        equipment_record_id=record.id,
+        storage_key=storage_key,
+        caption=sanitization.sanitize_plain(caption),
+        display_order=display_order,
+        content_type=content_type,
+        sha256=(sha256.lower() if sha256 else None),
+        scan_status="pending",
+    )
+    db.add(photo)
+    await db.flush()
+    return photo

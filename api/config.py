@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     twilio_from_number: str = ""
     twilio_messaging_service_sid: str = ""
 
+    # Sales ops — fallback recipient for change-request notifications when
+    # no rep is assigned yet. Empty string means "drop the notification with
+    # a log line" (acceptable for dev / tests).
+    sales_ops_email: str = ""
+
     # Cloudflare R2
     r2_account_id: str = ""
     r2_access_key_id: str = ""
