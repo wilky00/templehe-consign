@@ -210,6 +210,8 @@ def test_password_schema_accepts_valid():
         password="ValidPass1!xx",
         first_name="Jane",
         last_name="Doe",
+        tos_version="1",
+        privacy_version="1",
     )
     assert req.email == "user@example.com"
 
@@ -222,6 +224,8 @@ def test_register_request_strips_name_whitespace():
         password="ValidPass1!xx",
         first_name="  Jane  ",
         last_name="  Doe  ",
+        tos_version="1",
+        privacy_version="1",
     )
     assert req.first_name == "Jane"
     assert req.last_name == "Doe"

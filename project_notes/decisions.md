@@ -28,7 +28,7 @@ Run the POC and initial production on **Fly.io + Neon Postgres + Cloudflare R2 +
 
 **GCP target stack (post-migration):**
 - Compute: Cloud Run (three GCP projects: `temple-dev`, `temple-staging`, `temple-prod`)
-- Database: Cloud SQL Postgres 15, private IP, PITR
+- Database: Cloud SQL Postgres 16, private IP, PITR
 - Object Storage: Cloud Storage (versioning + lifecycle policies)
 - Async Jobs: Pub/Sub + Cloud Run Jobs
 - Secrets: Secret Manager + Workload Identity Federation (no static keys)

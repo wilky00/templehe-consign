@@ -38,7 +38,7 @@ Walk through `12_gcp_production_target.md` §2 end-to-end on staging only:
 - [ ] Enable all APIs listed in §2.3
 - [ ] Terraform state bucket bootstrapped
 - [ ] Workload Identity Federation configured for the GitHub repo
-- [ ] Cloud SQL (Postgres 15) instance provisioned with PITR enabled
+- [ ] Cloud SQL (Postgres 16) instance provisioned with PITR enabled
 - [ ] Memorystore Redis (Basic, 1 GB) provisioned
 - [ ] Cloud Storage buckets created (photos, reports), versioning on, lifecycle rules applied
 - [ ] Artifact Registry repository created for the API Docker image

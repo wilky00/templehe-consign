@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database.models import AuditLog, KnownDevice, Role, TotpRecoveryCode, User
-from services import email_service, session_service
+from services import email_service, legal_service, session_service
 
 logger = structlog.get_logger(__name__)
 
@@ -199,13 +199,28 @@ async def register_user(
     password: str,
     first_name: str,
     last_name: str,
+    tos_version: str,
+    privacy_version: str,
     db: AsyncSession,
     base_url: str = "",
     background_tasks: BackgroundTasks | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
 ) -> User:
     existing = await db.execute(select(User).where(User.email == email.lower()))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
+    # Reject sign-ups against stale versions so the version bump → re-accept
+    # flow actually protects new account creation too. The client must read
+    # the current versions (GET /legal/tos, /legal/privacy or app_config via
+    # the sign-up page) and echo them back.
+    current_tos, current_privacy = await legal_service.get_current_versions(db)
+    if tos_version != current_tos or privacy_version != current_privacy:
+        raise HTTPException(
+            status_code=409,
+            detail="Terms have been updated. Please refresh and review the latest versions.",
+        )
 
     role_result = await db.execute(select(Role).where(Role.slug == "customer"))
     role = role_result.scalar_one_or_none()
@@ -222,6 +237,15 @@ async def register_user(
     )
     db.add(user)
     await db.flush()
+
+    await legal_service.record_acceptance(
+        db=db,
+        user=user,
+        tos_version=current_tos,
+        privacy_version=current_privacy,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
 
     token = _create_signed_token(
         {"sub": str(user.id), "type": _TYPE_VERIFY_EMAIL},

@@ -13,7 +13,9 @@ from middleware.request_id import RequestIDMiddleware
 from middleware.security_headers import SecurityHeadersMiddleware
 from middleware.structured_logging import StructuredLoggingMiddleware
 from routers import auth as auth_router
+from routers import customers as customers_router
 from routers import health as health_router
+from routers import legal as legal_router
 
 logger = structlog.get_logger(__name__)
 
@@ -49,4 +51,6 @@ app.add_middleware(
 
 
 app.include_router(auth_router.router, prefix="/api/v1")
+app.include_router(customers_router.router, prefix="/api/v1")
 app.include_router(health_router.router, prefix="/api/v1")
+app.include_router(legal_router.router, prefix="/api/v1")

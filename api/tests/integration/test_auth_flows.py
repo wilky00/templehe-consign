@@ -23,6 +23,8 @@ async def _register(client: AsyncClient, email: str = _VALID_EMAIL) -> dict:
             "password": _VALID_PASSWORD,
             "first_name": "Test",
             "last_name": "User",
+            "tos_version": "1",
+            "privacy_version": "1",
         },
     )
     return resp
@@ -81,7 +83,14 @@ async def test_register_duplicate_email(client: AsyncClient):
 async def test_register_invalid_password(client: AsyncClient):
     resp = await client.post(
         "/api/v1/auth/register",
-        json={"email": "new@example.com", "password": "weak", "first_name": "A", "last_name": "B"},
+        json={
+            "email": "new@example.com",
+            "password": "weak",
+            "first_name": "A",
+            "last_name": "B",
+            "tos_version": "1",
+            "privacy_version": "1",
+        },
     )
     assert resp.status_code == 422
 
@@ -95,6 +104,8 @@ async def test_register_invalid_email(client: AsyncClient):
             "password": _VALID_PASSWORD,
             "first_name": "A",
             "last_name": "B",
+            "tos_version": "1",
+            "privacy_version": "1",
         },
     )
     assert resp.status_code == 422
@@ -506,6 +517,8 @@ async def test_request_body_too_large_returns_413(client: AsyncClient):
         "password": _VALID_PASSWORD,
         "first_name": "X" * (1024 * 1024 + 1024),
         "last_name": "User",
+        "tos_version": "1",
+        "privacy_version": "1",
     }
     resp = await client.post("/api/v1/auth/register", json=oversized)
     assert resp.status_code == 413

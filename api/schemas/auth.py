@@ -31,6 +31,11 @@ class RegisterRequest(BaseModel):
     password: str
     first_name: str
     last_name: str
+    # ToS/Privacy version the user explicitly accepted on the sign-up form.
+    # Service layer rejects anything other than the current server versions —
+    # a stale client must refresh before it can complete registration.
+    tos_version: str
+    privacy_version: str
 
     @field_validator("password")
     @classmethod
@@ -40,6 +45,14 @@ class RegisterRequest(BaseModel):
     @field_validator("first_name", "last_name")
     @classmethod
     def name_not_empty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("This field is required.")
+        return v
+
+    @field_validator("tos_version", "privacy_version")
+    @classmethod
+    def version_not_empty(cls, v: str) -> str:
         v = v.strip()
         if not v:
             raise ValueError("This field is required.")
@@ -167,3 +180,7 @@ class CurrentUser(BaseModel):
     first_name: str
     last_name: str
     totp_enabled: bool
+    # Drives the ToS/Privacy re-accept interstitial. True when the user's
+    # accepted tos_version or privacy_version is older than the server's
+    # current version (or missing entirely).
+    requires_terms_reaccept: bool = False

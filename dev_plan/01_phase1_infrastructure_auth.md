@@ -90,7 +90,7 @@ As a developer, I want automated testing and deployment on every push so that br
 As a developer, I want to run the full stack on my laptop without needing cloud infrastructure so that I can iterate fast and keep cloud costs low.
 
 **Acceptance Criteria:**
-- `docker-compose.yml` at repo root brings up: Postgres 15 and a local SMTP catcher (Mailpit) on ports that don't collide with common defaults
+- `docker-compose.yml` at repo root brings up: Postgres 16 and a local SMTP catcher (Mailpit) on ports that don't collide with common defaults
 - No Redis in local or Fly POC — record locking uses Postgres advisory locks (see Feature 1.4.x locking service); behavior matches staging/prod exactly
 - `.env.example` at the root documents every variable the API and web frontend need to run locally
 - `make dev` starts Docker, runs Alembic migrations, seeds the database, and launches API on `:8000` and web on `:5173`

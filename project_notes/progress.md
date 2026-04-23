@@ -140,4 +140,48 @@ Spec: Feature 1.1.2 + 1.1.3 in `dev_plan/01_phase1_infrastructure_auth.md`
 
 ---
 
-## Phase 2–8 — Not started
+## Phase 2 — Customer Portal (In Progress, started 2026-04-22)
+
+Full spec: `dev_plan/02_phase2_customer_portal.md`
+
+### Sprint 1: Customer Registration + ToS/Privacy Consent — COMPLETE (verified green 2026-04-22)
+
+Spec: Epic 2.1 in `dev_plan/02_phase2_customer_portal.md`
+
+- [x] `api/alembic/versions/005_phase2_customer_profile.py` — adds `users.deletion_grace_until`, `user_consent_versions` archive table (append-only via trigger), and app_config defaults (`tos_current_version`, `privacy_current_version`, `audit_pii_retention_days`, `audit_row_retention_months`)
+- [x] `api/database/models.py` — added `UserConsentVersion` model + `User.deletion_grace_until` column
+- [x] `api/content/tos/v1.md` + `api/content/privacy/v1.md` — DRAFT placeholder text, file-driven so the final lawyer-reviewed copy can land without a code change
+- [x] `api/schemas/customer.py` — `CustomerProfileRead`, `CustomerProfileUpdate` (USPS state validator, strip-or-null text fields), `EmailPrefs`
+- [x] `api/schemas/legal.py` — `LegalDocument`, `AcceptTermsRequest`, `ConsentStatus`
+- [x] `api/schemas/auth.py` — `RegisterRequest` now requires `tos_version` + `privacy_version`; `CurrentUser` now exposes `requires_terms_reaccept`
+- [x] `api/services/customer_service.py` — lazy-creates `customers` row on first `/me/profile` access, profile/email-pref read + update
+- [x] `api/services/legal_service.py` — loads markdown from `api/content/`, reads current versions from `app_config`, records consent + updates user, `requires_reaccept()` check
+- [x] `api/services/auth_service.py` — `register_user()` now takes `tos_version`/`privacy_version`/`ip_address`/`user_agent`, validates against server-current, writes to consent archive on success
+- [x] `api/routers/customers.py` — `GET/PATCH /me/profile`, `GET/PATCH /me/email-prefs`; all require `customer` role
+- [x] `api/routers/legal.py` — `GET /legal/tos`, `GET /legal/privacy` (public), `GET /legal/consent-status` + `POST /legal/accept` (auth)
+- [x] `api/routers/auth.py` — `/auth/me` returns `requires_terms_reaccept`; `/register` threads client IP + UA to the service layer
+- [x] `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` bumped to `"005"`
+- [x] `api/tests/integration/test_customer_registration.py` — 14 new tests: consent archive, stale-version reject, missing-fields 422, re-accept interstitial, profile auto-create, profile PATCH, USPS state validation, unauth 401s, email prefs roundtrip, app_config seed sanity
+- [x] `api/tests/integration/test_auth_flows.py` + `test_audit_log.py` + `test_rbac.py` + `tests/unit/test_auth_service.py` — updated register payloads to include `tos_version` + `privacy_version`
+
+**Full test gate: 124/124 green, 94.67% coverage (85% floor)**
+
+**Bugs fixed during sprint:**
+- Migration 005 INSERT parsed by SQLAlchemy as bind params because `":30"` inside JSON literals looked like placeholders → rewrote using `jsonb_build_object()`. Same fix applied to test-time `app_config` updates.
+- Docker Compose postgres was still running on a PG15 data volume after the `b6529e0` bump to postgres:16.9-alpine → `make reset` wiped the volume and reinitialized under PG16. All doc references to "PostgreSQL 15" (README, CLAUDE.md, dev_plan/00_overview.md, dev_plan/01_phase1, dev_plan/13_hosting_migration_plan, decisions.md) updated to 16.
+
+**Endpoints (new in Sprint 1):**
+- `GET /api/v1/legal/tos` — public ToS doc (markdown body + current version)
+- `GET /api/v1/legal/privacy` — public Privacy doc
+- `GET /api/v1/legal/consent-status` — authed; drives re-accept interstitial
+- `POST /api/v1/legal/accept` — authed; records acceptance of current versions
+- `GET /api/v1/me/profile` — authed customer; lazy-creates row
+- `PATCH /api/v1/me/profile` — authed customer; partial update
+- `GET /api/v1/me/email-prefs` — authed customer
+- `PATCH /api/v1/me/email-prefs` — authed customer
+
+**Legal content governance:** ToS/privacy text lives in versioned files under `api/content/<type>/v<N>.md`; current version is advertised via `app_config.tos_current_version` / `privacy_current_version`. Bumping the version string forces every returning user through `requires_terms_reaccept` on their next `/auth/me` call. Registration rejects sign-ups whose submitted version doesn't match current — prevents a stale sign-up page from silently binding a user to unfamiliar terms.
+
+---
+
+## Phase 3–8 — Not started

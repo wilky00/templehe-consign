@@ -67,6 +67,9 @@ class User(Base):
     deletion_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    deletion_grace_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -92,6 +95,29 @@ class User(Base):
     known_devices: Mapped[list[KnownDevice]] = relationship(
         "KnownDevice", back_populates="user", cascade="all, delete-orphan"
     )
+    consent_versions: Mapped[list[UserConsentVersion]] = relationship(
+        "UserConsentVersion", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserConsentVersion(Base):
+    """Append-only archive of every ToS/Privacy acceptance event."""
+
+    __tablename__ = "user_consent_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    consent_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    version: Mapped[str] = mapped_column(String(20), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    user: Mapped[User] = relationship("User", back_populates="consent_versions")
 
 
 class UserSession(Base):

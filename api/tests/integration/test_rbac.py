@@ -64,6 +64,8 @@ async def _create_active_user(
                 "password": _VALID_PASSWORD,
                 "first_name": "Test",
                 "last_name": "User",
+                "tos_version": "1",
+                "privacy_version": "1",
             },
         )
     assert reg.status_code == 201, reg.json()
