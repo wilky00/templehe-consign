@@ -35,6 +35,27 @@ async def _sweep(session: AsyncSession) -> None:
         table_name, rows_deleted = row
         logger.info("swept table=%s rows_deleted=%d", table_name, rows_deleted)
 
+    # Apply right-to-erasure on accounts past their 30-day grace window.
+    result = await session.execute(text("SELECT fn_delete_expired_accounts()"))
+    deleted_accounts = cast(int, result.scalar_one())
+    logger.info("accounts_scrubbed count=%d", deleted_accounts)
+
+    # PII scrub on audit_logs rows older than the admin-configurable window.
+    # Retention is stored as {"days": N, ...} JSONB in app_config; default 30.
+    cfg = await session.execute(
+        text(
+            "SELECT (value->>'days')::int AS days FROM app_config "
+            "WHERE key = 'audit_pii_retention_days'"
+        )
+    )
+    days_row = cfg.scalar_one_or_none()
+    retention_days = int(days_row) if days_row is not None else 30
+    result = await session.execute(
+        text("SELECT fn_scrub_audit_pii(:days)"), {"days": retention_days}
+    )
+    scrubbed = cast(int, result.scalar_one())
+    logger.info("audit_pii_scrubbed count=%d retention_days=%d", scrubbed, retention_days)
+
     await session.commit()
 
 

@@ -276,4 +276,46 @@ Spec: Epic 2.3 + 2.4 in `dev_plan/02_phase2_customer_portal.md`
 
 ---
 
+### Sprint 4: GDPR-Lite Data Export + Account Deletion + Audit PII Scrubber — COMPLETE (verified green 2026-04-23)
+
+Spec: Epic 2.5 + security baseline §7 in `dev_plan/11_security_baseline.md`
+
+- [x] `api/alembic/versions/008_phase2_account_deletion_and_audit_scrub.py` — new `data_export_jobs` table (status CHECK, user+requested_at index, updated_at trigger); new PL/pgSQL `fn_scrub_audit_pii(retention_days INT)` with 30–120 guard; new `fn_delete_expired_accounts()` that pseudonymizes users + customers; existing append-only audit trigger now yields when session GUC `templehe.pii_scrub='on'` is set so the scrubber can UPDATE
+- [x] `api/database/models.py` — new `DataExportJob` ORM model
+- [x] `api/services/data_export_service.py` — gathers user + customer + consent_versions + equipment_records (with intake_photos, status_events, change_requests via selectinload) + notifications_sent; writes per-entity JSON files + manifest.txt into a zip; `PUT` to R2 at `exports/{user_id}/{export_id}.zip`; 7-day presigned GET URL on the job row; enqueues archival email via NotificationService
+- [x] `api/services/account_deletion_service.py` — `request_deletion` (idempotent; sets `deletion_requested_at` + `deletion_grace_until = now+30d`, flips status to `pending_deletion`, revokes all other sessions, emails the user); `cancel_deletion` (clears grace, restores `active`, emails confirmation); `finalize_deletion_for_user` (immediate PII scrub for admin/test use; the production path is the hourly sweeper calling `fn_delete_expired_accounts()`)
+- [x] `api/middleware/auth.py` — `get_current_user` now accepts `status ∈ {"active", "pending_deletion"}` so a user mid-grace can still hit `/delete/cancel`; `deleted`, `locked`, `pending_verification` still 401
+- [x] `api/schemas/account.py` — `DeletionRequestResponse`, `DataExportOut`
+- [x] `api/routers/account.py` — 4 new endpoints under `/me/account`
+- [x] `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` bumped to `"008"`
+- [x] `scripts/sweep_retention.py` — extended to call `fn_delete_expired_accounts()` and `fn_scrub_audit_pii()` (reads retention days from `app_config.audit_pii_retention_days`, falling back to 30)
+- [x] `scripts/scrub_audit_pii.py` + `scripts/delete_expired_accounts.py` — new standalone admin entry points for ad-hoc runs
+- [x] `api/tests/integration/test_data_export.py` — 6 tests: persisted job + download URL, archival email enqueued, zip content includes all 7 expected files + correct payloads, list past jobs, unauth 401, R2 failure marks job failed
+- [x] `api/tests/integration/test_account_deletion.py` — 7 tests: grace window set + email enqueued, sessions revoked, idempotent second request, cancel restores active + clears grace, cancel outside grace is 409, finalize PII-scrubs user + customer, `fn_delete_expired_accounts()` via SQL finalizes a grace-expired user, deleted user's token returns 401
+- [x] `api/tests/integration/test_audit_pii_scrub.py` — 5 tests: rows > retention nulled, rows < retention untouched, out-of-range retention rejected at the function boundary, non-ip/ua fields preserved, naïve UPDATE outside scrubber still blocked, DELETE still blocked
+
+**Full test gate: 195/195 green, 95.86% coverage (85% floor)**
+
+**Bugs fixed during sprint:**
+- `auth_middleware` only allowed `status='active'`, which would have broken `/me/account/delete/cancel` during a grace window. Middleware now allows `active` or `pending_deletion`; all other states still 401.
+- Test helper inserted rows with `:days || ' days'` concat — Postgres doesn't auto-cast int → text for `||`. Switched to `make_interval(days => :days)`.
+
+**Deliberately kept out of scope:**
+- Hard row deletion of equipment records, consignments, and appraisal history — these are business facts after the identity is scrubbed. GDPR right-to-erasure is satisfied by pseudonymization of `users.email`, `users.first_name`, and the `customers` PII fields; the retention+scrubber layer removes ip_address/user_agent from `audit_logs` on the admin-configured schedule.
+- Real-time scan of uploaded export blobs (no PII in the zip itself that isn't already the user's own data).
+
+**Endpoints (new in Sprint 4):**
+- `POST /api/v1/me/account/delete` — start 30-day grace, revoke other sessions, email confirmation
+- `POST /api/v1/me/account/delete/cancel` — restore active status (must be pending_deletion)
+- `POST /api/v1/me/account/data-export` — synchronously build ZIP, upload to R2, return 7-day signed URL + enqueue archival email
+- `GET  /api/v1/me/account/data-exports` — list the caller's past export jobs
+
+**Right-to-erasure semantics:** at grace expiry the retention sweeper (hourly) scrubs `users` (email → non-routable marker, first_name → `[deleted]`, secrets nulled, status → `deleted`) and `customers` (submitter_name → `[deleted]`, PII NULLed, deleted_at set). Equipment records and consignment history remain as business facts. Deleted users can no longer authenticate — any surviving access token 401s.
+
+**Audit PII scrubber:** `fn_scrub_audit_pii(days)` nulls ip_address + user_agent on `audit_logs` rows older than N days, guarded by a 30–120 range check. Bypasses the append-only trigger via a session GUC (`templehe.pii_scrub='on'`) that the trigger explicitly recognizes — naïve application-code UPDATEs and DELETEs on audit_logs are still blocked outside that path.
+
+**Operational path:** the existing `temple-sweeper` Fly app (still awaiting provisioning per known-issues.md) now carries the deletion + PII-scrub work in addition to rate_limit_counters + webhook_events_seen + user_sessions + audit-partition bootstrap. No new Fly app to stand up; the retention worker does it all.
+
+---
+
 ## Phase 3–8 — Not started
