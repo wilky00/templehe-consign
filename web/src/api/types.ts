@@ -186,3 +186,137 @@ export interface DeletionRequestResponse {
 export interface ApiError {
   detail: string;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Sales
+// ---------------------------------------------------------------------------
+
+export interface LockInfo {
+  record_id: UUID;
+  record_type: string;
+  locked_by: UUID;
+  locked_at: ISODateTime;
+  expires_at: ISODateTime;
+}
+
+export interface LockConflict {
+  detail: string;
+  locked_by: UUID;
+  locked_at: ISODateTime;
+  expires_at: ISODateTime;
+}
+
+export interface EquipmentRow {
+  id: UUID;
+  reference_number: string | null;
+  status: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  serial_number: string | null;
+  submitted_at: ISODateTime | null;
+  assigned_sales_rep_id: UUID | null;
+  assigned_appraiser_id: UUID | null;
+}
+
+export interface CustomerGroup {
+  customer_id: UUID;
+  business_name: string | null;
+  submitter_name: string;
+  cell_phone: string | null;
+  business_phone: string | null;
+  business_phone_ext: string | null;
+  state: string | null;
+  first_submission_at: ISODateTime | null;
+  total_items: number;
+  assigned_sales_rep_id: UUID | null;
+  records: EquipmentRow[];
+}
+
+export interface SalesDashboardResponse {
+  customers: CustomerGroup[];
+  total_customers: number;
+  total_records: number;
+}
+
+export interface SalesStatusEvent {
+  from_status: string | null;
+  to_status: string;
+  changed_by: UUID | null;
+  note: string | null;
+  created_at: ISODateTime;
+}
+
+export interface SalesChangeRequest {
+  id: UUID;
+  request_type: string;
+  customer_notes: string | null;
+  status: string;
+  resolution_notes: string | null;
+  resolved_by: UUID | null;
+  submitted_at: ISODateTime;
+  resolved_at: ISODateTime | null;
+}
+
+export interface SalesEquipmentDetail {
+  id: UUID;
+  reference_number: string | null;
+  status: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  serial_number: string | null;
+  hours: number | null;
+  running_status: string | null;
+  ownership_type: string | null;
+  location_text: string | null;
+  description: string | null;
+  submitted_at: ISODateTime | null;
+  created_at: ISODateTime;
+  assigned_sales_rep_id: UUID | null;
+  assigned_appraiser_id: UUID | null;
+  customer_id: UUID;
+  customer_business_name: string | null;
+  customer_submitter_name: string;
+  customer_cell_phone: string | null;
+  customer_business_phone: string | null;
+  customer_email: string;
+  has_signed_contract: boolean;
+  has_appraisal_report: boolean;
+  public_listing_status: string | null;
+  status_history: SalesStatusEvent[];
+  change_requests: SalesChangeRequest[];
+}
+
+export interface AssignmentPatch {
+  assigned_sales_rep_id?: UUID | null;
+  assigned_appraiser_id?: UUID | null;
+}
+
+export interface CascadeResult {
+  updated_record_ids: UUID[];
+  skipped_record_ids: UUID[];
+  skipped_reason: string | null;
+}
+
+export interface ChangeRequestResolveRequest {
+  status: "resolved" | "rejected";
+  resolution_notes?: string | null;
+}
+
+export interface ChangeRequestResolveResponse {
+  id: UUID;
+  status: string;
+  resolution_notes: string | null;
+  resolved_by: UUID | null;
+  resolved_at: ISODateTime | null;
+  equipment_record_id: UUID;
+  equipment_record_status: string;
+}
+
+export interface PublishResponse {
+  equipment_record_id: UUID;
+  status: string;
+  public_listing_id: UUID;
+  published_at: ISODateTime;
+}

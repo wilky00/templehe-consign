@@ -10,6 +10,8 @@ import { IntakeFormPage } from "./pages/IntakeForm";
 import { LoginPage } from "./pages/Login";
 import { NotFoundPage } from "./pages/NotFound";
 import { RegisterPage } from "./pages/Register";
+import { SalesDashboardPage } from "./pages/SalesDashboard";
+import { SalesEquipmentDetailPage } from "./pages/SalesEquipmentDetail";
 import { VerifyEmailPage } from "./pages/VerifyEmail";
 
 function PhasePlaceholder({ title }: { title: string }) {
@@ -72,7 +74,26 @@ export default function App() {
         }
       />
 
-      <Route path="/sales/*" element={<PhasePlaceholder title="Sales CRM" />} />
+      <Route
+        path="/sales"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SalesDashboardPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/sales/equipment/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SalesEquipmentDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
       <Route path="/admin/*" element={<PhasePlaceholder title="Admin Panel" />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

@@ -512,4 +512,60 @@ Spec: Epic 3.5 in `dev_plan/03_phase3_sales_crm.md` + Phase 2 Sprint 3 carry-ove
 
 ---
 
+### Sprint 2: Sales Dashboard + Record View + Cascade + Manual Publish + Change-Request Resolution — COMPLETE (verified green 2026-04-24)
+
+Spec: Epic 3.1 + 3.2 + 3.3 + 3.6 + parts of 3.7 in `dev_plan/03_phase3_sales_crm.md`.
+
+**Backend (all new):**
+- [x] `api/schemas/sales.py` — `EquipmentRowOut`, `CustomerGroupOut`, `DashboardResponse`, `StatusEventSummary`, `ChangeRequestSummary`, `EquipmentDetailOut`, `AssignmentPatch`, `CascadePatch`, `CascadeResult`, `ChangeRequestResolve`, `ChangeRequestResolveOut`, `PublishResponse`. Patch schemas use `model_fields_set` so "unset" and "null" are distinguishable over the wire.
+- [x] `api/services/sales_service.py` — `list_dashboard` (role-scoped, grouped by customer, newest-first), `get_record_detail` (eager-loads customer, status_events, change_requests, consignment_contract, public_listing, appraisal_reports), `ensure_lock_held` (gate for PATCH assignment — 409 if no active lock), `apply_assignment` (writes via `record_transition` when nothing else changes, audits only on delta), `cascade_assignment` (touches `status='new_request'` only; rest returned in `skipped_record_ids`), `publish_record` (requires status=`esigned_pending_publish` + signed contract + ≥1 appraisal report; transitions record to `listed`, upserts `PublicListing`).
+- [x] `api/routers/sales.py` — `GET /sales/dashboard`, `GET /sales/equipment/{id}`, `PATCH /sales/equipment/{id}`, `PATCH /sales/customers/{id}/cascade-assignments`, `POST /sales/equipment/{id}/publish`, `PATCH /sales/change-requests/{id}`. All behind `require_roles("sales", "sales_manager", "admin")`.
+- [x] `api/services/change_request_service.py` — added `resolve_change_request()`. On `status='resolved'` + `request_type='withdraw'` calls `equipment_status_service.record_transition(to_status='withdrawn')`. Audits `change_request.resolved|rejected`; enqueues customer email via NotificationService with idempotency key `change_request_resolution:{id}:{status}`.
+- [x] `api/main.py` — wires `sales_router`.
+- [x] `api/tests/integration/test_sales_dashboard.py` (6), `test_sales_assignment.py` (5), `test_cascade_assignment.py` (4), `test_manual_publish.py` (5), `test_change_request_resolution.py` (6) — +26 integration tests, all green.
+
+**Frontend (all new):**
+- [x] `web/src/api/sales.ts` — API wrappers: `getDashboard`, `getEquipmentDetail`, `patchAssignment`, `cascadeAssignments`, `publishListing`, `resolveChangeRequest`, `acquireLock`, `heartbeatLock`, `releaseLock`, `overrideLock`.
+- [x] `web/src/hooks/useRecordLock.ts` — lifecycle hook: acquire on mount, heartbeat every 60s, release on unmount, parses `LockConflict` JSON body from 409.
+- [x] `web/src/components/CascadeAssignModal.tsx` — bulk reassign sales_rep + appraiser for every `new_request` under a customer, confirm checkbox required.
+- [x] `web/src/components/RecordLockIndicator.tsx` — banner per lock state (acquiring / held / expired / conflict / error). Conflict state exposes "Break lock" to sales_manager + admin only.
+- [x] `web/src/components/PhoneLink.tsx` — `tel:` helper; strips non-digits for href, renders em-dash when absent.
+- [x] `web/src/pages/SalesDashboard.tsx` — grouped-by-customer dashboard. Scope toggle (mine / all) for managers only; click-to-call cell + office, cascade button per group opens modal.
+- [x] `web/src/pages/SalesEquipmentDetail.tsx` — lock-aware detail view. Customer card + equipment card (read-only) + assignment form (disabled unless `lock.status === "held"`) + PublishCard (only rendered when `status === "esigned_pending_publish"`, shows missing gates) + inline ChangeRequestResolver per pending request with resolved/rejected buttons + notes + status timeline.
+
+**Supporting (modified):**
+- [x] `web/src/api/types.ts` — Phase 3 types: `LockInfo`, `LockConflict`, `EquipmentRow`, `CustomerGroup`, `SalesDashboardResponse`, `SalesStatusEvent`, `SalesChangeRequest`, `SalesEquipmentDetail`, `AssignmentPatch`, `CascadeResult`, `ChangeRequestResolveRequest/Response`, `PublishResponse`.
+- [x] `web/src/components/Layout.tsx` — sales-side nav when `user.role ∈ {sales, sales_manager, admin}`; customer-side nav unchanged.
+- [x] `web/src/components/ui/StatusBadge.tsx` — added `pending_manager_approval`, `approved_pending_esign`, `esigned_pending_publish`, `withdrawn` mappings.
+- [x] `web/src/App.tsx` — `/sales` and `/sales/equipment/:id` routes wrapped in `ProtectedRoute + Layout`; old placeholder retired.
+
+**Full test gate: 235/235 green, 96.16% coverage (85% floor)**
+
+**Design decisions this sprint:**
+- **Lock required for PATCH assignment.** Router calls `sales_service.ensure_lock_held()` before any write; 409 if no valid lock. Frontend acquires on detail-page mount via `useRecordLock`.
+- **Cascade only touches `status='new_request'` rows.** Later-status rows are returned in `skipped_record_ids` + human-readable `skipped_reason` so the modal can surface what was left alone.
+- **Publish transitions to `'listed'`** (not `'published'`) — matches the code vocabulary in `equipment_status_service._CUSTOMER_EMAIL_STATUSES`. Record must be in `esigned_pending_publish` with a signed `ConsignmentContract` and ≥1 `AppraisalReport`.
+- **Withdraw on resolve** → `record_transition(to_status='withdrawn')`. Other resolution paths don't change record status.
+- **Cross-record access:** sales/sales_manager/admin can read any record via `/sales/equipment/{id}`; listing is filtered by default to `assigned_sales_rep_id == caller`. Managers flip to `scope=all` in the UI.
+
+**Deferred (flagged, not regressed):**
+- User pickers (sales rep + appraiser dropdowns) — today the UI takes raw UUIDs. Phase 4 (Admin Panel) will ship the searchable picker component and wire it into CascadeAssignModal + the detail assignment form.
+- Lead Routing Engine (ad-hoc / geographic / round-robin) — Sprint 3.
+- Scheduling + shared calendar + drive-time — Sprint 4.
+- Workflow notification preferences UI — Sprint 5.
+
+**Endpoints (new in Sprint 2):**
+- `GET  /api/v1/sales/dashboard` — role-scoped, grouped by customer, optional `scope`, `status`, `assigned_rep_id` filters
+- `GET  /api/v1/sales/equipment/{id}` — full detail (customer + equipment + lock metadata + history + change requests)
+- `PATCH /api/v1/sales/equipment/{id}` — update sales_rep / appraiser assignments; requires held lock
+- `PATCH /api/v1/sales/customers/{id}/cascade-assignments` — bulk assign for all `new_request` rows under a customer
+- `POST /api/v1/sales/equipment/{id}/publish` — manual publish; transitions to `listed`, upserts `PublicListing`
+- `PATCH /api/v1/sales/change-requests/{id}` — resolve or reject pending change request; withdraw-resolves flip record to `withdrawn`
+
+**Routes (new in the web app):**
+- `/sales` — dashboard
+- `/sales/equipment/:id` — record view / edit
+
+---
+
 ## Phase 4–8 — Not started

@@ -19,6 +19,7 @@ from routers import equipment as equipment_router
 from routers import health as health_router
 from routers import legal as legal_router
 from routers import record_locks as record_locks_router
+from routers import sales as sales_router
 
 logger = structlog.get_logger(__name__)
 
@@ -60,3 +61,4 @@ app.include_router(equipment_router.router, prefix="/api/v1")
 app.include_router(health_router.router, prefix="/api/v1")
 app.include_router(legal_router.router, prefix="/api/v1")
 app.include_router(record_locks_router.router, prefix="/api/v1")
+app.include_router(sales_router.router, prefix="/api/v1")

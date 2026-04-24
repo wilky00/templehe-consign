@@ -19,16 +19,18 @@ validates against a narrow allowlist.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from config import settings
-from database.models import ChangeRequest, EquipmentRecord, User
-from services import notification_service, sanitization
+from database.models import AuditLog, ChangeRequest, Customer, EquipmentRecord, User
+from services import equipment_status_service, notification_service, sanitization
 
 logger = structlog.get_logger(__name__)
 
@@ -155,3 +157,118 @@ async def list_change_requests_for_record(
         .order_by(ChangeRequest.submitted_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def resolve_change_request(
+    db: AsyncSession,
+    *,
+    change_request_id: uuid.UUID,
+    resolver: User,
+    resolver_role_slug: str,
+    new_status: str,
+    resolution_notes: str | None,
+) -> ChangeRequest:
+    """Mark a pending change request as resolved or rejected.
+
+    On ``status='resolved'`` + ``request_type='withdraw'``, the underlying
+    equipment record's status transitions to ``withdrawn``. Both paths
+    enqueue a customer-facing email via NotificationService summarizing
+    the action taken (spec Feature 2.4.3). Audit event written either way.
+    """
+    if new_status not in ("resolved", "rejected"):
+        raise HTTPException(
+            status_code=422,
+            detail="status must be 'resolved' or 'rejected'",
+        )
+
+    result = await db.execute(
+        select(ChangeRequest)
+        .where(ChangeRequest.id == change_request_id)
+        .options(
+            selectinload(ChangeRequest.equipment_record)
+            .selectinload(EquipmentRecord.customer)
+            .selectinload(Customer.user)
+        )
+    )
+    change = result.scalar_one_or_none()
+    if change is None:
+        raise HTTPException(status_code=404, detail="change request not found")
+    if change.status != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail=f"change request is already '{change.status}'; cannot re-resolve",
+        )
+
+    record = change.equipment_record
+    customer = record.customer
+    customer_user = customer.user
+
+    clean_notes = sanitization.sanitize_plain(resolution_notes)
+
+    change.status = new_status
+    change.resolution_notes = clean_notes
+    change.resolved_at = datetime.now(UTC)
+    change.resolved_by = resolver.id
+    db.add(change)
+
+    # Withdraw-on-resolve is the one request type that doubles as a
+    # terminal status change. Spec Feature 2.4.3: "If the request type was
+    # Delete Listing [withdraw], resolution sets EquipmentRecord.status = withdrawn."
+    if new_status == "resolved" and change.request_type == "withdraw":
+        await equipment_status_service.record_transition(
+            db,
+            record=record,
+            to_status="withdrawn",
+            changed_by=resolver,
+            note=(clean_notes or "Withdrawn via customer change request.")[:500],
+            customer=customer_user,
+        )
+
+    # Customer-facing resolution email. Separate from the status-transition
+    # email so we can surface the resolution notes and the request type.
+    ref = record.reference_number or str(record.id)
+    verb = "resolved" if new_status == "resolved" else "declined"
+    subject = f"Your change request on {ref} was {verb}"
+    notes_html = (
+        f"<p><strong>Notes:</strong><br>{(clean_notes or '').replace(chr(10), '<br>')}</p>"
+        if clean_notes
+        else ""
+    )
+    body = (
+        f"<p>Hi {customer_user.first_name},</p>"
+        f"<p>Your <strong>{change.request_type}</strong> request on equipment record "
+        f"<strong>{ref}</strong> has been <strong>{verb}</strong> by our sales team.</p>"
+        f"{notes_html}"
+        "<p>— The Temple Heavy Equipment team</p>"
+    )
+    await notification_service.enqueue(
+        db,
+        idempotency_key=f"change_request_resolution:{change.id}:{new_status}",
+        user_id=customer_user.id,
+        channel="email",
+        template="customer_change_request_resolution",
+        payload={
+            "to_email": customer_user.email,
+            "subject": subject,
+            "html_body": body,
+            "change_request_id": str(change.id),
+            "reference_number": ref,
+        },
+    )
+
+    db.add(
+        AuditLog(
+            event_type=f"change_request.{new_status}",
+            actor_id=resolver.id,
+            actor_role=resolver_role_slug,
+            target_type="change_request",
+            target_id=change.id,
+            after_state={
+                "equipment_record_id": str(record.id),
+                "request_type": change.request_type,
+                "resolution_notes": clean_notes,
+            },
+        )
+    )
+    await db.flush()
+    return change
