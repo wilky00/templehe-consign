@@ -140,7 +140,7 @@ Spec: Feature 1.1.2 + 1.1.3 in `dev_plan/01_phase1_infrastructure_auth.md`
 
 ---
 
-## Phase 2 — Customer Portal (In Progress, started 2026-04-22)
+## Phase 2 — Customer Portal (COMPLETE — 2026-04-24, started 2026-04-22)
 
 Full spec: `dev_plan/02_phase2_customer_portal.md`
 
@@ -447,6 +447,69 @@ Every Phase 2 customer flow is now exercised in a real browser against a real st
 - Sprint 5: Web frontend — every endpoint has a UI path
 - Sprint 6: E2E gate green, axe zero Critical/Serious, Lighthouse CI wired
 
+### Phase 2 Gate — CLOSED 2026-04-24
+
+- **PR #28** merged to main at commit `a42ad7b` on 2026-04-24T15:36:04Z. Six grouped sprint commits on `phase2-customer-portal`: a6fb519, 5611c90, e07dcb0, 87d8ef4, da779fb, cf643ea.
+- **Backend:** 195/195 green, 95.80% coverage (85% floor).
+- **E2E:** 12/12 Playwright tests green in CI, zero Critical/Serious axe violations, Lighthouse Accessibility + Best Practices ≥ 0.9 on `/login` + `/register`.
+- **CI jobs on merge commit:** Lint ✅ Test ✅ E2E ✅ Deploy-Staging ✅. Deploy-Production is manual `workflow_dispatch`.
+- **Staging deploy fired automatically on the merge-to-main push** and succeeded — first real deploy of the `temple-api-staging` + `temple-web-staging` Fly apps. Staged secrets activated.
+
+### Phase 2 — deliberate deferrals / deviations (not bugs)
+
+All items are documented in `known-issues.md` or the relevant ADR so nothing is silent.
+
+- **Phase 2 completion checklist items that defer to later phases:**
+  - "Sales Rep resolves change request → customer receives resolution email" → Phase 3 (Sales CRM endpoints don't exist yet).
+  - "Admin can modify `AppConfig.intake_fields_visible` → form reflects changes without code deploy" → Phase 4 (Admin Panel).
+  - "SMS warning copy on registration" — register page doesn't surface an SMS preference toggle (the SMS opt-in is on the Account page post-login). `Standard SMS messaging rates may apply…` copy + A2P STOP/HELP wiring lands with the real Twilio A2P go-live (tracked in `known-issues.md`).
+  - "Customer cannot submit a second change request while one is pending" — not enforced server-side in Sprint 3. Tracked as a new known-issue; first Phase 3 ticket if sales rep dashboards need it.
+- **Security-stronger deviation from spec:** cross-customer access to another user's equipment record returns **404**, not 403, to avoid leaking the ID space. Confirmed by `test_equipment_intake.py::test_cross_customer_detail_is_404`. This is the intended posture.
+- **UI shape:** intake form is a single page rather than the 3-step wizard the spec describes. Sprint 5 note acknowledged visual polish + wizard flow as iterable; no user-blocking impact.
+- **Not yet surfaced:** 2FA setup/verify/disable UI (backend live; deferred to Phase 5 alongside iOS TOTP). Password-reset + change-email UI (backend live since Phase 1; deferred to Phase 6 polish).
+
+### Phase 2 — operational follow-ups before real customer data lands on prod
+
+Tracked in `known-issues.md` (prod-go-live bundle). None of these block Phase 3 work.
+
+- Neon Pro upgrade (PITR on prod branch)
+- Rotate `neondb_owner` password (leaked in chat)
+- Create `temple-sweeper` Fly app (hourly retention sweep)
+- Create `temple-notifications` Fly app (drains `notification_jobs`)
+- Confirm Twilio A2P 10DLC approval (SMS dispatch is silently skipped until `twilio_messaging_service_sid` is set)
+- Final lawyer-reviewed ToS + Privacy text (drafts live at `api/content/tos/v1.md` + `api/content/privacy/v1.md`)
+
 ---
 
-## Phase 3–8 — Not started
+## Phase 3 — Sales CRM, Lead Routing & Shared Calendar (In Progress, started 2026-04-24)
+
+Full spec: `dev_plan/03_phase3_sales_crm.md`
+
+### Sprint 1: Record Locking + Duplicate Change-Request Guard — COMPLETE (verified green 2026-04-24)
+
+Spec: Epic 3.5 in `dev_plan/03_phase3_sales_crm.md` + Phase 2 Sprint 3 carry-over.
+
+- [x] `api/alembic/versions/009_phase3_change_request_resolution_and_uniqueness.py` — adds `change_requests.resolved_by` FK to `users`; partial UNIQUE index `ux_change_requests_one_pending_per_record` (`equipment_record_id WHERE status='pending'`). DB-level enforcement of Phase 2 Feature 2.4.1.
+- [x] `api/database/models.py` — `ChangeRequest.resolved_by` column added to ORM.
+- [x] `api/services/record_lock_service.py` — POC impl backed by `record_locks` table. `acquire/heartbeat/release/override` — 15-min TTL, self-heal expired rows, unique constraint as atomic primitive. Redis-swap contract preserved per ADR-013 addendum.
+- [x] `api/schemas/record_lock.py` — `LockAcquireRequest`, `LockInfoOut`, `LockConflictOut` shapes.
+- [x] `api/routers/record_locks.py` — POST acquire, PUT heartbeat, DELETE release, DELETE override. RBAC: any authed user for acquire/heartbeat/release; `sales_manager`/`admin` for override. Every state change writes `audit_logs` (`record_lock.acquired`, `record_lock.released`, `record_lock.overridden`).
+- [x] `api/services/change_request_service.py` — duplicate-pending submit now caught via `IntegrityError` from the partial unique index and surfaced as `409 Conflict` with human-readable detail.
+- [x] `api/main.py` + `api/routers/health.py` — wired new router; bumped `_EXPECTED_MIGRATION_HEAD` to `"009"`.
+- [x] `api/tests/integration/test_record_locks.py` — 10 tests: acquire happy/audit, conflict 409 with locked_by, same-user refreshes, expired-lock replaced by other user, heartbeat refresh/404/non-owner 404, release happy/idempotent, manager override happy/audit trail, customer forbidden from override, cross-record isolation.
+- [x] `api/tests/integration/test_change_requests.py` — 2 new tests for duplicate guard (409 on second pending, re-allowed after first is resolved).
+
+**Full test gate: 209/209 green, 95.86% coverage (85% floor)**
+
+**Design notes:**
+- **Postgres advisory locks not needed.** ADR-002 mentioned `pg_try_advisory_lock` as an option, but the UNIQUE constraint on `(record_id, record_type)` is itself the atomic primitive — a concurrent second INSERT surfaces `IntegrityError` which the service maps to `LockHeldError`. Simpler, auditable, visible in normal SQL tooling.
+- **Release deletes the row.** Overridden flags on the table (`overridden_by`, `overridden_at`) are vestigial — audit trail lives in `audit_logs`. Swap to Redis will drop the whole table.
+- **Partial unique index vs. app-level check.** Belt-and-suspenders would be redundant; the DB enforces "one pending per record" which makes the rule impossible to violate from any callsite. The 409 path exercises the error surface.
+
+**Deferred (flagged, not regressed):**
+- Expired lock sweep: today a fresh acquire self-heals a stale row. Hourly cleanup via `temple-sweeper` (migration 010 or 011 will extend `fn_sweep_retention()`); not needed until traffic makes accumulation matter.
+- `/sales/equipment/{id}` integration with lock lifecycle on the UI side — Sprint 2 (Sales Dashboard) wires that.
+
+---
+
+## Phase 4–8 — Not started

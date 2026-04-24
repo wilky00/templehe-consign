@@ -315,6 +315,54 @@ After Phase 1 Sprint 5 landed the full infrastructure + auth stack, a triaged co
 
 ---
 
+## ADR-013: Phase 2 Customer Portal — Notification Queue, Right-to-Erasure, Access Response Shape
+
+**Date:** 2026-04-24
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 2 shipped the customer portal end-to-end: registration with ToS/Privacy consent, equipment intake with reference numbers, photo upload to R2, status timeline with customer-facing emails, change requests, GDPR-lite data export, and 30-day-grace account deletion. Several decisions made during implementation deserve their own ADR entry so future phases can build on the same contract.
+
+### Decisions
+
+1. **`notification_jobs` durable queue = Postgres, claimed via `SELECT … FOR UPDATE SKIP LOCKED` using `clock_timestamp()`.** Enqueue is idempotent on an optional `idempotency_key` (UNIQUE partial index when NOT NULL). Failures retry with exponential backoff (30s → 1m → 5m → 30m → 6h, cap 5 attempts). Tests and dev can run `scripts/notification_worker.py` as a single-pass drain (`WORKER_SINGLE_PASS=1`); prod/staging run it as a long-running Fly Machine per `infra/fly/temple-notifications.toml`. This is the concrete implementation of the `NotificationService` interface promised in ADR-001.
+
+2. **Customer-facing status emails are enqueued from a single entry point: `equipment_status_service.record_transition()`.** Six watched destinations (`appraisal_scheduled`, `appraisal_complete`, `offer_ready`, `listed`, `sold`, `declined`) each enqueue one message, keyed as `status_update:{record_id}:{to_status}` so retries + bounce-back same-status transitions don't duplicate. Phase 3 sales-rep endpoints will call this same function; no parallel transition paths.
+
+3. **Right-to-erasure = pseudonymization, not hard delete.** At grace expiry (`fn_delete_expired_accounts()`), `users.email`, `users.first_name`, + the `customers` PII fields are nulled or replaced with `[deleted]` markers; `status` → `deleted`; session secrets are wiped. Equipment records, consignments, and appraisal history remain as business facts, detached from the scrubbed identity. Deleted users can no longer authenticate — any surviving access token 401s via the `middleware.auth.get_current_user` status check. This trades "full row removal" (which would cascade into business-critical tables and break reporting) for a cleaner defense of the retention promise: the identity is gone, the transaction record stays.
+
+4. **`audit_logs` PII scrubber bypasses the append-only trigger via a session GUC, not a role or role-grant.** `fn_scrub_audit_pii(days)` sets `templehe.pii_scrub='on'` for the duration of its transaction; the trigger body explicitly recognizes that GUC and yields. Application-code UPDATEs and DELETEs against `audit_logs` outside that function are still blocked. Rationale: the scrubber runs as the same DB user as the app, so role-based trigger bypass would require an elevated connection and a second pool. A GUC is narrower (only the scrubber stored proc sets it), easier to audit in the trigger body, and survives pg_dump/restore.
+
+5. **Reference numbers are Crockford-32 encoded, format `THE-XXXXXXXX` (8 chars).** Crockford-32 chosen over base32 to drop ambiguous glyphs (I/1, O/0) — customers read these over the phone to sales reps. `secrets.token_bytes(5)` → Crockford encode → take first 8 chars, uppercase. UNIQUE constraint on `equipment_records.reference_number` with regenerate-on-collision loop. Collision probability at POC volume is vanishingly small; the retry loop is belt-and-suspenders.
+
+6. **Cross-customer record access returns 404, not 403.** Spec (Phase 2 Gate in `dev_plan/09_testing_strategy.md`) says "returns 403". We deliberately return 404 instead so the response shape doesn't differentiate "this record doesn't exist" from "this record exists but you can't see it" — no ID-space enumeration. This posture is enforced in `equipment_service.get_record_for_user` and asserted in `test_equipment_intake.py`. It supersedes the "403" wording in the spec for every customer-scoped record lookup.
+
+7. **Email verification on web uses React Query, not a `useEffect`+`useMutation`.** StrictMode double-mount fires the verification token at `/auth/verify-email` twice; the first succeeds and flips the user to `active`, the second 400s on an already-consumed token. `useQuery` dedupes by key and caches the success state, which is the right primitive for a one-shot idempotent read on page load. Future one-shot token-gated reads should follow this pattern.
+
+8. **macOS networking traps neutralized at the config boundary.**
+   - `smtp_host` defaults to `127.0.0.1` (not `localhost`) because macOS's getaddrinfo returns `::1` first and Mailpit binds IPv4; the fallback took ~35s per email.
+   - `smtplib.SMTP(..., local_hostname="localhost", timeout=10)` skips `socket.getfqdn()` which hangs ~35s on macOS mDNS with no responder.
+   - Vite's `/api` proxy `target` is `http://127.0.0.1:8000` for the same IPv6-first reason.
+   Same trap class — IPv6-preferring resolver vs. IPv4-only listener on macOS. Any future outbound localhost connection from Python or Node dev should pin to 127.0.0.1 explicitly.
+
+### Consequences
+
+- `temple-notifications` + `temple-sweeper` Fly apps must be created before production handles real customer data (see `known-issues.md`). Without `temple-notifications`, the portal accepts submissions and fills the queue silently; no user-facing regression, but emails never leave.
+- The notification queue's `idempotency_key` index is a PK-shaped UNIQUE partial index. Future services enqueuing notifications should pick collision-free keys (e.g., `status_update:<record_id>:<status>`, `export:<export_id>`) so retries remain safe.
+- `fn_delete_expired_accounts()` does not cascade through equipment_records. Any future Phase 3+ report that joins users ↔ equipment_records must handle the `users.status='deleted'` case; anonymized users appear as `[deleted]` rather than disappearing.
+- Phase 3 sales-rep change-request resolution endpoints will reuse `record_transition()` for status updates, reuse `NotificationService.enqueue` for resolution emails, and must add the "one pending change request at a time" guard documented in `known-issues.md`.
+- Frontend tests for any token-consumed endpoint (email verify, password reset confirm) should use `useQuery` not `useMutation` to survive StrictMode.
+
+### References
+
+- Working branch: `phase2-customer-portal` (6 commits; single PR #28 to `main`, merged at `a42ad7b` on 2026-04-24).
+- Phase spec: `dev_plan/02_phase2_customer_portal.md`.
+- Deferrals + follow-ups: `project_notes/known-issues.md` (prod-go-live bundle + duplicate change-request + SMS warning copy).
+
+---
+
 ## ADR-010: Session and Rate Limiting Storage — Postgres Tables in POC
 
 **Date:** 2026-04-20

@@ -227,3 +227,69 @@ async def test_change_request_list_returns_only_records_entries(
     items = listed.json()
     assert len(items) == 1
     assert items[0]["request_type"] == "edit_details"
+
+
+# ---------------------------------------------------------------------------
+# Duplicate-pending guard (Phase 3 Sprint 1 — Phase 2 carry-over)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_second_pending_request_on_same_record_returns_409(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """A customer cannot open a second pending change request on the same
+    record — the partial unique index enforces one-at-a-time at the DB."""
+    token = await _login_customer(client, db_session, "change_dup1@example.com")
+    record_id = await _create_record(client, token)
+
+    first = await client.post(
+        f"/api/v1/me/equipment/{record_id}/change-requests",
+        json={"request_type": "update_location"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert first.status_code == 201
+
+    second = await client.post(
+        f"/api/v1/me/equipment/{record_id}/change-requests",
+        json={"request_type": "edit_details"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert second.status_code == 409
+    assert "already pending" in second.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_new_request_allowed_after_prior_is_resolved(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Once a request flips out of 'pending' (resolved/rejected), the next
+    one can land. Partial index only binds pending rows."""
+    token = await _login_customer(client, db_session, "change_dup2@example.com")
+    record_id = await _create_record(client, token)
+
+    first = await client.post(
+        f"/api/v1/me/equipment/{record_id}/change-requests",
+        json={"request_type": "update_location"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert first.status_code == 201
+
+    # Simulate sales-rep resolution (Sprint 2 ships the HTTP endpoint for this;
+    # here we flip the row directly).
+    row = (
+        await db_session.execute(
+            select(ChangeRequest).where(
+                ChangeRequest.equipment_record_id == uuid.UUID(record_id)
+            )
+        )
+    ).scalar_one()
+    row.status = "resolved"
+    await db_session.flush()
+
+    second = await client.post(
+        f"/api/v1/me/equipment/{record_id}/change-requests",
+        json={"request_type": "edit_details"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert second.status_code == 201

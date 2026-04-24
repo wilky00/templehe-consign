@@ -15,10 +15,27 @@
 **Impact:** Google SSO (Phase 1 stub, not yet implemented) will need the `hd` (hosted domain) claim value
 **Action:** Provide the Google Workspace domain (e.g. `templehe.com`) before SSO implementation
 
-## OPEN — Fly.io first deploy
-**Status:** Apps created, secrets staged, pending first `flyctl deploy`
-**Impact:** Staging is not yet live; E2E phase gate cannot run until this fires
-**Action:** Merge PR #17 — CI will trigger `flyctl deploy` on staging automatically, which activates the staged secrets. No manual step needed.
+## FIXED — Fly.io first deploy (staging)
+**Fixed:** 2026-04-24 — first `flyctl deploy` to staging fired automatically on the PR #28 merge-to-main push and succeeded. Staged secrets activated on both `temple-api-staging` and `temple-web-staging`.
+**Remaining:** Production deploy is gated behind manual `workflow_dispatch` — fires when the prod-go-live bundle below is complete.
+
+## OPEN — Change request duplicate submission not blocked (Phase 2 Sprint 3)
+**Status:** `ChangeRequestService.submit_change_request` lets a customer file an unlimited number of open change requests on the same record. Spec (`dev_plan/02_phase2_customer_portal.md` Feature 2.4.1) says the UI should surface "your first request is in review" and the second POST should be rejected. Today neither the service nor the router enforces this.
+**Impact:** Minor — a customer who taps "submit" twice will create two pending notifications; a sales rep sees duplicate entries in their queue. No data corruption.
+**Action:** Add a `SELECT FOR UPDATE` check in `change_request_service.submit_change_request` that 409s if a row exists with `status='pending'` for the same `(equipment_record_id, customer_id)`. Bundle with the first Phase 3 sales-rep endpoint work so the resolution path is built alongside.
+**Location:** `api/services/change_request_service.py`, `api/routers/equipment.py` (POST /me/equipment/{id}/change-requests).
+
+## OPEN — SMS warning copy not present on registration / profile UI
+**Status:** Account page has an SMS opt-in checkbox with description "Text message updates (requires a cell number on your profile)". The Phase 2 spec (Feature 2.1.1) calls for visible inline text: *"Standard SMS messaging rates may apply based on your carrier plan."* No such copy is rendered anywhere in the web app today.
+**Impact:** Regulatory — A2P 10DLC + CAN-SPAM best practice mandates that consent capture include rate/fee language. Not a blocker until SMS actually dispatches (today `twilio_messaging_service_sid` is empty → SMS is skipped with an audit entry).
+**Action:** Add the inline warning under the SMS opt-in checkbox in `web/src/pages/Account.tsx` and on the register page whenever SMS preferences are surfaced. Bundle with the A2P go-live gate below.
+**Location:** `web/src/pages/Account.tsx:105-110`.
+
+## OPEN — httpx per-request cookies DeprecationWarning in test suite
+**Status:** `test_auth_flows.py::test_refresh_cookie_full_cycle` + `test_email_change_revokes_sessions` trigger `DeprecationWarning: Setting per-request cookies=<...> is being deprecated`. Tests still pass; warning is from httpx (ASGI test client).
+**Impact:** None today; will break when httpx removes the API.
+**Action:** Switch from `client.post(..., cookies={...})` to setting the cookie on the test client instance or using `client.cookies.set(...)` in the refresh-cookie tests.
+**Location:** `api/tests/integration/test_auth_flows.py` (two callsites).
 
 ## OPEN — Neon PITR on prod branch
 **Status:** Neon project + 3 branches (dev/staging/prod) created; PITR not yet enabled

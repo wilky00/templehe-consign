@@ -23,6 +23,7 @@ import uuid
 import structlog
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
@@ -64,7 +65,19 @@ async def submit_change_request(
         status="pending",
     )
     db.add(change)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        # The partial unique index ux_change_requests_one_pending_per_record
+        # surfaces as IntegrityError when a pending request already exists for
+        # this record. Enforced at the DB so two concurrent submits can't both
+        # land a pending row. Phase 2 Feature 2.4.1 / Phase 3 carry-over.
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="A change request for this record is already pending. "
+            "Wait for the sales team to resolve it before submitting another.",
+        ) from exc
 
     await _notify_sales(
         db,
