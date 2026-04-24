@@ -58,7 +58,7 @@ See `dev_plan/00_overview.md` for the full architecture reference.
 |---|---|
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic |
 | Frontend | React 18, TypeScript (strict), Tailwind CSS, React Query |
-| Database | PostgreSQL 15 (local Docker → Neon POC → Cloud SQL GCP) |
+| Database | PostgreSQL 16 (local Docker → Neon POC → Cloud SQL GCP) |
 | Email | Mailpit (local) → SendGrid (staging/prod) |
 | Hosting | Docker Compose (local) → Fly.io (POC) → GCP Cloud Run (prod) |
 

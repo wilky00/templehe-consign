@@ -1,0 +1,211 @@
+logic_type,category,target,rule_expression,rule_action,weight_percent,notes
+component_weight,Articulated Dump Trucks,Engine,,,18.69,Weighted condition score contribution
+component_weight,Articulated Dump Trucks,Transmission,,,14.02,Weighted condition score contribution
+component_weight,Articulated Dump Trucks,Center hitch/articulation,,,9.35,Weighted condition score contribution
+component_weight,Articulated Dump Trucks,Hydraulic system,,,14.02,Weighted condition score contribution
+component_weight,Articulated Dump Trucks,Axles/differentials,,,9.35,Weighted condition score contribution
+component_weight,Articulated Dump Trucks,Tires,,,14.02,Weighted condition score contribution
+component_weight,Articulated Dump Trucks,Cab/interior,,,9.35,Weighted condition score contribution
+component_weight,Articulated Dump Trucks,Body/chassis,,,11.21,Weighted condition score contribution
+red_flag_rule,Articulated Dump Trucks,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Articulated Dump Trucks,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Articulated Dump Trucks,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Articulated Dump Trucks,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Articulated Dump Trucks,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Articulated Dump Trucks,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Rigid Frame Dump Trucks,Engine,,,19.61,Weighted condition score contribution
+component_weight,Rigid Frame Dump Trucks,Transmission,,,14.71,Weighted condition score contribution
+component_weight,Rigid Frame Dump Trucks,Hydraulic hoist,,,9.8,Weighted condition score contribution
+component_weight,Rigid Frame Dump Trucks,Axles/suspension,,,9.8,Weighted condition score contribution
+component_weight,Rigid Frame Dump Trucks,Frame/chassis,,,9.8,Weighted condition score contribution
+component_weight,Rigid Frame Dump Trucks,Tires,,,14.71,Weighted condition score contribution
+component_weight,Rigid Frame Dump Trucks,Cab/interior,,,9.8,Weighted condition score contribution
+component_weight,Rigid Frame Dump Trucks,Body,,,11.76,Weighted condition score contribution
+red_flag_rule,Rigid Frame Dump Trucks,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Rigid Frame Dump Trucks,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Rigid Frame Dump Trucks,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Rigid Frame Dump Trucks,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Rigid Frame Dump Trucks,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Rigid Frame Dump Trucks,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Backhoe Loaders,Engine,,,19.05,Weighted condition score contribution
+component_weight,Backhoe Loaders,Transmission/driveline,,,14.29,Weighted condition score contribution
+component_weight,Backhoe Loaders,Loader assembly,,,9.52,Weighted condition score contribution
+component_weight,Backhoe Loaders,Backhoe assembly,,,9.52,Weighted condition score contribution
+component_weight,Backhoe Loaders,Hydraulic system,,,14.29,Weighted condition score contribution
+component_weight,Backhoe Loaders,Pins/bushings,,,9.52,Weighted condition score contribution
+component_weight,Backhoe Loaders,Tires,,,14.29,Weighted condition score contribution
+component_weight,Backhoe Loaders,Cab/controls,,,9.52,Weighted condition score contribution
+red_flag_rule,Backhoe Loaders,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Backhoe Loaders,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Backhoe Loaders,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Backhoe Loaders,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Backhoe Loaders,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Backhoe Loaders,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Dozers,Engine,,,18.18,Weighted condition score contribution
+component_weight,Dozers,Transmission/steering,,,13.64,Weighted condition score contribution
+component_weight,Dozers,Final drives,,,10.91,Weighted condition score contribution
+component_weight,Dozers,Undercarriage,,,18.18,Weighted condition score contribution
+component_weight,Dozers,Blade assembly,,,10.91,Weighted condition score contribution
+component_weight,Dozers,Ripper assembly,,,5.45,Weighted condition score contribution
+component_weight,Dozers,Hydraulic system,,,13.64,Weighted condition score contribution
+component_weight,Dozers,Cab/controls,,,9.09,Weighted condition score contribution
+red_flag_rule,Dozers,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Dozers,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Dozers,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Dozers,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Dozers,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Dozers,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Excavators,Engine,,,18.69,Weighted condition score contribution
+component_weight,Excavators,Hydraulic pumps/system,,,14.02,Weighted condition score contribution
+component_weight,Excavators,Swing system,,,9.35,Weighted condition score contribution
+component_weight,Excavators,Boom/stick/bucket,,,14.02,Weighted condition score contribution
+component_weight,Excavators,Undercarriage,,,18.69,Weighted condition score contribution
+component_weight,Excavators,Travel motors/drives,,,11.21,Weighted condition score contribution
+component_weight,Excavators,Cab/controls,,,9.35,Weighted condition score contribution
+component_weight,Excavators,Attachments,,,4.67,Weighted condition score contribution
+red_flag_rule,Excavators,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Excavators,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Excavators,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Excavators,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Excavators,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Excavators,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Mini Excavators,Engine,,,18.69,Weighted condition score contribution
+component_weight,Mini Excavators,Hydraulic system,,,14.02,Weighted condition score contribution
+component_weight,Mini Excavators,Swing system,,,9.35,Weighted condition score contribution
+component_weight,Mini Excavators,Boom/stick/bucket,,,14.02,Weighted condition score contribution
+component_weight,Mini Excavators,Tracks/undercarriage,,,18.69,Weighted condition score contribution
+component_weight,Mini Excavators,Blade,,,11.21,Weighted condition score contribution
+component_weight,Mini Excavators,Cab/controls,,,9.35,Weighted condition score contribution
+component_weight,Mini Excavators,Attachments,,,4.67,Weighted condition score contribution
+red_flag_rule,Mini Excavators,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Mini Excavators,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Mini Excavators,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Mini Excavators,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Mini Excavators,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Mini Excavators,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Wheel Loaders,Engine,,,18.69,Weighted condition score contribution
+component_weight,Wheel Loaders,Transmission,,,14.02,Weighted condition score contribution
+component_weight,Wheel Loaders,Hydraulics,,,14.02,Weighted condition score contribution
+component_weight,Wheel Loaders,Articulation/frame,,,9.35,Weighted condition score contribution
+component_weight,Wheel Loaders,Axles,,,9.35,Weighted condition score contribution
+component_weight,Wheel Loaders,Tires,,,14.02,Weighted condition score contribution
+component_weight,Wheel Loaders,Loader arms/bucket,,,11.21,Weighted condition score contribution
+component_weight,Wheel Loaders,Cab/controls,,,9.35,Weighted condition score contribution
+red_flag_rule,Wheel Loaders,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Wheel Loaders,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Wheel Loaders,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Wheel Loaders,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Wheel Loaders,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Wheel Loaders,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Skid Steers,Engine,,,20.0,Weighted condition score contribution
+component_weight,Skid Steers,Hydraulic system,,,15.0,Weighted condition score contribution
+component_weight,Skid Steers,Drive system,,,15.0,Weighted condition score contribution
+component_weight,Skid Steers,Lift arms/frame,,,10.0,Weighted condition score contribution
+component_weight,Skid Steers,Tires,,,15.0,Weighted condition score contribution
+component_weight,Skid Steers,Cab/controls,,,10.0,Weighted condition score contribution
+component_weight,Skid Steers,Quick attach,,,10.0,Weighted condition score contribution
+component_weight,Skid Steers,Attachments,,,5.0,Weighted condition score contribution
+red_flag_rule,Skid Steers,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Skid Steers,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Skid Steers,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Skid Steers,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Skid Steers,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Skid Steers,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Compact Track Loaders,Engine,,,19.05,Weighted condition score contribution
+component_weight,Compact Track Loaders,Hydraulic system,,,14.29,Weighted condition score contribution
+component_weight,Compact Track Loaders,Drive system,,,14.29,Weighted condition score contribution
+component_weight,Compact Track Loaders,Tracks/undercarriage,,,19.05,Weighted condition score contribution
+component_weight,Compact Track Loaders,Lift arms/frame,,,9.52,Weighted condition score contribution
+component_weight,Compact Track Loaders,Cab/controls,,,9.52,Weighted condition score contribution
+component_weight,Compact Track Loaders,Quick attach,,,9.52,Weighted condition score contribution
+component_weight,Compact Track Loaders,Attachments,,,4.76,Weighted condition score contribution
+red_flag_rule,Compact Track Loaders,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Compact Track Loaders,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Compact Track Loaders,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Compact Track Loaders,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Compact Track Loaders,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Compact Track Loaders,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Motor Graders,Engine,,,17.7,Weighted condition score contribution
+component_weight,Motor Graders,Transmission,,,13.27,Weighted condition score contribution
+component_weight,Motor Graders,Circle/drawbar/moldboard,,,15.93,Weighted condition score contribution
+component_weight,Motor Graders,Articulation/steering,,,8.85,Weighted condition score contribution
+component_weight,Motor Graders,Hydraulic system,,,13.27,Weighted condition score contribution
+component_weight,Motor Graders,Axles/tandems,,,8.85,Weighted condition score contribution
+component_weight,Motor Graders,Tires,,,13.27,Weighted condition score contribution
+component_weight,Motor Graders,Cab/controls,,,8.85,Weighted condition score contribution
+red_flag_rule,Motor Graders,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Motor Graders,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Motor Graders,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Motor Graders,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Motor Graders,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Motor Graders,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Telehandlers,Engine,,,18.52,Weighted condition score contribution
+component_weight,Telehandlers,Transmission,,,13.89,Weighted condition score contribution
+component_weight,Telehandlers,Boom assembly,,,16.67,Weighted condition score contribution
+component_weight,Telehandlers,Hydraulic system,,,13.89,Weighted condition score contribution
+component_weight,Telehandlers,Axles/steering,,,9.26,Weighted condition score contribution
+component_weight,Telehandlers,Tires,,,13.89,Weighted condition score contribution
+component_weight,Telehandlers,Cab/controls,,,9.26,Weighted condition score contribution
+component_weight,Telehandlers,Attachments/stabilizers,,,4.63,Weighted condition score contribution
+red_flag_rule,Telehandlers,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Telehandlers,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Telehandlers,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Telehandlers,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Telehandlers,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Telehandlers,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Wheel / Ag Tractors,Engine,,,18.69,Weighted condition score contribution
+component_weight,Wheel / Ag Tractors,Transmission/driveline,,,14.02,Weighted condition score contribution
+component_weight,Wheel / Ag Tractors,PTO/3-point,,,11.21,Weighted condition score contribution
+component_weight,Wheel / Ag Tractors,Hydraulic system,,,14.02,Weighted condition score contribution
+component_weight,Wheel / Ag Tractors,Axles,,,9.35,Weighted condition score contribution
+component_weight,Wheel / Ag Tractors,Tires,,,14.02,Weighted condition score contribution
+component_weight,Wheel / Ag Tractors,Loader assembly,,,9.35,Weighted condition score contribution
+component_weight,Wheel / Ag Tractors,Cab/controls,,,9.35,Weighted condition score contribution
+red_flag_rule,Wheel / Ag Tractors,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Wheel / Ag Tractors,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Wheel / Ag Tractors,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Wheel / Ag Tractors,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Wheel / Ag Tractors,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Wheel / Ag Tractors,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Crawler Loaders,Engine,,,17.54,Weighted condition score contribution
+component_weight,Crawler Loaders,Transmission/steering,,,13.16,Weighted condition score contribution
+component_weight,Crawler Loaders,Final drives,,,10.53,Weighted condition score contribution
+component_weight,Crawler Loaders,Undercarriage,,,17.54,Weighted condition score contribution
+component_weight,Crawler Loaders,Loader assembly,,,8.77,Weighted condition score contribution
+component_weight,Crawler Loaders,Hydraulic system,,,13.16,Weighted condition score contribution
+component_weight,Crawler Loaders,Cab/controls,,,8.77,Weighted condition score contribution
+component_weight,Crawler Loaders,Bucket/attachments,,,10.53,Weighted condition score contribution
+red_flag_rule,Crawler Loaders,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Crawler Loaders,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Crawler Loaders,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Crawler Loaders,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Crawler Loaders,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Crawler Loaders,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Scrapers,Engine,,,17.39,Weighted condition score contribution
+component_weight,Scrapers,Transmission,,,13.04,Weighted condition score contribution
+component_weight,Scrapers,Bowl/apron/ejector,,,15.65,Weighted condition score contribution
+component_weight,Scrapers,Hydraulic system,,,13.04,Weighted condition score contribution
+component_weight,Scrapers,Frame/gooseneck,,,10.43,Weighted condition score contribution
+component_weight,Scrapers,Axles,,,8.7,Weighted condition score contribution
+component_weight,Scrapers,Tires,,,13.04,Weighted condition score contribution
+component_weight,Scrapers,Cab/controls,,,8.7,Weighted condition score contribution
+red_flag_rule,Scrapers,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Scrapers,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Scrapers,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Scrapers,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Scrapers,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Scrapers,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos
+component_weight,Rollers / Compactors,Engine,,,19.42,Weighted condition score contribution
+component_weight,Rollers / Compactors,Drive system,,,14.56,Weighted condition score contribution
+component_weight,Rollers / Compactors,Drum/vibration,,,19.42,Weighted condition score contribution
+component_weight,Rollers / Compactors,Articulation/frame,,,9.71,Weighted condition score contribution
+component_weight,Rollers / Compactors,Water system,,,7.77,Weighted condition score contribution
+component_weight,Rollers / Compactors,Tires if applicable,,,14.56,Weighted condition score contribution
+component_weight,Rollers / Compactors,Cab/controls,,,9.71,Weighted condition score contribution
+component_weight,Rollers / Compactors,Attachments,,,4.85,Weighted condition score contribution
+red_flag_rule,Rollers / Compactors,appraisal_record,structural_damage = true,set management_review_required = true; downgrade marketability one band,,"Cracks, poor repairs, bent frame/body/boom/blade"
+red_flag_rule,Rollers / Compactors,appraisal_record,active_major_leak = true,set management_review_required = true,,"Major hydraulic, engine, coolant, axle, final drive, or transmission leakage"
+red_flag_rule,Rollers / Compactors,appraisal_record,missing_serial_plate = true,set hold_for_title_review = true,,Identity risk
+red_flag_rule,Rollers / Compactors,appraisal_record,running_status = Non-Running,set management_review_required = true; set marketability_rating = Salvage Risk unless overridden,,Non-running unit
+red_flag_rule,Rollers / Compactors,appraisal_record,hours_verified = false,append review note: verify hours history,,Questionable meter
+workflow_rule,Rollers / Compactors,submission,photo_set_complete = false,block final submission,,Do not allow completed appraisal without required photos

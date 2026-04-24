@@ -140,4 +140,313 @@ Spec: Feature 1.1.2 + 1.1.3 in `dev_plan/01_phase1_infrastructure_auth.md`
 
 ---
 
-## Phase 2–8 — Not started
+## Phase 2 — Customer Portal (In Progress, started 2026-04-22)
+
+Full spec: `dev_plan/02_phase2_customer_portal.md`
+
+### Sprint 1: Customer Registration + ToS/Privacy Consent — COMPLETE (verified green 2026-04-22)
+
+Spec: Epic 2.1 in `dev_plan/02_phase2_customer_portal.md`
+
+- [x] `api/alembic/versions/005_phase2_customer_profile.py` — adds `users.deletion_grace_until`, `user_consent_versions` archive table (append-only via trigger), and app_config defaults (`tos_current_version`, `privacy_current_version`, `audit_pii_retention_days`, `audit_row_retention_months`)
+- [x] `api/database/models.py` — added `UserConsentVersion` model + `User.deletion_grace_until` column
+- [x] `api/content/tos/v1.md` + `api/content/privacy/v1.md` — DRAFT placeholder text, file-driven so the final lawyer-reviewed copy can land without a code change
+- [x] `api/schemas/customer.py` — `CustomerProfileRead`, `CustomerProfileUpdate` (USPS state validator, strip-or-null text fields), `EmailPrefs`
+- [x] `api/schemas/legal.py` — `LegalDocument`, `AcceptTermsRequest`, `ConsentStatus`
+- [x] `api/schemas/auth.py` — `RegisterRequest` now requires `tos_version` + `privacy_version`; `CurrentUser` now exposes `requires_terms_reaccept`
+- [x] `api/services/customer_service.py` — lazy-creates `customers` row on first `/me/profile` access, profile/email-pref read + update
+- [x] `api/services/legal_service.py` — loads markdown from `api/content/`, reads current versions from `app_config`, records consent + updates user, `requires_reaccept()` check
+- [x] `api/services/auth_service.py` — `register_user()` now takes `tos_version`/`privacy_version`/`ip_address`/`user_agent`, validates against server-current, writes to consent archive on success
+- [x] `api/routers/customers.py` — `GET/PATCH /me/profile`, `GET/PATCH /me/email-prefs`; all require `customer` role
+- [x] `api/routers/legal.py` — `GET /legal/tos`, `GET /legal/privacy` (public), `GET /legal/consent-status` + `POST /legal/accept` (auth)
+- [x] `api/routers/auth.py` — `/auth/me` returns `requires_terms_reaccept`; `/register` threads client IP + UA to the service layer
+- [x] `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` bumped to `"005"`
+- [x] `api/tests/integration/test_customer_registration.py` — 14 new tests: consent archive, stale-version reject, missing-fields 422, re-accept interstitial, profile auto-create, profile PATCH, USPS state validation, unauth 401s, email prefs roundtrip, app_config seed sanity
+- [x] `api/tests/integration/test_auth_flows.py` + `test_audit_log.py` + `test_rbac.py` + `tests/unit/test_auth_service.py` — updated register payloads to include `tos_version` + `privacy_version`
+
+**Full test gate: 124/124 green, 94.67% coverage (85% floor)**
+
+**Bugs fixed during sprint:**
+- Migration 005 INSERT parsed by SQLAlchemy as bind params because `":30"` inside JSON literals looked like placeholders → rewrote using `jsonb_build_object()`. Same fix applied to test-time `app_config` updates.
+- Docker Compose postgres was still running on a PG15 data volume after the `b6529e0` bump to postgres:16.9-alpine → `make reset` wiped the volume and reinitialized under PG16. All doc references to "PostgreSQL 15" (README, CLAUDE.md, dev_plan/00_overview.md, dev_plan/01_phase1, dev_plan/13_hosting_migration_plan, decisions.md) updated to 16.
+
+**Endpoints (new in Sprint 1):**
+- `GET /api/v1/legal/tos` — public ToS doc (markdown body + current version)
+- `GET /api/v1/legal/privacy` — public Privacy doc
+- `GET /api/v1/legal/consent-status` — authed; drives re-accept interstitial
+- `POST /api/v1/legal/accept` — authed; records acceptance of current versions
+- `GET /api/v1/me/profile` — authed customer; lazy-creates row
+- `PATCH /api/v1/me/profile` — authed customer; partial update
+- `GET /api/v1/me/email-prefs` — authed customer
+- `PATCH /api/v1/me/email-prefs` — authed customer
+
+**Legal content governance:** ToS/privacy text lives in versioned files under `api/content/<type>/v<N>.md`; current version is advertised via `app_config.tos_current_version` / `privacy_current_version`. Bumping the version string forces every returning user through `requires_terms_reaccept` on their next `/auth/me` call. Registration rejects sign-ups whose submitted version doesn't match current — prevents a stale sign-up page from silently binding a user to unfamiliar terms.
+
+---
+
+### Sprint 2: Equipment Intake + NotificationService + Bundle Seed — COMPLETE (verified green 2026-04-23)
+
+Spec: Epic 2.2 in `dev_plan/02_phase2_customer_portal.md`
+
+- [x] `api/alembic/versions/006_phase2_intake_and_notifications.py` — adds 12 customer-intake columns + reference_number + category_id FK on `equipment_records`; `customer_intake_photos` child table; `notification_jobs` durable queue with CHECK constraints, partial pending-ready index, and set_updated_at trigger reuse
+- [x] `api/database/models.py` — `EquipmentRecord` intake columns + `category` + `intake_photos` relationships; new `CustomerIntakePhoto` and `NotificationJob` models
+- [x] `api/pyproject.toml` — `bleach>=6.1` re-added (per security baseline §3), `twilio>=9.3` added for A2P 10DLC dispatch
+- [x] `api/config.py` — `twilio_messaging_service_sid` setting; if empty, SMS dispatch is skipped + audited
+- [x] `api/services/sanitization.py` — `sanitize_plain` strips all markup, `sanitize_html` keeps a narrow inline allowlist and blocks `javascript:` / `data:` URIs
+- [x] `api/services/notification_service.py` — `enqueue` (idempotent on key), `claim_next_batch` via `FOR UPDATE SKIP LOCKED`, `process_job` with exponential backoff (30s → 6h) and 5 max attempts; DB-default `scheduled_for` so Python-host clock drift doesn't race `clock_timestamp()`
+- [x] `api/services/equipment_service.py` — `submit_intake` creates record, generates `THE-XXXXXXXX` via Crockford-32 secrets, attaches photos via relationship, enqueues intake confirmation through NotificationService; `list_records_for_user` / `get_record_for_user` use `selectinload` to avoid async lazy-load traps
+- [x] `api/schemas/equipment.py` — `IntakeSubmission` (running_status + ownership_type enums, photo cap=20, year/hours bounds), `IntakePhotoIn/Out`, `EquipmentRecordOut`
+- [x] `api/routers/equipment.py` — `POST /me/equipment`, `POST /me/equipment/batch` → 501 placeholder, `GET /me/equipment`, `GET /me/equipment/{id}`; all gated to `customer` role
+- [x] `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` bumped to `"006"`
+- [x] `scripts/import_category_bundle.py` — imports Dozers, Backhoe Loaders, and Articulated Dump Trucks with full components (weights from `06_scoring_and_rules_logic.csv`), inspection prompts, photo slots, attachments, and red-flag rules (from the per-category checklist markdown)
+- [x] `scripts/seed.py` — trimmed stub category list to the 12 remaining categories and hooked `import_bundle()` so `make seed` ships the three complete categories
+- [x] `scripts/notification_worker.py` — long-running drainer loop with `SELECT ... FOR UPDATE SKIP LOCKED`, signal-handled shutdown, and a `WORKER_SINGLE_PASS` env toggle for ad-hoc runs
+- [x] `infra/fly/temple-notifications.toml` — worker Fly Machine config mirroring the `temple-sweeper` shape
+- [x] `project_notes/known-issues.md` — added a pre-launch-gate entry for provisioning `temple-notifications`
+- [x] `api/tests/conftest.py` — seeds the starter bundle on test DB bootstrap so Phase 2+ tests have real category data
+- [x] `api/tests/unit/test_sanitization.py` — 6 tests: plain-strip, html-allowlist, script/iframe/javascript/data-URI blocks
+- [x] `api/tests/integration/test_equipment_intake.py` — 11 tests: happy path, bleach, running-status/ownership validation, unknown category 422, photo cap, unauth 401, batch 501, list isolation, detail cross-customer 404, reference-number uniqueness
+- [x] `api/tests/integration/test_notification_service.py` — 8 tests: enqueue writes pending, idempotency-key dedup, unknown channel rejected, claim_next_batch marks processing + skips future, delivered on success, retry on exception, failed after max_attempts, SMS skipped when not configured, SMS failed on missing payload fields
+- [x] `api/tests/integration/test_category_bundle_import.py` — 5 tests: 3 starter categories seeded, Dozers child tables populated (8 components + 10 prompts + 10 photos + 8 attachments + 5 red-flag rules), re-import no-ops, unknown-slug ignored, component weights sum to ~100%
+
+**Full test gate: 154/154 green, 94.98% coverage (85% floor)**
+
+**Bugs fixed during sprint:**
+- Test DB never ran the category bundle importer → extended `conftest.py` `setup_test_db` to invoke `import_bundle` after role seed.
+- `EquipmentRecord.intake_photos` triggered a greenlet-less lazy load when the router serialized a newly-created record → populate the collection via `record.intake_photos.append(...)` + `await db.refresh(record, attribute_names=["intake_photos"])`; list/detail paths use `selectinload`.
+- `test_claim_batch_marks_processing_and_skips_future` was flaky because Python on macOS host and Postgres in Docker Desktop VM can drift by hundreds of ms → enqueue now lets the DB default fire on `scheduled_for` when no explicit value is supplied, keeping the insert clock and the claim query's `clock_timestamp()` on the same source. `SELECT ... SKIP LOCKED` query changed `NOW()` → `clock_timestamp()` so jobs enqueued in the same transaction become visible to the worker in the same tx (matters for tests; prod is unaffected).
+- Migration 005 colon-bind trip already captured in Sprint 1, but a similar issue almost re-appeared in 006's test data — avoided by using the ORM throughout.
+
+**Sanitization policy (security baseline §3):**
+- Every customer-supplied free-text field (make, model, serial, location, description, photo caption) runs through `sanitize_plain` before the DB write.
+- `sanitize_html` is reserved for paths that render rich HTML (email templates) — not used in Sprint 2; will come online with status-update emails in Sprint 3.
+
+**Deferred to later Phase 2 sprints:**
+- Photo blob upload (signed R2 URLs + client-side multipart) — Sprint 3. Sprint 2 persists `storage_key` metadata only; the R2 object is assumed to already exist via an out-of-band path.
+- Change request API + status update emails — Sprint 3.
+- GDPR-lite data export + deletion + row-level `audit_logs` PII scrubber — Sprint 4.
+- Web frontend (sign-up, dashboard, intake form, detail timeline) — Sprint 5.
+- Phase 2 E2E (Playwright + axe-core + Lighthouse ≥ 90) — Sprint 6.
+
+**Endpoints (new in Sprint 2):**
+- `POST /api/v1/me/equipment` — submit intake; returns `THE-XXXXXXXX` reference
+- `POST /api/v1/me/equipment/batch` — 501 placeholder for Phase 4/5 bulk import
+- `GET  /api/v1/me/equipment` — list the caller's intakes
+- `GET  /api/v1/me/equipment/{id}` — detail; cross-customer is 404 (not 403 — no ID-space leak)
+
+---
+
+### Sprint 3: Photo Upload + Status Timeline + Change Requests — COMPLETE (verified green 2026-04-23)
+
+Spec: Epic 2.3 + 2.4 in `dev_plan/02_phase2_customer_portal.md`
+
+- [x] `api/alembic/versions/007_phase2_status_events_and_photo_scan.py` — new `status_events` (append-only trigger) + `customer_intake_photos.scan_status` / `content_type` / `sha256` columns with CHECK constraint + partial index for pending scans
+- [x] `api/database/models.py` — new `StatusEvent` model with append-only semantics; `CustomerIntakePhoto` gains scan metadata; `EquipmentRecord.status_events` relationship with `cascade="all, delete-orphan"` and `order_by=StatusEvent.created_at`
+- [x] `api/services/photo_upload_service.py` — presigned R2 URL generator (15-min expiry), immutable key pattern `photos/{equipment_id}/{uuid}.{ext}`, MIME + extension allowlist, finalize-side defense against cross-record storage_key spoofing
+- [x] `api/services/equipment_status_service.py` — single `record_transition()` entry point that writes to status_events, updates the record, and enqueues a customer-facing email on 6 watched destination statuses via NotificationService; narrow forbidden-transition set prevents obvious reversals (sold→new_request etc.)
+- [x] `api/services/change_request_service.py` — customer submission + allowlisted request_types; notifies assigned_sales_rep_id if set, else `settings.sales_ops_email`, else logs silently; notes run through `sanitize_plain`
+- [x] `api/services/equipment_service.py` — `submit_intake` now refreshes both `intake_photos` and `status_events` after flush; list/detail queries add `selectinload` for both collections; new `finalize_intake_photo` helper
+- [x] `api/schemas/photo.py` — `UploadUrlRequest/Response`, `FinalizePhotoRequest` (sha256 optional, hex-64 validated); `api/schemas/change_request.py` — create + out; `api/schemas/equipment.py` — new `StatusEventOut` + timeline on detail; `IntakePhotoOut` gains scan_status + content_type
+- [x] `api/config.py` — `sales_ops_email` setting (empty ⇒ silent)
+- [x] `api/routers/equipment.py` — four new endpoints; detail serializes both collections
+- [x] `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` bumped to `"007"`
+- [x] `api/tests/integration/test_photo_upload.py` — 9 tests: signed URL happy path (boto3 mocked), unknown extension rejected, non-image MIME rejected, cross-customer 404, finalize persists metadata, wrong-prefix rejected, bad sha256 rejected, detail shows finalized photo, unconfigured R2 returns 503
+- [x] `api/tests/integration/test_change_requests.py` — 6 tests: happy path + sales-rep notification enqueue + bleach on notes, ops-email fallback, silent fallback, unknown request_type 422, cross-customer 404, list isolation
+- [x] `api/tests/integration/test_status_events.py` — 7 tests: transition writes event + updates status, email enqueued on customer-facing statuses, internal statuses skip email, same-destination 409 + email idempotency, forbidden edge 409, detail endpoint exposes ordered timeline, DB-level append-only trigger blocks UPDATEs
+
+**Full test gate: 176/176 green, 95.65% coverage (85% floor)**
+
+**Bugs fixed during sprint:**
+- New `EquipmentRecord.status_events` relationship triggered the same async-SA lazy-load trap the `intake_photos` collection hit in Sprint 2 → `submit_intake` now refreshes both collections after flush, and `list`/`get` use `selectinload` on both.
+- Append-only trigger test caught the wrong exception class — Postgres raises asyncpg `RaiseError`, which SQLAlchemy wraps as `DBAPIError`, not `InternalError`/`ProgrammingError`. Test updated to match.
+
+**Deliberately deferred (flagged, not regressed):**
+- Real ClamAV scan integration — `scan_status` column is a scaffold that starts `pending` and never flips. Phase 5 or a dedicated scan-worker sprint adds the actual scanner + queue consumer.
+- PDF placeholder generator scaffold — zero-scope this sprint; Phase 7 will build the full generator.
+- Server-side verification of uploaded blob (sha256 recompute after R2 PUT) — Sprint 3 trusts the client-supplied hash and persists; real verification lives with the scan worker.
+
+**Endpoints (new in Sprint 3):**
+- `POST /api/v1/me/equipment/{id}/photos/upload-url` — short-lived presigned R2 PUT URL + immutable storage_key
+- `POST /api/v1/me/equipment/{id}/photos` — finalize photo metadata (scan_status=pending)
+- `POST /api/v1/me/equipment/{id}/change-requests` — customer submits a change request; enqueues sales notification
+- `GET  /api/v1/me/equipment/{id}/change-requests` — list for that record
+- `GET  /api/v1/me/equipment/{id}` — detail now includes `photos[].scan_status` + ordered `status_events[]` timeline
+
+**Status transition contract:** `equipment_status_service.record_transition()` is the single entry point. Called directly by tests today; Phase 3 sales-rep HTTP endpoints will call the same function. Status-update emails for the six watched destinations (`appraisal_scheduled`, `appraisal_complete`, `offer_ready`, `listed`, `sold`, `declined`) enqueue one message per (record, destination) via an idempotency key — safe against retries, safe against a bounce-back same-status transition (which 409s upstream).
+
+---
+
+### Sprint 4: GDPR-Lite Data Export + Account Deletion + Audit PII Scrubber — COMPLETE (verified green 2026-04-23)
+
+Spec: Epic 2.5 + security baseline §7 in `dev_plan/11_security_baseline.md`
+
+- [x] `api/alembic/versions/008_phase2_account_deletion_and_audit_scrub.py` — new `data_export_jobs` table (status CHECK, user+requested_at index, updated_at trigger); new PL/pgSQL `fn_scrub_audit_pii(retention_days INT)` with 30–120 guard; new `fn_delete_expired_accounts()` that pseudonymizes users + customers; existing append-only audit trigger now yields when session GUC `templehe.pii_scrub='on'` is set so the scrubber can UPDATE
+- [x] `api/database/models.py` — new `DataExportJob` ORM model
+- [x] `api/services/data_export_service.py` — gathers user + customer + consent_versions + equipment_records (with intake_photos, status_events, change_requests via selectinload) + notifications_sent; writes per-entity JSON files + manifest.txt into a zip; `PUT` to R2 at `exports/{user_id}/{export_id}.zip`; 7-day presigned GET URL on the job row; enqueues archival email via NotificationService
+- [x] `api/services/account_deletion_service.py` — `request_deletion` (idempotent; sets `deletion_requested_at` + `deletion_grace_until = now+30d`, flips status to `pending_deletion`, revokes all other sessions, emails the user); `cancel_deletion` (clears grace, restores `active`, emails confirmation); `finalize_deletion_for_user` (immediate PII scrub for admin/test use; the production path is the hourly sweeper calling `fn_delete_expired_accounts()`)
+- [x] `api/middleware/auth.py` — `get_current_user` now accepts `status ∈ {"active", "pending_deletion"}` so a user mid-grace can still hit `/delete/cancel`; `deleted`, `locked`, `pending_verification` still 401
+- [x] `api/schemas/account.py` — `DeletionRequestResponse`, `DataExportOut`
+- [x] `api/routers/account.py` — 4 new endpoints under `/me/account`
+- [x] `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` bumped to `"008"`
+- [x] `scripts/sweep_retention.py` — extended to call `fn_delete_expired_accounts()` and `fn_scrub_audit_pii()` (reads retention days from `app_config.audit_pii_retention_days`, falling back to 30)
+- [x] `scripts/scrub_audit_pii.py` + `scripts/delete_expired_accounts.py` — new standalone admin entry points for ad-hoc runs
+- [x] `api/tests/integration/test_data_export.py` — 6 tests: persisted job + download URL, archival email enqueued, zip content includes all 7 expected files + correct payloads, list past jobs, unauth 401, R2 failure marks job failed
+- [x] `api/tests/integration/test_account_deletion.py` — 7 tests: grace window set + email enqueued, sessions revoked, idempotent second request, cancel restores active + clears grace, cancel outside grace is 409, finalize PII-scrubs user + customer, `fn_delete_expired_accounts()` via SQL finalizes a grace-expired user, deleted user's token returns 401
+- [x] `api/tests/integration/test_audit_pii_scrub.py` — 5 tests: rows > retention nulled, rows < retention untouched, out-of-range retention rejected at the function boundary, non-ip/ua fields preserved, naïve UPDATE outside scrubber still blocked, DELETE still blocked
+
+**Full test gate: 195/195 green, 95.86% coverage (85% floor)**
+
+**Bugs fixed during sprint:**
+- `auth_middleware` only allowed `status='active'`, which would have broken `/me/account/delete/cancel` during a grace window. Middleware now allows `active` or `pending_deletion`; all other states still 401.
+- Test helper inserted rows with `:days || ' days'` concat — Postgres doesn't auto-cast int → text for `||`. Switched to `make_interval(days => :days)`.
+
+**Deliberately kept out of scope:**
+- Hard row deletion of equipment records, consignments, and appraisal history — these are business facts after the identity is scrubbed. GDPR right-to-erasure is satisfied by pseudonymization of `users.email`, `users.first_name`, and the `customers` PII fields; the retention+scrubber layer removes ip_address/user_agent from `audit_logs` on the admin-configured schedule.
+- Real-time scan of uploaded export blobs (no PII in the zip itself that isn't already the user's own data).
+
+**Endpoints (new in Sprint 4):**
+- `POST /api/v1/me/account/delete` — start 30-day grace, revoke other sessions, email confirmation
+- `POST /api/v1/me/account/delete/cancel` — restore active status (must be pending_deletion)
+- `POST /api/v1/me/account/data-export` — synchronously build ZIP, upload to R2, return 7-day signed URL + enqueue archival email
+- `GET  /api/v1/me/account/data-exports` — list the caller's past export jobs
+
+**Right-to-erasure semantics:** at grace expiry the retention sweeper (hourly) scrubs `users` (email → non-routable marker, first_name → `[deleted]`, secrets nulled, status → `deleted`) and `customers` (submitter_name → `[deleted]`, PII NULLed, deleted_at set). Equipment records and consignment history remain as business facts. Deleted users can no longer authenticate — any surviving access token 401s.
+
+**Audit PII scrubber:** `fn_scrub_audit_pii(days)` nulls ip_address + user_agent on `audit_logs` rows older than N days, guarded by a 30–120 range check. Bypasses the append-only trigger via a session GUC (`templehe.pii_scrub='on'`) that the trigger explicitly recognizes — naïve application-code UPDATEs and DELETEs on audit_logs are still blocked outside that path.
+
+**Operational path:** the existing `temple-sweeper` Fly app (still awaiting provisioning per known-issues.md) now carries the deletion + PII-scrub work in addition to rate_limit_counters + webhook_events_seen + user_sessions + audit-partition bootstrap. No new Fly app to stand up; the retention worker does it all.
+
+---
+
+### Sprint 5: Web Frontend (Customer Portal) — COMPLETE (verified green 2026-04-23)
+
+Spec: Epic 2.1–2.6 (customer-facing UI) in `dev_plan/02_phase2_customer_portal.md`
+
+Every Phase 2 backend endpoint now has a working UI path. Design is workmanlike Tailwind utility classes — visual polish + design-system tokens can iterate once UAT surfaces what needs attention.
+
+**API client + state (6 files):**
+- [x] `web/src/api/client.ts` — fetch wrapper with Bearer header, `credentials: "include"` for the refresh cookie, auto `401 → /auth/refresh → retry` dance, typed `ApiError` with `status` + `detail`
+- [x] `web/src/api/types.ts` — TypeScript shapes mirroring every backend schema
+- [x] `web/src/api/auth.ts`, `legal.ts`, `equipment.ts`, `account.ts` — typed wrappers per domain
+- [x] `web/src/state/auth.ts` — Zustand store for the access token (sessionStorage-backed; refresh is HttpOnly cookie)
+- [x] `web/src/hooks/useMe.ts` — React Query hook against `/auth/me`, gated on token presence
+
+**Design-system atoms (6 files):**
+- [x] `web/src/components/ui/Button.tsx` — 4 variants (primary/secondary/ghost/danger), 3 sizes, accessible focus ring
+- [x] `web/src/components/ui/Input.tsx` — `TextInput`, `Select`, `Textarea`, `Checkbox` — consistent labels + errors + aria-invalid
+- [x] `web/src/components/ui/Alert.tsx` — 4 tones, role=alert on errors/warnings
+- [x] `web/src/components/ui/Card.tsx` — simple bordered container
+- [x] `web/src/components/ui/Spinner.tsx` — css-only animated loader with aria-label
+- [x] `web/src/components/ui/StatusBadge.tsx` — colored badge mapping the 8 Phase 2 equipment statuses
+
+**Shell (3 files):**
+- [x] `web/src/components/Layout.tsx` — header + nav + logout + ToS interstitial wrapper for every authenticated page
+- [x] `web/src/components/ProtectedRoute.tsx` — redirects to /login on no-token or /auth/me failure
+- [x] `web/src/components/ToSInterstitial.tsx` — full-screen modal driven by `CurrentUser.requires_terms_reaccept`; re-accept triggers `POST /legal/accept` then invalidates the `me` query
+
+**Customer portal pages (8 files):**
+- [x] `web/src/pages/Register.tsx` — pulls current ToS + Privacy versions, requires the consent checkbox, echoes versions on `POST /auth/register`; success shows the "check your inbox" state
+- [x] `web/src/pages/Login.tsx` — simple email+password, sets the access token, honors `Location.state.from` for a post-login redirect
+- [x] `web/src/pages/VerifyEmail.tsx` — reads `?token=…`, calls `GET /auth/verify-email`, surfaces success/error
+- [x] `web/src/pages/Dashboard.tsx` — lists submissions with status badges + a "Submit new equipment" CTA; empty state links to intake
+- [x] `web/src/pages/IntakeForm.tsx` — category dropdown (new `GET /me/equipment/categories` backend endpoint added for this), all customer-supplied fields, multi-photo picker; submits record with `photos=[]` then runs the 3-step signed-URL upload per file and partials any failures back as a warning
+- [x] `web/src/pages/EquipmentDetail.tsx` — details card, timeline card, photo grid (reads from `VITE_R2_PUBLIC_URL` when set; otherwise shows storage_key as placeholder), and an inline change-request form that shows prior requests
+- [x] `web/src/pages/Account.tsx` — email preferences (save-on-click), data export (request + latest job state + download link), account deletion (confirmation checkbox → request; pending_deletion users see the cancel button)
+- [x] `web/src/pages/NotFound.tsx` — catch-all 404
+- [x] `web/src/App.tsx` — real routes for `/login`, `/register`, `/auth/verify-email`, `/portal`, `/portal/submit`, `/portal/equipment/:id`, `/portal/account`; Sales CRM + Admin Panel stay as placeholders
+
+**Supporting (2 files):**
+- [x] `web/src/hooks/usePhotoUpload.ts` — orchestrates `upload-url → PUT (direct to R2 via fetch) → finalize` for a single file
+- [x] `web/src/vite-env.d.ts` — ImportMeta typings for `VITE_API_BASE_URL` and `VITE_R2_PUBLIC_URL`
+
+**Backend side-car:**
+- [x] `api/routers/equipment.py` — new `GET /me/equipment/categories` endpoint returning active categories ordered by display_order (customer role required; existing tests unaffected)
+
+**Env:**
+- [x] `web/.env.example` — documents `VITE_API_BASE_URL` (defaults to vite proxy → `:8000`) and `VITE_R2_PUBLIC_URL` for photo thumbnails
+
+**Full stack gates:** `npm run build` clean (119 modules, 249 KB main JS), `npm run lint` clean, backend 195/195 tests green, ruff clean. No frontend unit tests this sprint — that's Sprint 6's Playwright + axe + Lighthouse territory.
+
+**Bugs fixed during sprint:**
+- TypeScript build initially failed with `Property 'env' does not exist on type 'ImportMeta'` — added `web/src/vite-env.d.ts` with the standard Vite augmentation so `VITE_*` reads type-check.
+
+**Deliberately deferred (flagged, not regressed):**
+- 2FA setup/verify/disable UI — all backend endpoints exist and the `CurrentUser.totp_enabled` flag is in the types; the Phase 5 iOS sprint will need the UI and can build it then.
+- Password reset + change email full UI — backend endpoints shipped in Phase 1; the front-end flow is one more pair of pages that Phase 6 polish can pick up.
+- Polished design system (color tokens, type ramp, spacing scale) — minimal Tailwind utility classes today. Phase 6 design pass handles the visual refresh.
+- Frontend unit tests (Vitest + Testing Library) — Sprint 6 delivers E2E + axe + Lighthouse as the gate; component-level unit tests come alongside if useful.
+
+**Flows working end-to-end against local stack (`make dev` + `npm run dev`):**
+1. Register → ToS/Privacy consent → verification email → verify → login
+2. Dashboard → Submit equipment (incl. photos via signed-URL direct to R2 when configured) → detail page → THE-XXXXXXXX reference visible
+3. Detail page → change request → sales notification queued in `notification_jobs`
+4. Account page → email prefs → save
+5. Account page → data export → 7-day download URL surfaced (and emailed via NotificationService)
+6. Account page → delete account → 30-day grace → cancel
+7. Version bump in `app_config.tos_current_version` → ToSInterstitial blocks every route until re-accept
+
+**Endpoints surfaced this sprint (new):**
+- `GET /api/v1/me/equipment/categories` — ordered list of active categories for the intake form dropdown
+
+**Routes (new in the web app):**
+- `/register`, `/login`, `/auth/verify-email`
+- `/portal` (dashboard), `/portal/submit` (intake), `/portal/equipment/:id` (detail + change-request), `/portal/account`
+
+---
+
+### Sprint 6: Phase 2 Gate — Playwright + axe + Lighthouse — COMPLETE (verified green 2026-04-23)
+
+Spec: `dev_plan/09_testing_strategy.md` §4, §7
+
+Every Phase 2 customer flow is now exercised in a real browser against a real stack. Accessibility is enforced by axe-core (zero Critical/Serious); Lighthouse CI pins Accessibility + Best Practices ≥ 0.9 on the public auth pages.
+
+- [x] `web/package.json` — added `@playwright/test ^1.59`, `@axe-core/playwright ^4.11`, `@lhci/cli ^0.15` dev deps; new scripts: `e2e`, `e2e:ui`, `lhci`
+- [x] `web/playwright.config.ts` — auto-starts `npm run dev` unless `E2E_SKIP_WEBSERVER=1`; trace on first retry, screenshot + video on failure; `fullyParallel: false` + `workers: 1` so per-user rate-limit counters don't cross-contaminate tests
+- [x] `web/e2e/helpers/api.ts` — `makeTestUser` (unique `e2e+slug@example.com` + random TEST-NET-1 fake IP), `apiRegister` / `apiLogin` / `apiVerifyEmail` with the fake IP as `CF-Connecting-IP`, `applyFakeIp` helper to thread the same header onto the browser context (sidesteps the 5-registrations/hour IP limiter)
+- [x] `web/e2e/helpers/mailpit.ts` — polls Mailpit's HTTP API for a verify email by recipient + subject; extracts the JWT token from the HTML body
+- [x] `web/e2e/helpers/axe.ts` — `@axe-core/playwright` wrapper tagged `wcag2a / aa wcag21a / aa`; asserts zero Critical/Serious
+- [x] `web/e2e/phase2_register_verify_login.spec.ts` — register form → Mailpit token → verify page → login → dashboard; plus wrong-password surfaces the error banner
+- [x] `web/e2e/phase2_intake_flow.spec.ts` — intake form → detail page with `THE-XXXXXXXX` → dashboard shows the row + status badge
+- [x] `web/e2e/phase2_change_request.spec.ts` — change request from detail → success banner + appears in prior-requests list
+- [x] `web/e2e/phase2_account.spec.ts` — email prefs save roundtrip (reload preserves), delete → pending_deletion → cancel, data export button renders (R2 happy path left to backend tests)
+- [x] `web/e2e/phase2_tos_interstitial.spec.ts` — Playwright route interceptor flips `requires_terms_reaccept` on `/auth/me` → full-screen modal blocks every route
+- [x] `web/e2e/phase2_accessibility.spec.ts` — axe sweep across public routes (login, register, verify-email) + authenticated routes (dashboard, submit, detail, account); zero Critical/Serious required
+- [x] `web/lighthouserc.cjs` — `/login` and `/register` served from `dist/`; Accessibility + Best Practices ≥ 0.9 gated; Performance kept at a warning (cold-boot CI is noisy)
+- [x] `.github/workflows/ci.yml` — new `e2e` job: Postgres service, Mailpit via `docker run`, uvicorn + vite preview backgrounded, `npx playwright test`, `lhci autorun`; uploads the Playwright report + API log on failure; `deploy-staging` now depends on `e2e` passing
+
+**Frontend/UI fixes discovered by axe + E2E:**
+
+- `web/src/pages/Register.tsx` — `AuthShell` promotes page-specific title to `<h1>` with the brand as supplementary text above; gives every auth page one real landmark so axe heading-order is happy.
+- `web/src/pages/IntakeForm.tsx` — the multi-file photo picker had no label; added a visually-hidden `<label for="intake-photos">` so axe "label" rule passes (was 97 matching nodes).
+- `web/src/pages/VerifyEmail.tsx` — switched from `useMutation` inside `useEffect` to `useQuery`. StrictMode's dev-mode double-mount was firing the verify mutation twice — success the first, 400 the second (status flipped to `active` between calls) — and leaving `mutation.isError` true. `useQuery` dedupes by key and is the right primitive for a token-gated one-shot read anyway.
+
+**Backend + infra fixes discovered by real SMTP round-trip:**
+
+- `api/services/email_service.py` — `smtplib.SMTP(...)` now passes `local_hostname="localhost"` and `timeout=10`. Default invocation calls `socket.getfqdn()`, which on macOS hangs ~35s on an mDNS lookup with no responder. Explicit hostname skips it.
+- `api/config.py` + `.env` + `.env.example` — `smtp_host` default `localhost` → `127.0.0.1`. `localhost` resolves to `::1` first on macOS; Mailpit binds IPv4 only, so the resolver takes ~35s to fall back. 127.0.0.1 is unambiguous.
+- `web/vite.config.ts` — Vite dev proxy `target` `localhost` → `127.0.0.1`. Same IPv6-first trap from the Node side.
+
+**Full local E2E: 12/12 passing in ~15s** against `make dev` + API + Playwright's auto-started vite.
+
+**Bugs fixed during sprint:**
+- Pydantic `email_validator` rejects `.test` TLD (reserved); switched `makeTestUser` to `e2e+<slug>@example.com` (example.com is the reserved documentation domain, passes deliverability check).
+- Per-IP register rate limit (5/hr) blew up fast across repeat runs; random TEST-NET-1 fake IP per test via `CF-Connecting-IP` header (backend's `get_client_ip` already honors it, no API change).
+
+**Deferred (out of scope for Phase 2 gate):**
+- Photo upload E2E through real R2 — backend integration tests already cover `upload-url` + `finalize`; the full UI path needs R2 creds and lives in a manual smoke on staging.
+- Password reset + change email E2E — UIs deferred per Sprint 5 scope note; E2E follows the UI work.
+- 2FA E2E — follows the Phase 5 iOS TOTP work.
+- Lighthouse Performance budget — left as a warning; cold-boot CI scores are too noisy to gate on.
+
+**Phase 2 PR from `phase2-customer-portal` → `main` is ready to open** after this commit. Full Phase 2 scope delivered:
+
+- Sprint 1: ToS + Privacy + consent capture
+- Sprint 2: Equipment intake + durable notification queue + category bundle
+- Sprint 3: Photo upload + status timeline + change requests
+- Sprint 4: GDPR-lite data export + 30-day grace deletion + audit PII scrubber
+- Sprint 5: Web frontend — every endpoint has a UI path
+- Sprint 6: E2E gate green, axe zero Critical/Serious, Lighthouse CI wired
+
+---
+
+## Phase 3–8 — Not started

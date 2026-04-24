@@ -56,8 +56,17 @@ def _send_smtp(to_email: str, subject: str, html_body: str) -> None:
     msg["From"] = f"{settings.sendgrid_from_name} <{settings.sendgrid_from_email}>"
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html"))
+    # local_hostname is passed explicitly so smtplib doesn't call
+    # socket.getfqdn(), which hangs ~35s on macOS when mDNS goes looking for
+    # a .local FQDN the network doesn't answer for. timeout=10 bounds any
+    # other slowness (e.g. if Mailpit is slow to greet).
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+        with smtplib.SMTP(
+            settings.smtp_host,
+            settings.smtp_port,
+            local_hostname="localhost",
+            timeout=10,
+        ) as server:
             server.sendmail(settings.sendgrid_from_email, to_email, msg.as_string())
     except Exception:
         logger.exception("smtp_send_failed", to=to_email, subject=subject)

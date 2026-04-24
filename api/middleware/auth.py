@@ -60,7 +60,10 @@ async def get_current_user(
 
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id_str)))
     user = result.scalar_one_or_none()
-    if user is None or user.status != "active":
+    # 'active' and 'pending_deletion' both get through — a user mid-grace
+    # must be able to hit /me/account/delete/cancel. Scrubbed ('deleted'),
+    # locked, or pending_verification accounts are rejected here.
+    if user is None or user.status not in ("active", "pending_deletion"):
         raise HTTPException(status_code=401, detail="Account not found or inactive.")
 
     # Stash for the structured-logging middleware so it doesn't re-verify the JWT

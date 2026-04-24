@@ -34,6 +34,22 @@
 **Action:** Rotate the `neondb_owner` password in the Neon console, update `fly secrets` on `temple-api-{dev,staging,prod}`, update `.env`. Bundle with the Neon Pro / PITR activation above — same gate: before real customer data lands on prod.
 **Not an immediate blocker** — same risk profile as the PITR gap; both get resolved together in the "prod go-live readiness" checklist.
 
+## OPEN — Fly app `temple-notifications` not yet created
+**Status:** `infra/fly/temple-notifications.toml` committed (Phase 2 Sprint 2), but the Fly app itself hasn't been created.
+**Impact:** Rows land in `notification_jobs` with status=`pending`, but nothing drains them. Intake confirmation emails (and Phase 2+ status emails / SMS) never leave the queue in staging/prod.
+**Action (same prod-go-live gate as temple-sweeper):**
+```
+fly apps create temple-notifications --org <org-slug>
+fly secrets set -a temple-notifications \
+  DATABASE_URL="<prod pooler url>" \
+  SENDGRID_API_KEY="..." \
+  TWILIO_ACCOUNT_SID="..." TWILIO_AUTH_TOKEN="..." \
+  TWILIO_MESSAGING_SERVICE_SID="..."   # leave empty until A2P 10DLC confirmed
+fly machine run . --app temple-notifications \
+  --config infra/fly/temple-notifications.toml --region iad
+```
+**Not an immediate blocker** — Sprint 2 integration tests exercise the worker in-process against the test DB; local `make dev` can run the worker manually. Provision alongside Neon Pro / temple-sweeper as one bundle.
+
 ## OPEN — Fly app `temple-sweeper` not yet created
 **Status:** `infra/fly/temple-sweeper.toml` committed (WS13), but the Fly app itself hasn't been created — `fly secrets` / `fly deploy` fail with "Could not find App".
 **Impact:** Hourly retention sweep (rate_limit_counters, webhook_events_seen, expired user_sessions) + monthly audit-log partition bootstrap don't run. Tables grow unbounded.

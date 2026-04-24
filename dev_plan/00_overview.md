@@ -43,7 +43,7 @@ Temple Heavy Equipment (TempleHE) operates a heavy equipment appraisal and consi
 - **Offline:** Core Data for local cache; background sync via URLSession background tasks
 
 ### Database
-- **Primary:** PostgreSQL 15 — Neon (POC) → Cloud SQL (target). Same wire protocol; same SQL.
+- **Primary:** PostgreSQL 16 — Neon (POC) → Cloud SQL (target). Same wire protocol; same SQL.
 - **Cache / Lock Store:** Postgres advisory locks + a `record_locks` row for visibility (POC, no Redis) → Memorystore Redis (target). The `RecordLockService` interface is identical across both.
 - **Standards:** See `.claude/docs/database.md`
 
@@ -59,7 +59,7 @@ Temple Heavy Equipment (TempleHE) operates a heavy equipment appraisal and consi
 
 **Target (post-migration, per `12_gcp_production_target.md`):**
 - **Compute:** Cloud Run services in three GCP projects (`temple-dev`, `temple-staging`, `temple-prod`)
-- **Database:** Cloud SQL Postgres 15, private IP, PITR enabled
+- **Database:** Cloud SQL Postgres 16, private IP, PITR enabled
 - **Object Storage:** Cloud Storage buckets with versioning + lifecycle policies
 - **Async Jobs:** Pub/Sub + Cloud Run Jobs
 - **Secrets:** Secret Manager + Workload Identity Federation (no static keys)

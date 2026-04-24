@@ -1,0 +1,29 @@
+# ABOUTME: Fly.io app config for the notification_jobs queue worker (Phase 2).
+# ABOUTME: Reuses the API Docker image; no HTTP service — always-on worker machine.
+
+app = 'temple-notifications'
+primary_region = 'iad'
+
+# Drains notification_jobs with FOR UPDATE SKIP LOCKED so multiple machines
+# can safely run in parallel. DATABASE_URL + SendGrid + Twilio creds land via:
+#   fly secrets set -a temple-notifications DATABASE_URL=... SENDGRID_API_KEY=... \
+#     TWILIO_ACCOUNT_SID=... TWILIO_AUTH_TOKEN=... TWILIO_MESSAGING_SERVICE_SID=...
+
+[build]
+  dockerfile = "../../api/Dockerfile"
+
+[processes]
+  worker = "/app/.venv/bin/python /app/scripts/notification_worker.py"
+
+# One always-on machine is enough for POC volume. Launch via:
+#   fly machine run . --app temple-notifications --region iad
+# Scale out by adding more machines of the same process; the queue is safe.
+
+[env]
+  WORKER_POLL_INTERVAL = "5"
+  WORKER_BATCH_SIZE = "10"
+
+[[vm]]
+  memory = '256mb'
+  cpu_kind = 'shared'
+  cpus = 1

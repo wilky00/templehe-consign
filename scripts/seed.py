@@ -9,6 +9,8 @@ import uuid
 
 # Allow running from project root or scripts/ directly
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
+# Make sibling scripts importable for the category bundle hookup below.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bcrypt
 from sqlalchemy import text
@@ -40,15 +42,16 @@ ROLES = [
     {"slug": "reporting",     "display_name": "Reporting User"},
 ]
 
-# 15 default equipment categories
-# TODO: populate components/prompts/photo_slots from business data CSVs (Phase 4 Admin Panel)
+# Category catalog. The three bundle-seeded categories (dozers, backhoe-loaders,
+# articulated-dump-trucks) are owned by scripts/import_category_bundle.py —
+# that importer writes the full components/prompts/photo_slots/red_flag_rules
+# graph. The remaining 12 entries here are name-only placeholders for Phase 4
+# Admin Panel (ADR-002) to fill out via bulk import.
 EQUIPMENT_CATEGORIES = [
     {"name": "Excavators",            "slug": "excavators",            "display_order": 1},
-    {"name": "Dozers",                "slug": "dozers",                "display_order": 2},
     {"name": "Wheel Loaders",         "slug": "wheel-loaders",         "display_order": 3},
     {"name": "Motor Graders",         "slug": "motor-graders",         "display_order": 4},
     {"name": "Scrapers",              "slug": "scrapers",              "display_order": 5},
-    {"name": "Articulated Trucks",    "slug": "articulated-trucks",    "display_order": 6},
     {"name": "Rigid Frame Trucks",    "slug": "rigid-frame-trucks",    "display_order": 7},
     {"name": "Compactors",            "slug": "compactors",            "display_order": 8},
     {"name": "Cranes",                "slug": "cranes",                "display_order": 9},
@@ -56,7 +59,6 @@ EQUIPMENT_CATEGORIES = [
     {"name": "Telescopic Handlers",   "slug": "telescopic-handlers",   "display_order": 11},
     {"name": "Skid Steers",           "slug": "skid-steers",           "display_order": 12},
     {"name": "Track Loaders",         "slug": "track-loaders",         "display_order": 13},
-    {"name": "Backhoes",              "slug": "backhoes",              "display_order": 14},
     {"name": "Pipe Layers",           "slug": "pipe-layers",           "display_order": 15},
 ]
 
@@ -96,7 +98,7 @@ async def seed(session: AsyncSession) -> None:
             {"id": str(uuid.uuid4()), **role},
         )
 
-    print("Seeding equipment categories...")
+    print("Seeding equipment categories (placeholders)...")
     for cat in EQUIPMENT_CATEGORIES:
         await session.execute(
             text(
@@ -106,6 +108,16 @@ async def seed(session: AsyncSession) -> None:
             ),
             {"id": str(uuid.uuid4()), **cat},
         )
+
+    print("Seeding starter category bundle (Dozers, Backhoe Loaders, ADT)...")
+    # Imported locally so the top of seed.py stays import-cheap.
+    from import_category_bundle import import_bundle
+
+    inserted = await import_bundle(session)
+    if inserted:
+        print(f"  inserted: {', '.join(inserted)}")
+    else:
+        print("  (already present — no-op)")
 
     print("Seeding app_config defaults...")
     for cfg in APP_CONFIG_DEFAULTS:

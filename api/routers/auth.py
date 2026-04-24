@@ -91,9 +91,13 @@ async def register(
         password=body.password,
         first_name=body.first_name,
         last_name=body.last_name,
+        tos_version=body.tos_version,
+        privacy_version=body.privacy_version,
         db=db,
         base_url=_base_url(request),
         background_tasks=background_tasks,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     return RegisterResponse(
         id=user.id,
@@ -138,9 +142,11 @@ async def me(
     from sqlalchemy import select
 
     from database.models import Role
+    from services import legal_service
 
     role_result = await db.execute(select(Role).where(Role.id == current_user.role_id))
     role = role_result.scalar_one_or_none()
+    current_tos, current_privacy = await legal_service.get_current_versions(db)
     return CurrentUser(
         id=current_user.id,
         email=current_user.email,
@@ -149,6 +155,9 @@ async def me(
         first_name=current_user.first_name,
         last_name=current_user.last_name,
         totp_enabled=current_user.totp_enabled,
+        requires_terms_reaccept=legal_service.requires_reaccept(
+            current_user, current_tos, current_privacy
+        ),
     )
 
 

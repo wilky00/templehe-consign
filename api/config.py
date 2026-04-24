@@ -38,13 +38,23 @@ class Settings(BaseSettings):
     sendgrid_api_key: str = ""
     sendgrid_from_email: str = "noreply@saltrun.net"
     sendgrid_from_name: str = "Temple Heavy Equipment"
-    smtp_host: str = "localhost"
+    # 127.0.0.1 not "localhost" — on macOS the resolver tries IPv6 ::1 first and
+    # blocks ~35s before falling back to IPv4 when Mailpit only binds to 0.0.0.0.
+    smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
 
-    # SMS
+    # SMS — A2P 10DLC dispatch goes through a Messaging Service SID; the
+    # from-number is kept for dev/sandbox testing. If the Messaging Service
+    # SID is empty, NotificationService skips SMS and emits sms_skipped_not_configured.
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
+    twilio_messaging_service_sid: str = ""
+
+    # Sales ops — fallback recipient for change-request notifications when
+    # no rep is assigned yet. Empty string means "drop the notification with
+    # a log line" (acceptable for dev / tests).
+    sales_ops_email: str = ""
 
     # Cloudflare R2
     r2_account_id: str = ""

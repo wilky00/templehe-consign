@@ -26,6 +26,8 @@ async def _register_and_activate(
                 "password": _VALID_PASSWORD,
                 "first_name": "Audit",
                 "last_name": "Test",
+                "tos_version": "1",
+                "privacy_version": "1",
             },
         )
     assert reg.status_code == 201, reg.json()
@@ -66,6 +68,8 @@ async def test_audit_log_registration(client: AsyncClient, db_session: AsyncSess
                 "password": _VALID_PASSWORD,
                 "first_name": "A",
                 "last_name": "B",
+                "tos_version": "1",
+                "privacy_version": "1",
             },
         )
     assert resp.status_code == 201
@@ -99,6 +103,8 @@ async def test_audit_log_failed_login(client: AsyncClient, db_session: AsyncSess
                 "password": _VALID_PASSWORD,
                 "first_name": "A",
                 "last_name": "B",
+                "tos_version": "1",
+                "privacy_version": "1",
             },
         )
     user_id = reg.json()["id"]
@@ -148,6 +154,8 @@ async def test_audit_log_account_locked(client: AsyncClient, db_session: AsyncSe
                 "password": _VALID_PASSWORD,
                 "first_name": "A",
                 "last_name": "B",
+                "tos_version": "1",
+                "privacy_version": "1",
             },
         )
     user_id = reg.json()["id"]

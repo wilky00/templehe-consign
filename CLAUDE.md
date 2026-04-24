@@ -39,7 +39,7 @@ Supported remotely by a single operator (Jim) on an 8–24 hour SLA. Every archi
 | Backend | Python 3.12+, FastAPI, Pydantic v2, asyncio |
 | Frontend | React 18, TypeScript (strict), React Query, Zustand, Tailwind CSS |
 | iOS | Swift 5.9+, SwiftUI, Core Data (offline), iOS 16+ |
-| Database | PostgreSQL 15 — Neon (POC) → Cloud SQL (GCP target) |
+| Database | PostgreSQL 16 — Neon (POC) → Cloud SQL (GCP target) |
 | Cache/Locks | Postgres advisory locks + `record_locks` table (POC) → Redis Memorystore (GCP) |
 | Compute | Fly Machines (POC) → Cloud Run (GCP) |
 | Object Storage | Cloudflare R2 (POC) → Cloud Storage (GCP) |

@@ -1,0 +1,1075 @@
+{
+  "core_intake_fields": [
+    {
+      "field_name": "appraisal_id",
+      "data_type": "string",
+      "required": true,
+      "description": "Unique appraisal record ID"
+    },
+    {
+      "field_name": "appraisal_date",
+      "data_type": "date",
+      "required": true,
+      "description": "Date of site visit"
+    },
+    {
+      "field_name": "appraiser_name",
+      "data_type": "string",
+      "required": true,
+      "description": "Field tech/appraiser name"
+    },
+    {
+      "field_name": "customer_name",
+      "data_type": "string",
+      "required": true,
+      "description": "Owner or seller"
+    },
+    {
+      "field_name": "customer_contact",
+      "data_type": "string",
+      "required": false,
+      "description": "Primary contact details"
+    },
+    {
+      "field_name": "site_name",
+      "data_type": "string",
+      "required": false,
+      "description": "Jobsite, yard, or farm name"
+    },
+    {
+      "field_name": "site_address",
+      "data_type": "string",
+      "required": true,
+      "description": "Inspection location"
+    },
+    {
+      "field_name": "asset_category",
+      "data_type": "enum",
+      "required": true,
+      "description": "Machine category selected from master list"
+    },
+    {
+      "field_name": "make",
+      "data_type": "string",
+      "required": true,
+      "description": "Manufacturer"
+    },
+    {
+      "field_name": "model",
+      "data_type": "string",
+      "required": true,
+      "description": "Model designation"
+    },
+    {
+      "field_name": "serial_number",
+      "data_type": "string",
+      "required": true,
+      "description": "Serial or PIN"
+    },
+    {
+      "field_name": "year",
+      "data_type": "integer",
+      "required": false,
+      "description": "Model year if confirmed"
+    },
+    {
+      "field_name": "hours_meter",
+      "data_type": "decimal",
+      "required": true,
+      "description": "Displayed operating hours"
+    },
+    {
+      "field_name": "hours_verified",
+      "data_type": "boolean",
+      "required": true,
+      "description": "Whether meter believed accurate"
+    },
+    {
+      "field_name": "ownership_type",
+      "data_type": "enum",
+      "required": true,
+      "description": "Owned, financed, leased, unknown"
+    },
+    {
+      "field_name": "lien_status",
+      "data_type": "enum",
+      "required": false,
+      "description": "Clear, lien reported, unknown"
+    },
+    {
+      "field_name": "acquisition_path",
+      "data_type": "enum",
+      "required": true,
+      "description": "Consignment or direct purchase candidate"
+    },
+    {
+      "field_name": "running_status",
+      "data_type": "enum",
+      "required": true,
+      "description": "Running, partial, non-running"
+    },
+    {
+      "field_name": "can_cold_start",
+      "data_type": "boolean",
+      "required": true,
+      "description": "Was cold start observed"
+    },
+    {
+      "field_name": "emissions_tier",
+      "data_type": "enum",
+      "required": false,
+      "description": "Tier/Stage label if visible"
+    },
+    {
+      "field_name": "cab_type",
+      "data_type": "enum",
+      "required": true,
+      "description": "Open station, canopy, enclosed cab"
+    },
+    {
+      "field_name": "rops_present",
+      "data_type": "boolean",
+      "required": true,
+      "description": "ROPS/FOPS present if applicable"
+    },
+    {
+      "field_name": "transport_notes",
+      "data_type": "text",
+      "required": false,
+      "description": "Only key issues affecting pickup to yard"
+    },
+    {
+      "field_name": "service_records_available",
+      "data_type": "boolean",
+      "required": true,
+      "description": "Maintenance records available"
+    },
+    {
+      "field_name": "major_rebuild_history",
+      "data_type": "text",
+      "required": false,
+      "description": "Engine, transmission, hydraulic, UC rebuilds"
+    },
+    {
+      "field_name": "overall_cosmetic_condition",
+      "data_type": "enum",
+      "required": true,
+      "description": "Excellent/Good/Fair/Poor/Inoperable/Not Verified"
+    },
+    {
+      "field_name": "marketability_rating",
+      "data_type": "enum",
+      "required": true,
+      "description": "Fast sell, average, slow sell, salvage risk"
+    },
+    {
+      "field_name": "photo_set_complete",
+      "data_type": "boolean",
+      "required": true,
+      "description": "Required photos captured"
+    },
+    {
+      "field_name": "listing_notes",
+      "data_type": "text",
+      "required": false,
+      "description": "Market-facing descriptive notes"
+    },
+    {
+      "field_name": "red_flags_summary",
+      "data_type": "text",
+      "required": false,
+      "description": "Major issues affecting value or listing"
+    }
+  ],
+  "condition_scale": [
+    {
+      "score": 5,
+      "label": "Excellent",
+      "definition": "Low-hour or exceptionally maintained unit. Clean, fully functional, strong cosmetics, no material leaks, no immediate repairs expected."
+    },
+    {
+      "score": 4,
+      "label": "Good",
+      "definition": "Normal used condition for age/hours. Fully operational with minor wear, minor cosmetic flaws, and no major immediate repair needed."
+    },
+    {
+      "score": 3,
+      "label": "Fair",
+      "definition": "Operational but shows meaningful wear. Multiple defects or deferred maintenance present. Marketability reduced and buyer likely expects repairs."
+    },
+    {
+      "score": 2,
+      "label": "Poor",
+      "definition": "Runs or partially functions but has major defects, structural concerns, heavy leakage, significant wear, or failed systems. Strong value discount."
+    },
+    {
+      "score": 1,
+      "label": "Inoperable",
+      "definition": "Non-running or unable to demonstrate critical functions. Salvage, parts, or major project unit unless repaired."
+    },
+    {
+      "score": 0,
+      "label": "Not Verified",
+      "definition": "Tech could not inspect or confirm. Use sparingly and explain why."
+    }
+  ],
+  "categories": {
+    "articulated_dump_trucks": {
+      "display_name": "Articulated Dump Trucks",
+      "major_components": [
+        "Engine",
+        "Transmission",
+        "Center hitch/articulation",
+        "Hydraulic system",
+        "Axles/differentials",
+        "Tires",
+        "Cab/interior",
+        "Body/chassis"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Exhaust smoke",
+        "Fluid leaks",
+        "Transmission shift quality",
+        "Center hitch play",
+        "Body floor wear",
+        "Cylinder leakage",
+        "Tire matching",
+        "Brake performance",
+        "Cab electronics"
+      ],
+      "attachments": [
+        "Tailgate",
+        "Body liner",
+        "Heated body",
+        "Payload weighing system",
+        "Camera system",
+        "Fire suppression"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Center hitch close-up",
+        "All tires",
+        "Dump body floor",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Brand/model desirability",
+        "Body condition",
+        "Tire life",
+        "Hitch looseness",
+        "Service history",
+        "Fleet-maintained appearance",
+        "Running and driving status",
+        "Emission tier",
+        "Transport to yard if purchased"
+      ]
+    },
+    "rigid_frame_dump_trucks": {
+      "display_name": "Rigid Frame Dump Trucks",
+      "major_components": [
+        "Engine",
+        "Transmission",
+        "Hydraulic hoist",
+        "Axles/suspension",
+        "Frame/chassis",
+        "Tires",
+        "Cab/interior",
+        "Body"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Frame cracks",
+        "Body floor wear",
+        "Cylinder leakage",
+        "Steering play",
+        "Brake performance",
+        "Tire matching",
+        "Transmission operation",
+        "Suspension condition",
+        "Cab electronics"
+      ],
+      "attachments": [
+        "Tailgate",
+        "Body liner",
+        "Canopy",
+        "Camera system",
+        "Payload system",
+        "Fire suppression"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Frame rails",
+        "All tires",
+        "Dump body floor",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Mileage if road use",
+        "Body condition",
+        "Tire cost exposure",
+        "Structural cracking",
+        "Major rebuild history",
+        "Road legality if applicable",
+        "Running status",
+        "Emission tier",
+        "Overall marketability"
+      ]
+    },
+    "backhoe_loaders": {
+      "display_name": "Backhoe Loaders",
+      "major_components": [
+        "Engine",
+        "Transmission/driveline",
+        "Loader assembly",
+        "Backhoe assembly",
+        "Hydraulic system",
+        "Pins/bushings",
+        "Tires",
+        "Cab/controls"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Hydraulic drift",
+        "Stabilizer hold",
+        "Swing frame wear",
+        "Boom/stick welds",
+        "Pin looseness",
+        "Bucket cutting edge",
+        "4WD engagement",
+        "Tire condition",
+        "Cab controls"
+      ],
+      "attachments": [
+        "General purpose bucket",
+        "4-in-1 bucket",
+        "Extendahoe",
+        "Quick coupler",
+        "Forks",
+        "Hydraulic hammer circuit",
+        "Thumb",
+        "Auger"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab or operator station",
+        "Engine compartment",
+        "Loader bucket edge",
+        "Backhoe bucket teeth",
+        "Outriggers",
+        "Tires",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Open cab vs enclosed cab",
+        "4x4",
+        "Extendahoe",
+        "Aux hydraulics",
+        "Attachment package",
+        "Pin/bushing wear",
+        "Tire life",
+        "Brand demand",
+        "Running status"
+      ]
+    },
+    "dozers": {
+      "display_name": "Dozers",
+      "major_components": [
+        "Engine",
+        "Transmission/steering",
+        "Final drives",
+        "Undercarriage",
+        "Blade assembly",
+        "Ripper assembly",
+        "Hydraulic system",
+        "Cab/controls"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Blow-by",
+        "Undercarriage wear",
+        "Final drive noise/leaks",
+        "Blade push arm wear",
+        "Trunnion wear",
+        "Ripper frame wear",
+        "Steering response",
+        "Hydraulic leaks",
+        "Cab/AC condition"
+      ],
+      "attachments": [
+        "PAT blade",
+        "SU blade",
+        "U blade",
+        "Winch",
+        "Single shank ripper",
+        "Multi-shank ripper",
+        "Sweeps",
+        "Rear screen"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Both track sides",
+        "Sprockets/idlers/rollers",
+        "Blade cutting edge",
+        "Ripper",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Undercarriage remaining life",
+        "Hours",
+        "Enclosed cab vs open canopy",
+        "PAT vs straight blade",
+        "Ripper equipped",
+        "Steering/final drive condition",
+        "Emission tier",
+        "Service records",
+        "Major rebuilds",
+        "Transport width issues if purchased"
+      ]
+    },
+    "excavators": {
+      "display_name": "Excavators",
+      "major_components": [
+        "Engine",
+        "Hydraulic pumps/system",
+        "Swing system",
+        "Boom/stick/bucket",
+        "Undercarriage",
+        "Travel motors/drives",
+        "Cab/controls",
+        "Attachments"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Hydraulic response",
+        "Swing bearing play",
+        "Swing brake hold",
+        "Boom/stick cracks",
+        "Pin/bushing wear",
+        "Track wear",
+        "Travel motor performance",
+        "Cab electronics",
+        "Aux hydraulic function"
+      ],
+      "attachments": [
+        "General purpose bucket",
+        "Ditch bucket",
+        "Hydraulic thumb",
+        "Coupler",
+        "Hammer",
+        "Grapple",
+        "Mulcher head",
+        "Tilt bucket"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Boom base",
+        "Stick and bucket",
+        "Coupler/thumb",
+        "Undercarriage both sides",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Auxiliary hydraulics",
+        "Thumb/coupler",
+        "Undercarriage life",
+        "Boom/stick repairs",
+        "Brand demand",
+        "Running status",
+        "Hydraulic smoothness",
+        "Emission tier",
+        "Attachment package"
+      ]
+    },
+    "mini_excavators": {
+      "display_name": "Mini Excavators",
+      "major_components": [
+        "Engine",
+        "Hydraulic system",
+        "Swing system",
+        "Boom/stick/bucket",
+        "Tracks/undercarriage",
+        "Blade",
+        "Cab/controls",
+        "Attachments"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Hydraulic drift",
+        "Swing play",
+        "Track wear",
+        "Blade cylinder leakage",
+        "Boom/stick welds",
+        "Pins/bushings",
+        "Travel function",
+        "Cab/canopy condition",
+        "Aux hydraulic operation"
+      ],
+      "attachments": [
+        "Bucket set",
+        "Thumb",
+        "Coupler",
+        "Auger drive",
+        "Breaker",
+        "Grapple",
+        "Tilt bucket"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Operator station",
+        "Engine compartment",
+        "Bucket and thumb",
+        "Blade",
+        "Tracks both sides",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Zero-tail vs conventional",
+        "Cab vs canopy",
+        "Rubber track life",
+        "Thumb/coupler",
+        "Aux hydraulics",
+        "Rental fleet wear",
+        "Brand demand",
+        "Running status",
+        "Transport convenience"
+      ]
+    },
+    "wheel_loaders": {
+      "display_name": "Wheel Loaders",
+      "major_components": [
+        "Engine",
+        "Transmission",
+        "Hydraulics",
+        "Articulation/frame",
+        "Axles",
+        "Tires",
+        "Loader arms/bucket",
+        "Cab/controls"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Center pin play",
+        "Boom arm cracks",
+        "Bucket edge wear",
+        "Lift drift",
+        "Transmission shift quality",
+        "Axle leakage",
+        "Tire matching",
+        "Brake performance",
+        "Cab electronics"
+      ],
+      "attachments": [
+        "General purpose bucket",
+        "Forks",
+        "Quick coupler",
+        "High lift arms",
+        "Scale system",
+        "Snow pusher",
+        "Grapple bucket"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Center articulation",
+        "Bucket edge",
+        "All tires",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Tire life",
+        "Ride control",
+        "Coupler/forks included",
+        "Center articulation wear",
+        "Bucket condition",
+        "Cab package",
+        "Brand desirability",
+        "Running status",
+        "Emission tier"
+      ]
+    },
+    "skid_steers": {
+      "display_name": "Skid Steers",
+      "major_components": [
+        "Engine",
+        "Hydraulic system",
+        "Drive system",
+        "Lift arms/frame",
+        "Tires",
+        "Cab/controls",
+        "Quick attach",
+        "Attachments"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Hydraulic response",
+        "Drive straightness",
+        "Chain case noise",
+        "Lift arm play",
+        "Quick attach wear",
+        "Tire wear",
+        "Cab door/glass",
+        "Seat bar/safety interlocks",
+        "Aux function"
+      ],
+      "attachments": [
+        "General purpose bucket",
+        "Forks",
+        "Auger",
+        "Grapple",
+        "Trencher",
+        "Cold planer",
+        "Broom",
+        "Breaker"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Quick attach",
+        "Bucket cutting edge",
+        "All tires",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Enclosed cab vs open",
+        "High-flow hydraulics",
+        "Attachment package",
+        "Tire life",
+        "Controls type",
+        "Brand demand",
+        "Running status",
+        "Rental wear",
+        "Overall cosmetics"
+      ]
+    },
+    "compact_track_loaders": {
+      "display_name": "Compact Track Loaders",
+      "major_components": [
+        "Engine",
+        "Hydraulic system",
+        "Drive system",
+        "Tracks/undercarriage",
+        "Lift arms/frame",
+        "Cab/controls",
+        "Quick attach",
+        "Attachments"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Hydraulic response",
+        "Track wear",
+        "Sprocket/roller wear",
+        "Lift arm play",
+        "Quick attach wear",
+        "Drive performance",
+        "Cab condition",
+        "High-flow function",
+        "Leaks/damage"
+      ],
+      "attachments": [
+        "General purpose bucket",
+        "Forks",
+        "Mulcher",
+        "Brush cutter",
+        "Auger",
+        "Grapple",
+        "Trencher",
+        "Breaker"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Quick attach",
+        "Bucket cutting edge",
+        "Tracks/rollers both sides",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Track life",
+        "High-flow package",
+        "Attachment package",
+        "Undercarriage cost exposure",
+        "Cab package",
+        "Brand demand",
+        "Running status",
+        "Rental wear",
+        "Overall cosmetics"
+      ]
+    },
+    "motor_graders": {
+      "display_name": "Motor Graders",
+      "major_components": [
+        "Engine",
+        "Transmission",
+        "Circle/drawbar/moldboard",
+        "Articulation/steering",
+        "Hydraulic system",
+        "Axles/tandems",
+        "Tires",
+        "Cab/controls"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Circle wear",
+        "Drawbar looseness",
+        "Moldboard edge wear",
+        "Articulation play",
+        "Steering response",
+        "Transmission operation",
+        "Tandem leaks",
+        "Hydraulic leaks",
+        "Cab electronics/GPS"
+      ],
+      "attachments": [
+        "Front blade",
+        "Scarifier",
+        "Ripper",
+        "Snow wing",
+        "GPS mast kit",
+        "Cross slope controls"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Circle and drawbar",
+        "Moldboard edge",
+        "Tandems",
+        "All tires",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Moldboard/circle condition",
+        "Tire life",
+        "GPS machine control",
+        "Articulation wear",
+        "Roading ability",
+        "Brand demand",
+        "Running status",
+        "Emission tier",
+        "Overall cosmetics"
+      ]
+    },
+    "telehandlers": {
+      "display_name": "Telehandlers",
+      "major_components": [
+        "Engine",
+        "Transmission",
+        "Boom assembly",
+        "Hydraulic system",
+        "Axles/steering",
+        "Tires",
+        "Cab/controls",
+        "Attachments/stabilizers"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Boom section wear",
+        "Boom extend/retract smoothness",
+        "Frame leveling operation",
+        "Stabilizer function",
+        "Hydraulic leaks",
+        "Tire wear",
+        "Brake performance",
+        "Attachment lock-up",
+        "Cab condition"
+      ],
+      "attachments": [
+        "Fork carriage",
+        "Bucket",
+        "Jib",
+        "Winch",
+        "Personnel basket",
+        "Truss boom",
+        "Work lights"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Boom wear pads",
+        "Fork carriage or bucket",
+        "Tires",
+        "Outriggers",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Lift height/capacity",
+        "Enclosed cab vs open",
+        "Attachment package",
+        "Boom wear",
+        "Tire life",
+        "Outrigger/frame leveling condition",
+        "Brand demand",
+        "Running status",
+        "ANSI compliance features"
+      ]
+    },
+    "wheel_ag_tractors": {
+      "display_name": "Wheel / Ag Tractors",
+      "major_components": [
+        "Engine",
+        "Transmission/driveline",
+        "PTO/3-point",
+        "Hydraulic system",
+        "Axles",
+        "Tires",
+        "Loader assembly",
+        "Cab/controls"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "PTO engagement",
+        "3-point lift hold",
+        "Hydraulic remotes",
+        "Transmission operation",
+        "Front axle MFWD",
+        "Tire condition",
+        "Cab electronics",
+        "Loader pin wear",
+        "Leaks/damage"
+      ],
+      "attachments": [
+        "Loader",
+        "Bucket",
+        "Forks",
+        "Rear remotes",
+        "Ballast",
+        "Quick hitch",
+        "Guidance components"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab or operator station",
+        "Engine compartment",
+        "Rear PTO/3-point",
+        "Loader and bucket",
+        "All tires",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "MFWD vs 2WD",
+        "Cab vs open station",
+        "Loader included",
+        "PTO and remote count",
+        "Tire life",
+        "Guidance readiness",
+        "Brand desirability",
+        "Running status",
+        "Service history"
+      ]
+    },
+    "crawler_loaders": {
+      "display_name": "Crawler Loaders",
+      "major_components": [
+        "Engine",
+        "Transmission/steering",
+        "Final drives",
+        "Undercarriage",
+        "Loader assembly",
+        "Hydraulic system",
+        "Cab/controls",
+        "Bucket/attachments"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Undercarriage wear",
+        "Final drive noise/leaks",
+        "Loader arm cracks",
+        "Bucket wear",
+        "Lift drift",
+        "Steering response",
+        "Hydraulic leaks",
+        "Cab condition",
+        "Visible repairs"
+      ],
+      "attachments": [
+        "General purpose bucket",
+        "Multi-purpose bucket",
+        "Forks",
+        "Ripper",
+        "Winch"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab or operator station",
+        "Engine compartment",
+        "Bucket edge",
+        "Both track sides",
+        "Sprockets/idlers/rollers",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Undercarriage life",
+        "Hours",
+        "Cab vs open",
+        "Bucket type",
+        "Hydraulic response",
+        "Final drive condition",
+        "Brand demand",
+        "Running status",
+        "Service records",
+        "Overall cosmetics"
+      ]
+    },
+    "scrapers": {
+      "display_name": "Scrapers",
+      "major_components": [
+        "Engine",
+        "Transmission",
+        "Bowl/apron/ejector",
+        "Hydraulic system",
+        "Frame/gooseneck",
+        "Axles",
+        "Tires",
+        "Cab/controls"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Transmission operation",
+        "Bowl floor wear",
+        "Cutting edge wear",
+        "Apron cylinders",
+        "Ejector movement",
+        "Gooseneck/frame cracking",
+        "Axle leaks",
+        "Tire wear",
+        "Cab electronics"
+      ],
+      "attachments": [
+        "Push block",
+        "Cushion hitch",
+        "Heaped bowl",
+        "Automatic controls",
+        "Camera system"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab interior",
+        "Engine compartment",
+        "Bowl floor",
+        "Cutting edge",
+        "Gooseneck/frame",
+        "All tires",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Bowl/cutting edge condition",
+        "Tire life",
+        "Hydraulic condition",
+        "Frame cracks",
+        "Control package",
+        "Brand demand",
+        "Running status",
+        "Service history",
+        "Transport complexity if purchased"
+      ]
+    },
+    "rollers_compactors": {
+      "display_name": "Rollers / Compactors",
+      "major_components": [
+        "Engine",
+        "Drive system",
+        "Drum/vibration",
+        "Articulation/frame",
+        "Water system",
+        "Tires if applicable",
+        "Cab/controls",
+        "Attachments"
+      ],
+      "inspection_prompts": [
+        "Cold start",
+        "Vibration operation",
+        "Drum shell damage",
+        "Articulation play",
+        "Hydrostatic response",
+        "Water spray function",
+        "Tire wear if equipped",
+        "Cab/ROPS condition",
+        "Leaks/damage",
+        "Meter/controls"
+      ],
+      "attachments": [
+        "Padfoot shell kit",
+        "Blade",
+        "Cab package",
+        "Edge cutters",
+        "Work lights"
+      ],
+      "required_photos": [
+        "4 corner exterior",
+        "Serial plate",
+        "Hour meter",
+        "Cab or operator station",
+        "Engine compartment",
+        "Drum(s) close-up",
+        "Articulation",
+        "Tires if applicable",
+        "Visible leaks/damage"
+      ],
+      "value_drivers": [
+        "Hours",
+        "Smooth drum vs padfoot",
+        "Drum condition",
+        "Vibration performance",
+        "Water system operation",
+        "Cab package",
+        "Brand demand",
+        "Running status",
+        "Rental wear",
+        "Overall cosmetics"
+      ]
+    }
+  }
+}
