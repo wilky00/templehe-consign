@@ -19,11 +19,10 @@
 **Fixed:** 2026-04-24 — first `flyctl deploy` to staging fired automatically on the PR #28 merge-to-main push and succeeded. Staged secrets activated on both `temple-api-staging` and `temple-web-staging`.
 **Remaining:** Production deploy is gated behind manual `workflow_dispatch` — fires when the prod-go-live bundle below is complete.
 
-## OPEN — Change request duplicate submission not blocked (Phase 2 Sprint 3)
-**Status:** `ChangeRequestService.submit_change_request` lets a customer file an unlimited number of open change requests on the same record. Spec (`dev_plan/02_phase2_customer_portal.md` Feature 2.4.1) says the UI should surface "your first request is in review" and the second POST should be rejected. Today neither the service nor the router enforces this.
-**Impact:** Minor — a customer who taps "submit" twice will create two pending notifications; a sales rep sees duplicate entries in their queue. No data corruption.
-**Action:** Add a `SELECT FOR UPDATE` check in `change_request_service.submit_change_request` that 409s if a row exists with `status='pending'` for the same `(equipment_record_id, customer_id)`. Bundle with the first Phase 3 sales-rep endpoint work so the resolution path is built alongside.
-**Location:** `api/services/change_request_service.py`, `api/routers/equipment.py` (POST /me/equipment/{id}/change-requests).
+## FIXED — Change request duplicate submission (Phase 3 Sprint 1)
+**Fixed:** 2026-04-24 — commit `feb18d1` on `phase3-sales-crm`. Migration 009 added partial UNIQUE index `ux_change_requests_one_pending_per_record` on `(equipment_record_id) WHERE status='pending'`. `change_request_service.submit_change_request` catches the resulting `IntegrityError` and maps to 409 with human-readable detail. Two new integration tests verify the 409 path and that a new request is accepted after the prior one is resolved.
+**Was:** `ChangeRequestService.submit_change_request` let a customer file unlimited pending requests on the same record; Phase 2 Feature 2.4.1 required one-at-a-time enforcement.
+**Enforcement point:** DB-level partial unique index — impossible to violate from any callsite (direct SQL, seed script, future sales endpoint).
 
 ## OPEN — SMS warning copy not present on registration / profile UI
 **Status:** Account page has an SMS opt-in checkbox with description "Text message updates (requires a cell number on your profile)". The Phase 2 spec (Feature 2.1.1) calls for visible inline text: *"Standard SMS messaging rates may apply based on your carrier plan."* No such copy is rendered anywhere in the web app today.
