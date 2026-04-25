@@ -568,4 +568,51 @@ Spec: Epic 3.1 + 3.2 + 3.3 + 3.6 + parts of 3.7 in `dev_plan/03_phase3_sales_crm
 
 ---
 
+### Sprint 3: Lead Routing Engine + Admin API + Assignment Notifications — COMPLETE (verified green 2026-04-25)
+
+Spec: Epic 3.3 in `dev_plan/03_phase3_sales_crm.md` (Features 3.3.1, 3.3.2, 3.3.3).
+
+**Backend (all new):**
+- [x] `api/alembic/versions/010_phase3_lead_routing_audit_columns.py` — adds `created_by` (FK users), `created_at` (server_default now()), `deleted_at` to `lead_routing_rules`. Creates partial index `ix_lead_routing_rules_active ON (priority) WHERE deleted_at IS NULL AND is_active = true`. Down-migration drops the index then the columns.
+- [x] `api/database/models.py` — `LeadRoutingRule` extended with the three audit columns. Pre-existing `round_robin_index`, `priority`, `is_active`, `conditions` (JSONB), `assigned_user_id` columns kept as-is.
+- [x] `api/schemas/routing.py` — `RoutingRuleCreate`, `RoutingRulePatch` (`extra="forbid"`, sparse via `model_fields_set`), `RoutingRuleOut`, `RoutingRuleListResponse`. `RuleType = Literal["ad_hoc", "geographic", "round_robin"]`.
+- [x] `api/services/lead_routing_service.py` — full waterfall: `route_for_record(db, *, record, customer)` returns `RoutingDecision(assigned_user_id, rule_id, rule_type, trigger)`. Matchers: `_ad_hoc_matches` (customer_id UUID equality / email_domain case-insensitive endswith with optional `@` prefix), `_geo_matches` (state_list + zip_list with exact + range, zip+4 head extraction, metro_area silently skipped pending Sprint 4), `_round_robin_rep_ids` (filters invalid UUIDs). Atomic round-robin via `UPDATE lead_routing_rules SET round_robin_index = round_robin_index + 1 WHERE id = :id RETURNING round_robin_index` — Postgres row lock substitutes for Redis `INCR`. AppConfig fallback reads `default_sales_rep_id`. Admin CRUD: `list_rules` (orders by rule_type then priority), `get_rule`, `create_rule`, `update_rule`, `soft_delete_rule`. `_validate_conditions` enforces rule-type-specific shape (422 on malformed). `_require_sales_role` confirms `assigned_user_id ∈ {sales, sales_manager, admin}`.
+- [x] `api/routers/admin_routing.py` — `/admin/routing-rules` CRUD, admin-only via `require_roles("admin")`. GET supports `include_deleted` query. POST returns 201. PATCH delegates `model_fields_set` to the service so explicit `null` clears `assigned_user_id`. DELETE soft-deletes (sets `deleted_at` + flips `is_active=false`).
+- [x] `api/services/equipment_service.py` — `_route_and_assign` invoked from `submit_intake` after `db.flush() + db.refresh()`, before `_enqueue_confirmation`. Wrapped in `try/except Exception` → routing failure logs `lead_routing_failed` and leaves record unassigned (does not 5xx). Writes `equipment_record.routed` audit row in every branch (assigned, default_sales_rep, unassigned). New `enqueue_assignment_notification(db, *, record, assigned_user_id, trigger)` is the single chokepoint for `record_assigned` emails — idempotency key `record_assigned:{record_id}:{user_id}:{trigger}`.
+- [x] `api/services/sales_service.py` — `apply_assignment` captures `prior_sales_rep_id`, then on a real change calls `equipment_service.enqueue_assignment_notification(...trigger="manual_override")`. Skipped for null assignments and no-op writes.
+- [x] `api/main.py` — wires `admin_routing_router`.
+- [x] `api/routers/health.py` — bumps `_EXPECTED_MIGRATION_HEAD` to `"010"`.
+
+**Tests (all new):**
+- [x] `api/tests/unit/test_lead_routing_service.py` — 16 tests on the pure matchers (ad_hoc customer_id / email_domain / malformed; geo state / zip exact / zip range / zip+4 / neither field / metro_area silently skipped; `_normalize_zip` parametric across +4 and short inputs; `_zip_entry_matches` exact + range + malformed; `_round_robin_rep_ids` filters invalid + empty for missing).
+- [x] `api/tests/integration/test_lead_routing.py` — 11 tests: ad_hoc by customer_id (asserts assignment + audit row + notification enqueued), ad_hoc by email_domain, geographic by state, geographic by zip range, ad_hoc precedence over geographic, round-robin cycles a→b→a with counter = 3 after 3 intakes, AppConfig fallback (`trigger='default_sales_rep'`), unassigned (`trigger='unassigned'`), routing failure does not block intake (RuntimeError mocked), soft-deleted rule excluded, inactive rule excluded.
+- [x] `api/tests/integration/test_admin_routing_rules.py` — 7 tests: admin creates ad_hoc rule (201, captures `created_by`), non-admin (sales_manager) blocked 403, round_robin requires non-empty `rep_ids` (422), assigned_user must have sales role (422 against customer-role user), sparse PATCH preserves untouched fields, explicit `null` PATCH clears `assigned_user_id`, DELETE soft-deletes (row preserved, excluded by default, surfaced via `?include_deleted=true`).
+
+**Full test gate: 269/269 green** (≥85% coverage floor maintained).
+
+**Design decisions this sprint:** captured as **ADR-014** in `decisions.md`. Highlights:
+- **Postgres `UPDATE … RETURNING` for round-robin counter, not Redis.** Same atomicity, no extra runtime dep, swap path documented.
+- **Routing is non-blocking.** Failure logs and leaves record unassigned for manager triage; never 5xx the customer's intake.
+- **Soft delete preserves rule_id resolution in audit rows.** Rules disappear from the waterfall via `deleted_at IS NOT NULL`; `?include_deleted=true` is the forensic escape hatch.
+- **One `record_assigned` template, idempotency keyed by trigger.** Routing-time and manual-override emails share the template but never collide on idempotency.
+- **Geographic metro-area matching deferred to Sprint 4** (needs Google geocoding from Epic 3.4). Matcher silently skips `metro_area` keys today.
+
+**Deferred (flagged, not regressed):**
+- Admin UI for routing-rule CRUD — Phase 4 (Admin Panel) ships the React pages over the API delivered this sprint.
+- Metro-area routing (`condition.metro_area = {center_lat, center_lon, radius_miles}`) — Sprint 4 once geocoding lands.
+- `default_sales_rep_id` AppConfig key seeding — intentionally unset; admin chooses one in Phase 4.
+- iOS push for assignment notifications — Phase 5 add-on alongside email; both will route through `enqueue_assignment_notification`.
+
+**Endpoints (new in Sprint 3):**
+- `GET    /api/v1/admin/routing-rules` — list (ordered rule_type asc, priority asc); `?include_deleted=true` includes soft-deleted rows
+- `POST   /api/v1/admin/routing-rules` — create (admin-only); 422 on malformed conditions or non-sales `assigned_user_id`
+- `PATCH  /api/v1/admin/routing-rules/{id}` — sparse update; explicit `null` clears `assigned_user_id`
+- `DELETE /api/v1/admin/routing-rules/{id}` — soft delete (sets `deleted_at` + `is_active=false`)
+
+**Routing trigger surfaces:**
+- `POST /api/v1/me/equipment` (intake) — new `_route_and_assign` hook runs the waterfall, writes `equipment_record.routed` audit, optionally enqueues `record_assigned` email.
+- `PATCH /api/v1/sales/equipment/{id}` (manual reassignment, Sprint 2) — also emits `record_assigned` email with `trigger="manual_override"`.
+
+---
+
 ## Phase 4–8 — Not started

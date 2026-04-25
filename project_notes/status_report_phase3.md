@@ -117,3 +117,48 @@ None introduced; the duplicate-change-request guard was carry-over from Phase 2'
 
 - **Sprint 3 — Lead Routing Engine.** Ad-hoc → geographic → round-robin. Builds on the AssignmentPatch surface this sprint shipped.
 
+---
+
+## Sprint 3 — Lead Routing Engine + Admin API + Assignment Notifications
+
+**Closed: 2026-04-25** — backend complete, all tests green, branch `phase3-sales-crm` (one commit on top of Sprint 2's `5b04e49`).
+
+**Scope:** Epic 3.3 (Features 3.3.1 ad-hoc, 3.3.2 geographic, 3.3.3 round-robin) plus the admin CRUD API for routing rules and the assignment-notification email path. Metro-area routing deferred to Sprint 4 with the calendar/geocoding work.
+
+### What landed
+
+**Routing waterfall (`api/services/lead_routing_service.py`).** Single public entry `route_for_record(db, *, record, customer)` returns `RoutingDecision(assigned_user_id, rule_id, rule_type, trigger)`. Order: ad-hoc match (customer_id or email_domain, first match wins) → geographic (state_list / zip_list with exact + range, ascending priority) → round-robin (lowest-priority active RR rule, atomic counter) → AppConfig `default_sales_rep_id` fallback → unassigned. The matchers are pure functions; the counter and AppConfig reads are the only DB-touching helpers.
+
+**Atomic round-robin without Redis.** `_claim_next_round_robin` issues `UPDATE lead_routing_rules SET round_robin_index = round_robin_index + 1 WHERE id = :id RETURNING round_robin_index` and selects `rep_ids[(returned_index - 1) % len(rep_ids)]`. Postgres row lock serializes concurrent intakes. Tested end-to-end (`test_round_robin_cycles_through_reps` — three intakes assign a, b, a; counter reads 3). Documented as part of **ADR-014**: same semantics as Redis `INCR`; swap-path preserved for the GCP migration.
+
+**Routing hook in customer intake.** `equipment_service.submit_intake` calls `_route_and_assign` after `db.flush() + db.refresh()`. The whole call is wrapped in `try/except Exception` — any crash logs `lead_routing_failed` and leaves the record unassigned (intake is **never** blocked on a routing fault). An `equipment_record.routed` audit row is written in every branch (`trigger ∈ {lead_routing, default_sales_rep, unassigned}`), so managers always have forensic context for an unassigned record.
+
+**Assignment notifications, single chokepoint.** New `equipment_service.enqueue_assignment_notification(db, *, record, assigned_user_id, trigger)` is the only place `record_assigned` emails are queued. Idempotency key `record_assigned:{record_id}:{user_id}:{trigger}` — distinct triggers don't collide, so an auto-route + manual reassignment correctly sends two emails (rep gets one when the record lands, another when ownership changes). `sales_service.apply_assignment` (Sprint 2) now invokes this with `trigger="manual_override"` only on a real change.
+
+**Admin CRUD API (`api/routers/admin_routing.py`).** `/admin/routing-rules` GET/POST/PATCH/DELETE behind `require_roles("admin")` only — sales managers cannot author rules. Schemas in `schemas/routing.py` use `RoutingRulePatch.extra="forbid"` and `model_fields_set` so explicit `null` clears `assigned_user_id` while a missing field leaves it alone. Service-level validation (`_validate_conditions`) rejects malformed bodies per rule_type with 422; `_require_sales_role` enforces that `assigned_user_id` resolves to `sales / sales_manager / admin`. DELETE is soft (sets `deleted_at` + flips `is_active=false`); `?include_deleted=true` is the forensic escape hatch.
+
+**Migration 010.** Adds `lead_routing_rules.created_by` (FK users, nullable for seeded rules), `created_at` (server_default now()), `deleted_at`. Creates partial index `ix_lead_routing_rules_active ON (priority) WHERE deleted_at IS NULL AND is_active = true` to keep the waterfall query lean as the rule set grows. Health check `_EXPECTED_MIGRATION_HEAD` bumped to `"010"`.
+
+### Test results
+
+- `make test-api`: **269/269 passed** (≥85% coverage floor maintained).
+- New test files:
+  - `tests/unit/test_lead_routing_service.py` — 16 tests on the matchers (ad_hoc / geo / zip helpers / round-robin parsing / `_normalize_zip` parametric).
+  - `tests/integration/test_lead_routing.py` — 11 tests through the real intake endpoint: ad_hoc by customer_id (assignment + audit + notification), ad_hoc by email_domain, geographic by state, geographic by zip range, ad_hoc precedence over geographic, round-robin cycling with counter assertion, AppConfig fallback (`trigger='default_sales_rep'`), unassigned trail, routing failure does not block intake (RuntimeError mocked), soft-deleted rule excluded, inactive rule excluded.
+  - `tests/integration/test_admin_routing_rules.py` — 7 tests: admin POST 201 + `created_by` captured, sales_manager 403, round_robin requires non-empty `rep_ids` (422), assigned_user must have sales role (422 against customer-role user), sparse PATCH preserves untouched fields, explicit-null PATCH clears `assigned_user_id`, DELETE soft-deletes (row preserved, excluded by default, surfaced via `?include_deleted=true`).
+
+### Bugs found + fixed
+
+- **SQLAlchemy identity-map masked the round-robin counter assertion.** The atomic `UPDATE … RETURNING` runs through raw SQL via `text(...)`; re-querying `LeadRoutingRule` returned the cached instance with a stale `round_robin_index`. Fixed in the test by selecting the column scalar (`select(LeadRoutingRule.round_robin_index).where(...)`) which bypasses the identity map. The production code path was always correct — `_claim_next_round_robin` reads the counter from the `RETURNING` clause directly.
+
+### Open follow-ups for later sprints
+
+- **Admin UI** for rule CRUD — Phase 4 ships the React pages over the API delivered this sprint. The schemas and validation are stable; the UI is purely additive.
+- **Metro-area geographic matching** (`condition.metro_area = {center_lat, center_lon, radius_miles}`) — Sprint 4 once Google geocoding lands. Today the matcher silently skips `metro_area` keys (`test_geo_skips_metro_area_silently`).
+- **`default_sales_rep_id` AppConfig key** — intentionally unset; admin chooses one via Phase 4's settings UI. Until then, dev/staging intakes with no matching rule produce `trigger='unassigned'` audit rows by design.
+- **iOS push assignment notifications** — Phase 5 alongside email; both will route through `enqueue_assignment_notification` so idempotency stays consistent.
+
+### Next
+
+- **Sprint 4 — Scheduling + Shared Calendar + Drive-Time + Metro-Area Routing.** Calendar events, appraiser availability, drive-time buffers via Google Distance Matrix, and the metro-area routing rules that drop into the existing waterfall.
+

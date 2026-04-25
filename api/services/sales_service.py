@@ -32,7 +32,7 @@ from database.models import (
     StatusEvent,
     User,
 )
-from services import equipment_status_service
+from services import equipment_service, equipment_status_service
 
 logger = structlog.get_logger(__name__)
 
@@ -185,6 +185,7 @@ async def apply_assignment(
         else None,
     }
 
+    prior_sales_rep_id = record.assigned_sales_rep_id
     if set_sales_rep:
         if sales_rep_id is not None:
             await _require_user_has_role(db, sales_rep_id, ("sales", "sales_manager", "admin"))
@@ -217,6 +218,21 @@ async def apply_assignment(
         )
     )
     await db.flush()
+
+    # Spec Feature 3.3.3: notify the newly-assigned sales rep on a manual
+    # change. Only fire when the assignment actually changed to a non-null
+    # user — re-assigning the same rep or clearing the field is a no-op.
+    if (
+        set_sales_rep
+        and sales_rep_id is not None
+        and sales_rep_id != prior_sales_rep_id
+    ):
+        await equipment_service.enqueue_assignment_notification(
+            db,
+            record=record,
+            assigned_user_id=sales_rep_id,
+            trigger="manual_override",
+        )
     return record
 
 

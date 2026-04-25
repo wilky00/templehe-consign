@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database.models import (
+    AuditLog,
     Customer,
     CustomerIntakePhoto,
     EquipmentCategory,
@@ -33,7 +34,12 @@ from database.models import (
     User,
 )
 from schemas.equipment import IntakeSubmission
-from services import customer_service, notification_service, sanitization
+from services import (
+    customer_service,
+    lead_routing_service,
+    notification_service,
+    sanitization,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -141,8 +147,139 @@ async def submit_intake(
     # a greenlet-providing context.
     await db.refresh(record, attribute_names=["intake_photos", "status_events"])
 
+    await _route_and_assign(db, user=user, record=record, customer=customer)
     await _enqueue_confirmation(db, user=user, record=record)
     return record
+
+
+async def _route_and_assign(
+    db: AsyncSession,
+    *,
+    user: User,
+    record: EquipmentRecord,
+    customer: Customer,
+) -> None:
+    """Run the lead routing waterfall and apply the assignment.
+
+    A failure here must not block intake — log and leave unassigned so
+    a manager can triage rather than dropping the customer's submission.
+    """
+    try:
+        # Customer.user is a relationship; ensure it's loaded for ad_hoc
+        # email-domain matching. ensure_profile_for_user returns the row
+        # but the user relation may not be hydrated.
+        if customer.user is None:
+            customer.user = user
+        decision = await lead_routing_service.route_for_record(
+            db, record=record, customer=customer
+        )
+    except Exception:
+        logger.exception(
+            "lead_routing_failed",
+            record_id=str(record.id),
+            customer_id=str(customer.id),
+        )
+        return
+
+    if decision.assigned_user_id is None:
+        logger.info(
+            "lead_routing_unassigned",
+            record_id=str(record.id),
+            customer_id=str(customer.id),
+        )
+        # Still write an audit row so the gap is visible in forensics.
+        db.add(
+            AuditLog(
+                event_type="equipment_record.routed",
+                actor_id=None,
+                actor_role="system",
+                target_type="equipment_record",
+                target_id=record.id,
+                after_state={
+                    "trigger": decision.trigger,
+                    "rule_id": None,
+                    "rule_type": None,
+                    "assigned_sales_rep_id": None,
+                },
+            )
+        )
+        await db.flush()
+        return
+
+    record.assigned_sales_rep_id = decision.assigned_user_id
+    db.add(record)
+    db.add(
+        AuditLog(
+            event_type="equipment_record.routed",
+            actor_id=None,
+            actor_role="system",
+            target_type="equipment_record",
+            target_id=record.id,
+            after_state={
+                "trigger": decision.trigger,
+                "rule_id": str(decision.rule_id) if decision.rule_id else None,
+                "rule_type": decision.rule_type,
+                "assigned_sales_rep_id": str(decision.assigned_user_id),
+            },
+        )
+    )
+    await db.flush()
+    await enqueue_assignment_notification(
+        db,
+        record=record,
+        assigned_user_id=decision.assigned_user_id,
+        trigger=decision.trigger,
+    )
+
+
+async def enqueue_assignment_notification(
+    db: AsyncSession,
+    *,
+    record: EquipmentRecord,
+    assigned_user_id: uuid.UUID,
+    trigger: str,
+) -> None:
+    """Email the newly-assigned rep that they own this record.
+
+    Idempotency key includes the trigger so a manual reassignment doesn't
+    collide with the routing-time enqueue (different idempotency keys ⇒
+    both deliver).
+    """
+    rep_result = await db.execute(select(User).where(User.id == assigned_user_id))
+    rep = rep_result.scalar_one_or_none()
+    if rep is None or rep.status != "active" or not rep.email:
+        logger.info(
+            "assignment_notification_skipped",
+            record_id=str(record.id),
+            assigned_user_id=str(assigned_user_id),
+            reason="rep_inactive_or_missing",
+        )
+        return
+
+    ref = record.reference_number or str(record.id)
+    make_model = " ".join(filter(None, [record.customer_make, record.customer_model])).strip()
+    descriptor = f"{make_model} ({ref})" if make_model else ref
+    subject = f"You've been assigned {ref}"
+    body = (
+        f"<p>Hi {rep.first_name or 'team'},</p>"
+        f"<p>You have been assigned equipment record <strong>{descriptor}</strong>.</p>"
+        f"<p>Trigger: <strong>{trigger}</strong></p>"
+        "<p>Open the sales console to review and respond.</p>"
+    )
+    await notification_service.enqueue(
+        db,
+        idempotency_key=f"record_assigned:{record.id}:{assigned_user_id}:{trigger}",
+        user_id=assigned_user_id,
+        channel="email",
+        template="record_assigned",
+        payload={
+            "to_email": rep.email,
+            "subject": subject,
+            "html_body": body,
+            "reference_number": ref,
+            "trigger": trigger,
+        },
+    )
 
 
 async def _enqueue_confirmation(

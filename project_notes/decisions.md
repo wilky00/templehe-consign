@@ -391,3 +391,46 @@ Both are accessed via `SessionService` and `RateLimitService` interfaces. The GC
 
 - `user_sessions` and `rate_limit_counters` are present in the initial Alembic migration.
 - No Redis dependency in the POC environment (docker-compose.yml has only Postgres + Mailpit).
+
+---
+
+## ADR-014: Phase 3 Sprint 3 — Lead Routing Engine
+
+**Date:** 2026-04-25
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 3 Sprint 3 ships the lead routing engine (Epic 3.3) that auto-assigns incoming `equipment_records` to a sales rep at intake time. The waterfall — ad-hoc → geographic → round-robin → AppConfig fallback — is straightforward, but two implementation choices warrant their own ADR entry so Phase 4 (admin UI), Phase 5 (iOS push), and the GCP migration build on the same contract.
+
+### Decisions
+
+1. **Round-robin counter uses `UPDATE … RETURNING` on a Postgres row, not Redis `INCR`.** ADR-002 bans Redis in POC, so the rotation index lives in `lead_routing_rules.round_robin_index`. The atomic-claim path (`services/lead_routing_service._claim_next_round_robin`) issues a single statement: `UPDATE lead_routing_rules SET round_robin_index = round_robin_index + 1 WHERE id = :id RETURNING round_robin_index`. Postgres's row-level lock serializes concurrent intakes; each sees a distinct counter value, same semantics as Redis `INCR`. The rep is selected with `rep_ids[(returned_index - 1) % len(rep_ids)]` so the very first intake against a fresh rule lands on `rep_ids[0]`. GCP migration can swap to `redis.incr` without touching the public service signature.
+
+2. **Routing is non-blocking on intake.** `equipment_service.submit_intake` calls `_route_and_assign` after `db.flush() + db.refresh()` and before the customer confirmation enqueue. The whole call is wrapped in `try/except Exception` — if routing crashes (bad rule data, race with admin edits, transient DB issue), we log `lead_routing_failed` and the record stays unassigned. Customers always see their submission accepted; a manager triages the orphan from the dashboard. Tested in `test_routing_failure_does_not_block_intake`.
+
+3. **Soft delete via `deleted_at` timestamp, never row removal.** `LeadRoutingRule.deleted_at` (added in migration `010`) preserves historical rules so audit rows that reference `rule_id` keep resolving. Soft-deleted rules are excluded from the waterfall via the partial index `ix_lead_routing_rules_active ON (priority) WHERE deleted_at IS NULL AND is_active = true`. `GET /admin/routing-rules?include_deleted=true` is the escape hatch for forensics.
+
+4. **`AppConfig.default_sales_rep_id` is the floor.** When no rule matches, the engine reads `AppConfig` key `default_sales_rep_id` (shape `{"user_id": "<uuid>"}`). If the key is unset or the user is invalid, the record stays unassigned and the audit row is written with `trigger='unassigned'` so managers can reconcile. The default rep is set by admins via Phase 4's settings UI; for the POC it's set directly in the DB.
+
+5. **One shared `record_assigned` notification template, idempotency keyed by trigger.** Both routing-time assignment (`trigger='lead_routing'` or `'default_sales_rep'`) and manual reassignment via the Phase 3 Sprint 2 PATCH (`trigger='manual_override'`) use the same `record_assigned` template. The idempotency key is `record_assigned:{record_id}:{user_id}:{trigger}` — distinct triggers don't collide, so a manual reassignment after auto-routing produces two emails (correct UX: the rep gets one when the record lands, another when ownership shifts).
+
+6. **Service-level condition validation before persistence.** The Pydantic schemas accept any `dict` for `conditions`; `services/lead_routing_service._validate_conditions` enforces the rule-type-specific shape (ad_hoc needs `condition_type` + `value`; geographic needs at least one of `state_list` / `zip_list`; round_robin needs a non-empty `rep_ids` list). A malformed rule body returns 422 instead of silently never matching. Same guardrail runs on PATCH.
+
+7. **Geographic metro-area matching is deferred to Sprint 4.** The matcher silently skips `metro_area` keys without erroring (`test_geo_skips_metro_area_silently`). Sprint 4's calendar work brings Google geocoding; metro-area routing slots in then without breaking existing rules.
+
+### Consequences
+
+- Migration `010` extends `lead_routing_rules` with `created_by`, `created_at`, `deleted_at` and the partial active-rules index. The pre-existing table from Phase 1's initial migration kept its `round_robin_index`, `priority`, `is_active`, `conditions` (JSONB), and `assigned_user_id` columns.
+- `services/equipment_service.enqueue_assignment_notification` is the single chokepoint for assignment emails — both the routing path and `services/sales_service.apply_assignment` call it. Phase 4's bulk-reassignment tooling and Phase 5's iOS-push integration should call this same function rather than enqueueing parallel emails.
+- The atomic counter is exercised by `test_round_robin_cycles_through_reps` (3 sequential intakes → assignments [a, b, a], counter = 3). Concurrent intake serialization is delegated to Postgres row locks; no application-level mutex.
+- Admin RBAC on `/admin/routing-rules` is `admin`-only; sales managers cannot author rules. Phase 4's settings UI inherits this restriction.
+- `default_sales_rep_id` is **not** seeded by `scripts/seed.py` — it stays unset until an admin chooses one in Phase 4. Until then, dev/staging intakes with no matching rule produce `trigger='unassigned'` audit rows by design.
+
+### References
+
+- Working branch: `phase3-sales-crm`.
+- Phase spec: `dev_plan/03_phase3_sales_crm.md` Epic 3.3.
+- Implementation: `api/services/lead_routing_service.py`, `api/routers/admin_routing.py`, `api/alembic/versions/010_phase3_lead_routing_audit_columns.py`.
+- Tests: `api/tests/unit/test_lead_routing_service.py` (16 tests), `api/tests/integration/test_lead_routing.py` (11 tests), `api/tests/integration/test_admin_routing_rules.py` (7 tests).
