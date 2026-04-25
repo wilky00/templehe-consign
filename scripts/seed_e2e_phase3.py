@@ -85,6 +85,16 @@ async def _upsert_user(
             "role": str(role_id),
         },
     )
+    # Mirror primary role into the user_roles join table — Phase 4 pre-
+    # work moved RBAC onto the join table; raw SQL inserts bypass the
+    # ORM event listener that handles this for managed writes.
+    await session.execute(
+        text(
+            "INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid) "
+            "ON CONFLICT (user_id, role_id) DO NOTHING"
+        ),
+        {"uid": user_id, "rid": str(role_id)},
+    )
     return user_id
 
 

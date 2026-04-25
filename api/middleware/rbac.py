@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from fastapi import Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.base import get_db
-from database.models import Role, User
+from database.models import User
 from middleware.auth import get_current_user
+from services import user_roles_service
 
 
 def require_roles(*role_slugs: str):
     """
-    Return a FastAPI dependency that enforces role membership.
+    Return a FastAPI dependency that grants access to any user holding
+    at least one of the listed roles. Phase 4 pre-work: a user can hold
+    multiple roles (sales rep who also covers appraiser shifts), so
+    the check is set intersection — not single-role equality.
 
     Usage:
         @router.get("/admin-only", dependencies=[Depends(require_roles("admin"))])
@@ -21,13 +24,14 @@ def require_roles(*role_slugs: str):
             ...
     """
 
+    allowed = frozenset(role_slugs)
+
     async def _check(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> User:
-        role_result = await db.execute(select(Role).where(Role.id == current_user.role_id))
-        role = role_result.scalar_one_or_none()
-        if role is None or role.slug not in role_slugs:
+        held = await user_roles_service.role_slugs_for_user(db, user=current_user)
+        if not allowed & held:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to perform this action.",

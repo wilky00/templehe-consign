@@ -175,7 +175,15 @@ class TwoFADisableRequest(BaseModel):
 class CurrentUser(BaseModel):
     id: uuid.UUID
     email: str
+    # Primary role — drives default landing-page routing in the SPA
+    # (sales-side vs customer-side). Phase 4 admin's "change primary
+    # role" action updates this; ``roles`` (below) tracks every grant.
     role: str
+    # Every role slug the user holds, including the primary. Phase 4
+    # pre-work (multi-role users): use this for capability checks in
+    # the UI; ``role`` stays for default routing only. Backwards-
+    # compatible — clients that only read ``role`` keep working.
+    roles: list[str] = []
     status: str
     first_name: str
     last_name: str
