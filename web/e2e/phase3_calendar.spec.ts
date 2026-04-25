@@ -1,39 +1,14 @@
-// ABOUTME: Phase 3 Sprint 4 calendar smoke — sales nav, schedule happy path, 409 conflict banner.
-// ABOUTME: Full UI gate (axe + Lighthouse + click-to-detail + cancel) is deferred to Sprint 6.
-import { execFileSync } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+// ABOUTME: Phase 3 calendar E2E — nav, schedule happy path, 409 conflict, click event → record detail.
+// ABOUTME: PATCH/DELETE for events have no UI in Sprint 4, so backend-only flows live in integration tests.
 import { expect, test, type Page } from "@playwright/test";
-import { uiLoginAsStaff } from "./helpers/api";
+import { seedPhase3, uiLoginAsStaff } from "./helpers/api";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-
-interface SeedPayload {
+interface SeedDual {
   password: string;
   sales_email: string;
   appraiser_user_id: string;
   customer_user_id: string;
-  equipment_record_id: string;
-  reference_number: string;
-}
-
-function seedPhase3Fixture(): SeedPayload {
-  const repoRoot = path.resolve(HERE, "..", "..");
-  const out = execFileSync(
-    "uv",
-    ["run", "python", path.join(repoRoot, "scripts", "seed_e2e_phase3.py")],
-    {
-      cwd: path.join(repoRoot, "api"),
-      env: {
-        ...process.env,
-        DATABASE_URL:
-          process.env.E2E_DATABASE_URL ??
-          "postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe",
-      },
-      encoding: "utf8",
-    },
-  );
-  return JSON.parse(out.trim()) as SeedPayload;
+  records: Array<{ equipment_record_id: string; reference_number: string }>;
 }
 
 function randomFakeIp(): string {
@@ -63,16 +38,16 @@ async function fillSchedule(
   await dialog.getByRole("button", { name: /^schedule$/i }).click();
 }
 
-test("calendar smoke: nav + schedule + conflict", async ({ page }) => {
-  // Two records — first for the happy path, second for the conflict path.
-  // The seeder reuses the deterministic sales/appraiser/customer users.
-  const first = seedPhase3Fixture();
-  const second = seedPhase3Fixture();
-  expect(second.appraiser_user_id).toBe(first.appraiser_user_id);
+test("calendar smoke: nav + schedule + conflict + click-through", async ({ page }) => {
+  // Two records in a single seed call — the seeder wipes the customer's
+  // prior records and all future calendar events first, so the calendar
+  // is guaranteed empty at landing.
+  const fixture = seedPhase3<SeedDual>("default", { records: 2 });
+  const [first, second] = fixture.records;
 
   await uiLoginAsStaff(page, {
-    email: first.sales_email,
-    password: first.password,
+    email: fixture.sales_email,
+    password: fixture.password,
     fakeIp: randomFakeIp(),
     landingPath: "/sales",
   });
@@ -90,7 +65,7 @@ test("calendar smoke: nav + schedule + conflict", async ({ page }) => {
   await page.goto(`/sales/equipment/${first.equipment_record_id}`);
   await page.getByRole("button", { name: /schedule appraisal/i }).click();
   await fillSchedule(page, {
-    appraiserId: first.appraiser_user_id,
+    appraiserId: fixture.appraiser_user_id,
     date: happyPath.date,
     time: happyPath.time,
   });
@@ -105,7 +80,19 @@ test("calendar smoke: nav + schedule + conflict", async ({ page }) => {
   // The event lands on the calendar.
   await page.getByRole("link", { name: /^Calendar$/ }).click();
   await expect(page).toHaveURL(/\/sales\/calendar$/);
-  await expect(page.getByText(new RegExp(first.reference_number))).toBeVisible();
+  const eventCell = page
+    .locator(".rbc-event")
+    .filter({ hasText: first.reference_number })
+    .first();
+  await expect(eventCell).toBeVisible();
+
+  // ── Click-through: tapping the event lands on the record detail. ──────
+  await eventCell.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/sales/equipment/${first.equipment_record_id}$`),
+  );
+  // Banner shows we're now editing this record.
+  await expect(page.getByText(/you are editing this record/i)).toBeVisible();
 
   // ── Conflict path: overlap second record 60 min from now (within
   // first event's 60-minute duration block) on the same appraiser. ─────
@@ -113,7 +100,7 @@ test("calendar smoke: nav + schedule + conflict", async ({ page }) => {
   await page.goto(`/sales/equipment/${second.equipment_record_id}`);
   await page.getByRole("button", { name: /schedule appraisal/i }).click();
   await fillSchedule(page, {
-    appraiserId: second.appraiser_user_id,
+    appraiserId: fixture.appraiser_user_id,
     date: conflictAttempt.date,
     time: conflictAttempt.time,
   });
