@@ -75,6 +75,26 @@ export async function fetchVerifyToken(toEmail: string): Promise<string> {
   return extractVerifyToken(body);
 }
 
+/**
+ * Wait for any message addressed to `toEmail` whose subject contains
+ * `subjectContains` (case-insensitive). Returns the body so callers can
+ * grep for content. Used by specs that verify durable notification
+ * dispatches reach the SMTP outbox, not just the queue.
+ */
+export async function waitForEmailBody(
+  toEmail: string,
+  subjectContains: string,
+  opts: { maxAttempts?: number; intervalMs?: number } = {},
+): Promise<string> {
+  const msg = await waitForMessage(
+    toEmail,
+    subjectContains,
+    opts.maxAttempts ?? 40,
+    opts.intervalMs ?? 500,
+  );
+  return await fetchBody(msg.ID);
+}
+
 export async function clearInbox(): Promise<void> {
   // Best-effort cleanup between tests that care about message counts.
   const api = await ctx();

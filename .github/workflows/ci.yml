@@ -197,6 +197,18 @@ jobs:
             sleep 1
           done
 
+      - name: Start notification worker (background)
+        # Phase 3 record-lock override emails go through notification_jobs;
+        # the worker drains the queue into the SMTP outbox so Mailpit-backed
+        # specs can read them. WORKER_POLL_INTERVAL is shortened from the
+        # 5s prod default so test waits stay tight.
+        run: |
+          nohup uv --project api run python scripts/notification_worker.py > /tmp/worker.log 2>&1 &
+          echo "worker started (pid=$!)"
+        env:
+          WORKER_POLL_INTERVAL: "1"
+          WORKER_BATCH_SIZE: "10"
+
       - name: Build web
         run: cd web && npm run build
 
@@ -230,6 +242,14 @@ jobs:
         with:
           name: api-log
           path: /tmp/api.log
+          retention-days: 7
+
+      - name: Upload notification worker log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-log
+          path: /tmp/worker.log
           retention-days: 7
 
   deploy-staging:

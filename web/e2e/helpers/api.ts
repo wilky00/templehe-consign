@@ -1,7 +1,50 @@
 // ABOUTME: Playwright test helpers that talk to the TempleHE API directly (no browser).
 // ABOUTME: Per-test unique IPs sidestep the per-IP rate limiters; CF-Connecting-IP is trusted by the API.
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { APIRequestContext, BrowserContext, Page, request } from "@playwright/test";
 import { API_URL } from "../../playwright.config";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, "..", "..", "..");
+
+/**
+ * Run the Phase 3 seeder in one of its modes (default | publish | cascade |
+ * locking | hide-roles) and return the JSON payload it prints to stdout.
+ *
+ * Each spec invokes the seeder for its own fixture instead of mutating
+ * shared state, so re-runs against the same DB stay clean.
+ */
+export function seedPhase3<T>(
+  mode: "default" | "publish" | "cascade" | "locking" | "hide-roles",
+  opts: { roles?: string[]; records?: number } = {},
+): T {
+  const args = [
+    "run",
+    "python",
+    path.join(REPO_ROOT, "scripts", "seed_e2e_phase3.py"),
+    "--mode",
+    mode,
+  ];
+  if (mode === "hide-roles") {
+    args.push("--roles", (opts.roles ?? []).join(","));
+  }
+  if (mode === "default" && opts.records !== undefined) {
+    args.push("--records", String(opts.records));
+  }
+  const out = execFileSync("uv", args, {
+    cwd: path.join(REPO_ROOT, "api"),
+    env: {
+      ...process.env,
+      DATABASE_URL:
+        process.env.E2E_DATABASE_URL ??
+        "postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe",
+    },
+    encoding: "utf8",
+  });
+  return JSON.parse(out.trim()) as T;
+}
 
 const VALID_PASSWORD = "TestPassword1!";
 
