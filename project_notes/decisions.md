@@ -572,3 +572,53 @@ Phase 3 Sprints 2, 4, and 5 each deferred interactive UI verification to the Spr
 - Phase spec: `dev_plan/03_phase3_sales_crm.md` Phase 3 Completion Checklist.
 - Implementation: `web/e2e/phase3_calendar.spec.ts` (extended), `web/e2e/phase3_sales_dashboard.spec.ts`, `web/e2e/phase3_record_locking.spec.ts`, `web/e2e/phase3_notifications.spec.ts`, `web/e2e/phase3_accessibility.spec.ts`, `web/e2e/helpers/api.ts` (shared `seedPhase3`), `web/e2e/helpers/mailpit.ts` (`waitForEmailBody`), `scripts/seed_e2e_phase3.py` (per-mode cleanup + new modes), `.github/workflows/ci.yml` (notification worker step).
 - Test gate: 22/22 e2e green locally (12 Phase 2 + 10 Phase 3).
+
+---
+
+## ADR-018: Phase 3 → Phase 4 Pre-work — Architectural Debt Fixes
+
+**Date:** 2026-04-25
+**Status:** Accepted (commits in flight on `phase4-prework`; Commit 3 = multi-role users follows as a separate PR)
+**Deciders:** Jim Wilen
+
+### Context
+
+The Phase 3 close-out architectural debt review surfaced 16 items across the Phase 3 surface area that Phase 4 will be built on top of. Four were Critical/High enough that fixing them now is materially cheaper than fixing after Phase 4 builds on them. The other 12 were intentionally deferred into Phase 4's scope (each fix lives naturally inside a Phase 4 epic). This ADR captures the pre-work decisions; the deferred items are documented in `dev_plan/04_phase4_admin_panel.md` § Architectural Debt to Address.
+
+### Decisions
+
+1. **Equipment status state machine extracted to `services/equipment_status_machine.py`.** The canonical set of `equipment_records.status` values + per-status metadata + transition rules now live in one module. Replaces inline `_FORBIDDEN_TRANSITIONS` denylists, `_CUSTOMER_EMAIL_STATUSES` / `_SALES_REP_NOTIFY_STATUSES` sets, and the `display` dict scattered across `equipment_status_service`, `calendar_service`, `sales_service`, `change_request_service`, `equipment_service`. Migration 013 installs a Postgres CHECK constraint enumerating the same values; a unit-test drift guard parses the migration's `_VALID_STATUSES` tuple and asserts equality with the runtime registry.
+
+   Adding a new status: one row in `_REGISTRY` + bump migration 013's tuple + the drift-guard test passes. Phase 4 admin "manually transition this record" UI reads `all_status_values()` and `is_forbidden_transition()` instead of inventing its own copy of the rules.
+
+   `withdrawn` status (used inline by `change_request_service` but not in the prior registry) was added during this work — caught by the CHECK constraint immediately.
+
+2. **AppConfig key registry shipped as `services/app_config_registry.py`.** Each `app_config.key` registers a `KeySpec(name, category, field_type, description, default, parser, serializer, validator)`. Five existing keys registered (`tos_current_version`, `privacy_current_version`, `drive_time_fallback_minutes`, `default_sales_rep_id`, `notification_preferences_hidden_roles`). Existing JSONB shapes preserved per-spec so no data migration was required — the `default_sales_rep_id` keeps `{"user_id": "<uuid>"}`, `drive_time_fallback_minutes` keeps `{"minutes": <int>}`, etc.
+
+   `legal_service`, `google_maps_service`, `lead_routing_service`, `notification_preferences_service` all migrated to `get_typed(db, key)`. Raw `select(AppConfig.value).where(AppConfig.key == ...)` removed from those four sites. Phase 4 admin form for global variables iterates `all_specs()` and writes through `set_typed()` so per-key validators run on every write. The YAML-seed loader (planned Phase 4 per ADR-016 #7) MUST also call `set_typed()` so YAML and UI enforce the same schema.
+
+3. **Inspection prompt + red-flag rule versioning shipped (migration 014).** Both tables gained `version` (int, default 1) and `replaced_at` (nullable timestamptz). Edits via `category_versioning_service.supersede_*` insert a new row with `version + 1` and flip `replaced_at` on the old. `replaced_at IS NULL` = current; partial index keeps the "current rows for this category" lookup a single seek.
+
+   `AppraisalSubmission.field_values` and `.red_flags` JSONB shapes gained docstring updates: writers MUST embed the version that was answered (`prompt_version` / `rule_version`) so Phase 7 PDF reports stay historically accurate. The legacy keyed-by-id dict shape is documented as legacy-on-read; no rows in production with that shape so no data migration was needed.
+
+   `category_versioning_service.inspection_prompt_version_at(prompt_id, instant)` and `red_flag_rule_version_at(rule_id, instant)` provide the "what was current when this appraisal was authored" temporal query Phase 7 needs.
+
+4. **Multi-role users (Critical #1) deferred to a follow-up PR on the same branch.** Schema (`users.role_id` → `user_roles` join table) + middleware + schemas + frontend + ~15 test fixtures all need to move atomically. Bundling it into the prework PR would have inflated the diff to 50+ files; splitting keeps Commits 1–2 narrowly reviewable. The follow-up PR ships the join table, `User.roles` relationship, `require_roles()` intersection check, `CurrentUser.roles` schema (with `primary_role` for back-compat), frontend `Layout.tsx` update, and seeder fixture rewrites.
+
+5. **Notification template registry (Critical #2) deferred to Phase 4 proper.** Inline composers in `equipment_status_service`, `routers/record_locks`, `auth_service` each have a small enough surface area that the natural extraction lives next to Phase 4's "edit email copy" admin feature. Documented as a Phase 4 pre-flight item; will use the same registry shape as the AppConfig registry (KeySpec/all_specs/get/set) so admin UI patterns stay consistent.
+
+### Consequences
+
+- Migrations 013 + 014 land additive + reversible. Health check expected migration head bumps to `014`.
+- The runtime registry pattern (`Status` + `KeySpec`) is now established as the project's idiom for "Phase 4 admin needs to introspect this." Future debt fixes follow the same shape.
+- The drift-guard test pattern (parse the migration file, assert equality with the runtime constant) is a cheap insurance policy worth replicating when migrations duplicate runtime constants — most notably the pending notification template registry will need it for the inverse direction (template registry → migration seed).
+- `services/category_versioning_service.py` is the only write path for category prompt + red-flag rule edits. Phase 4 admin CRUD MUST go through it; bypassing into a raw UPDATE is a regression caught only at PDF report regeneration time months later.
+- Phase 4 dev plan § Architectural Debt to Address enumerates the 12 deferred items with a one-paragraph fix sketch each, so Phase 4 sprint planning can absorb them without re-deriving the analysis.
+
+### References
+
+- Working branch: `phase4-prework`.
+- Architectural review prompt: `docs/review-prompts.md` (the "Phase boundary debt" section).
+- Implementation: `api/services/equipment_status_machine.py`, `api/services/app_config_registry.py`, `api/services/category_versioning_service.py`, migrations 013 + 014, refactors across `equipment_status_service`, `calendar_service`, `sales_service`, `change_request_service`, `equipment_service`, `legal_service`, `google_maps_service`, `lead_routing_service`, `notification_preferences_service`.
+- Tests: `api/tests/unit/test_equipment_status_machine.py` (12), `api/tests/unit/test_app_config_registry.py` (15), `api/tests/integration/test_category_versioning.py` (7). Full backend gate **341/341** (was 319 + 22 new pre-work tests).
+- Deferred items: `dev_plan/04_phase4_admin_panel.md` § Architectural Debt to Address.
