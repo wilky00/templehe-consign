@@ -50,6 +50,12 @@ export function Layout({ children }: { children: ReactNode }) {
                   Sales Dashboard
                 </NavLink>
                 <NavLink
+                  to="/sales/calendar"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Calendar
+                </NavLink>
+                <NavLink
                   to="/portal/account"
                   className={({ isActive }) => navLinkClasses(isActive)}
                 >

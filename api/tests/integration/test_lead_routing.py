@@ -271,6 +271,127 @@ async def test_geographic_zip_range_match_assigns_rep(
 
 
 @pytest.mark.asyncio
+async def test_geographic_metro_area_match_assigns_rep(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Metro-area routing geocodes the customer's address (mocked) and
+    matches when the haversine distance is within ``radius_miles``."""
+    from unittest.mock import AsyncMock, patch as _patch
+
+    from database.models import Customer
+
+    rep = await _user_with_role(client, db_session, "lr_metro_rep@example.com", "sales")
+    cust = await _activated_customer(
+        client, db_session, "lr_metro_c@example.com"
+    )
+
+    # Pre-create profile with a usable address.
+    customer = (
+        await db_session.execute(
+            select(Customer).where(Customer.user_id == uuid.UUID(cust["user_id"]))
+        )
+    ).scalar_one_or_none()
+    if customer is None:
+        customer = Customer(
+            user_id=uuid.UUID(cust["user_id"]),
+            submitter_name="C U",
+            address_street="123 Peachtree St",
+            address_city="Atlanta",
+            address_state="GA",
+            address_zip="30303",
+        )
+        db_session.add(customer)
+    else:
+        customer.address_street = "123 Peachtree St"
+        customer.address_city = "Atlanta"
+        customer.address_state = "GA"
+        customer.address_zip = "30303"
+    await db_session.flush()
+
+    rule = LeadRoutingRule(
+        rule_type="geographic",
+        priority=50,
+        conditions={
+            "metro_area": {
+                "center_lat": 33.7490,
+                "center_lon": -84.3880,
+                "radius_miles": 25,
+            }
+        },
+        assigned_user_id=uuid.UUID(rep["user_id"]),
+        is_active=True,
+    )
+    db_session.add(rule)
+    await db_session.flush()
+
+    # Customer is 5 miles from Atlanta center per the mocked geocoder.
+    with _patch(
+        "services.google_maps_service.geocode",
+        new_callable=AsyncMock,
+        return_value=(33.78, -84.40),
+    ):
+        rec_id = await _intake(client, cust["access_token"])
+
+    record = (
+        await db_session.execute(select(EquipmentRecord).where(EquipmentRecord.id == rec_id))
+    ).scalar_one()
+    assert record.assigned_sales_rep_id == uuid.UUID(rep["user_id"])
+
+
+@pytest.mark.asyncio
+async def test_geographic_metro_area_skips_when_outside_radius(
+    client: AsyncClient, db_session: AsyncSession
+):
+    from unittest.mock import AsyncMock, patch as _patch
+
+    from database.models import Customer
+
+    rep = await _user_with_role(client, db_session, "lr_metro_far_rep@example.com", "sales")
+    cust = await _activated_customer(
+        client, db_session, "lr_metro_far_c@example.com"
+    )
+    customer = Customer(
+        user_id=uuid.UUID(cust["user_id"]),
+        submitter_name="C U",
+        address_street="1 Far Out Rd",
+        address_city="Boise",
+        address_state="ID",
+        address_zip="83702",
+    )
+    db_session.add(customer)
+    await db_session.flush()
+
+    db_session.add(
+        LeadRoutingRule(
+            rule_type="geographic",
+            priority=50,
+            conditions={
+                "metro_area": {
+                    "center_lat": 33.7490,
+                    "center_lon": -84.3880,
+                    "radius_miles": 25,
+                }
+            },
+            assigned_user_id=uuid.UUID(rep["user_id"]),
+            is_active=True,
+        )
+    )
+    await db_session.flush()
+
+    with _patch(
+        "services.google_maps_service.geocode",
+        new_callable=AsyncMock,
+        return_value=(43.6, -116.2),  # Boise — far outside Atlanta radius
+    ):
+        rec_id = await _intake(client, cust["access_token"])
+
+    record = (
+        await db_session.execute(select(EquipmentRecord).where(EquipmentRecord.id == rec_id))
+    ).scalar_one()
+    assert record.assigned_sales_rep_id is None
+
+
+@pytest.mark.asyncio
 async def test_ad_hoc_takes_priority_over_geographic(
     client: AsyncClient, db_session: AsyncSession
 ):

@@ -615,4 +615,74 @@ Spec: Epic 3.3 in `dev_plan/03_phase3_sales_crm.md` (Features 3.3.1, 3.3.2, 3.3.
 
 ---
 
+### Sprint 4: Shared Calendar + Scheduling + Drive-Time + Metro-Area Routing — COMPLETE (verified green 2026-04-25)
+
+Spec: Epic 3.4 (Features 3.4.1 calendar view, 3.4.2 schedule + conflict, 3.4.3 Google Maps drive-time, 3.4.4 edit/cancel) + Sprint 3 carry-forward (metro-area routing).
+
+**Backend (all new unless noted):**
+- [x] `api/alembic/versions/011_phase3_drive_time_geocode_caches.py` — `drive_time_cache` (composite PK on origin/dest hashes, 6h TTL) + `geocode_cache` (address_hash PK, 30d TTL); seeds `AppConfig` key `drive_time_fallback_minutes = 60`. Both caches indexed on `expires_at` for the retention sweep.
+- [x] `api/database/models.py` — `DriveTimeCache` + `GeocodeCache` ORM. Adds `Float` to imports.
+- [x] `api/config.py` — new `google_maps_api_key: str = ""` setting. Optional in dev/test/staging; the service short-circuits to `None` when empty so the calendar + metro-area routing work end-to-end without provisioning a key.
+- [x] `api/services/google_maps_service.py` — Distance Matrix + Geocoding clients with read-through cache. SHA-256 of lowercased + stripped string is the cache key. On any failure (no key, network, non-OK status, malformed body) returns `None` — never raises. New helper `read_drive_time_fallback_minutes` reads the AppConfig key with a default of 60.
+- [x] `api/services/calendar_service.py` — `list_events` / `create_event` / `update_event` / `cancel_event`. Atomic conflict detection via `SELECT … FOR UPDATE` over the appraiser's same-day events. Drive-time buffer applied either side: real Distance Matrix call → fallback minutes when unavailable. Returns `CalendarConflict` dataclass on collision (router maps to 409 with structured body). Status transitions: `new_request → appraisal_scheduled` on create; `appraisal_scheduled → new_request` on cancel. Audit-logs every mutation with `actor_role` (so manager + admin can review sales-rep changes after the fact, per spec).
+- [x] `api/services/lead_routing_service.py` — `_metro_matches` (async): geocodes the customer address (street + city + state + zip) via the cached `google_maps_service.geocode`, applies haversine distance vs metro center. Falls through silently when geocode fails. `_validate_conditions` extended so `metro_area: {center_lat, center_lon, radius_miles}` is an accepted geographic-rule shape with type/positive-radius checks.
+- [x] `api/routers/calendar.py` — `/calendar/events` GET / POST / PATCH / DELETE behind `require_roles("sales", "sales_manager", "admin")`. 409 conflict response carries `next_available_at` + `conflicting_event_id` for the UI's reschedule hint. `_hydrate_event` re-fetches with `selectinload` so serialization never lazy-loads outside a greenlet.
+- [x] `api/schemas/calendar.py` — `CalendarEventCreate` / `CalendarEventPatch` (`extra="forbid"`, sparse via `model_fields_set`) / `CalendarEventOut` / `CalendarEventListResponse` / `CalendarConflictResponse`.
+- [x] `api/main.py` — wires `calendar_router`.
+- [x] `api/routers/health.py` — bumps `_EXPECTED_MIGRATION_HEAD` to `"011"`.
+
+**Notification templates (new):**
+- `appraisal_scheduled_appraiser` — emailed on event create. Idempotency key `appraisal_scheduled:{event_id}:{user_id}`.
+- `appraisal_cancelled_appraiser` — emailed on event cancel. Idempotency key `appraisal_cancelled:{event_id}:{user_id}`.
+- `appraisal_cancelled_customer` — emailed on event cancel. Idempotency key `appraisal_cancelled_customer:{event_id}`.
+- Customer-side `status_appraisal_scheduled` — fires for free via `equipment_status_service.record_transition` (Phase 2 Sprint 3 chokepoint).
+
+**Frontend (all new unless noted):**
+- [x] `web/package.json` — `react-big-calendar@^1.19.4`, `date-fns@^4.1.0`, `@types/react-big-calendar@^1.16.3`.
+- [x] `web/src/api/types.ts` (modified) — `CalendarEvent`, `CalendarEventListResponse`, `CalendarEventCreateRequest`, `CalendarEventPatchRequest`, `CalendarConflict`, plus customer/equipment sub-shapes.
+- [x] `web/src/api/calendar.ts` — `listCalendarEvents`, `createCalendarEvent`, `patchCalendarEvent`, `cancelCalendarEvent`. Create + patch return a discriminated union `{ ok: true; event } | { ok: false; conflict }` so the UI can render the conflict banner without try/catch on the network error path.
+- [x] `web/src/pages/SalesCalendar.tsx` — `react-big-calendar` skinned to match the design system. Month / week / day views; eight-tone appraiser color palette via `eventPropGetter` (cycles for >8 appraisers); appraiser multi-select filter chips with aria-pressed; click-to-detail on event select.
+- [x] `web/src/components/ScheduleAppraisalModal.tsx` — appraiser UUID + date + time + duration + site address. Surfaces 409 conflict with `next_available_at` rendered in local time. Loading + error states keyed off `useMutation`.
+- [x] `web/src/pages/SalesEquipmentDetail.tsx` (modified) — new `ScheduleCard` only renders when `detail.status === "new_request"`; lock-gated like the assignment form.
+- [x] `web/src/components/Layout.tsx` (modified) — Calendar nav link inserted between Sales Dashboard and Account for sales-side users.
+- [x] `web/src/App.tsx` (modified) — `/sales/calendar` route wrapped in `ProtectedRoute + Layout`.
+
+**Tests (all new):**
+- [x] `api/tests/integration/test_google_maps_service.py` — 10 tests: returns None when no API key, blank inputs, caches first call (second hits cache), HTTP error → None, non-OK Google status → None, falls back to `duration` when `duration_in_traffic` absent; geocode no-key path, case-insensitive cache hit, ZERO_RESULTS handled; AppConfig fallback minutes returns seeded 60.
+- [x] `api/tests/integration/test_calendar.py` — 10 tests: create happy path (assignment + status transition + audit + appraiser email), non-appraiser rejected, blocked when not in `new_request`, overlapping event 409 with structured body, drive-time buffer blocks via fallback, different appraisers don't conflict, PATCH reschedule re-runs conflict check, cancel reverts status + dual emails, list filters by appraiser + window, customer 403.
+- [x] `api/tests/integration/test_lead_routing.py` (extended) — 2 metro-area tests: assigned when geocode places customer in radius (mocked at 5 mi from Atlanta center), unassigned when far (Boise vs Atlanta). Geocoder mocked end-to-end so tests run keyless.
+
+**Full test gate: 291/291 backend tests green** (≥85% coverage maintained). Frontend `tsc -b && vite build` clean (1286 modules, 460 KB). `eslint` zero warnings.
+
+**Design decisions this sprint:** captured as **ADR-015** in `decisions.md`. Highlights:
+- **Postgres caches with Redis-swap contract** for drive-time + geocode (matches ADR-013 + ADR-014 pattern).
+- **Service returns `None` on every failure mode, never raises** — keeps calendar + intake working without a Google Maps API key.
+- **Atomic conflict detection via row lock** on the appraiser's day window.
+- **409 body carries `next_available_at`** so UI can offer one-click reschedule.
+- **Metro-area routing** layers cleanly on existing geographic rules (state/zip + metro can both fire).
+- **`react-big-calendar` over hand-rolled grid** — accessibility + keyboard nav for free.
+
+**Bugs found + fixed:**
+- **Lazy-load outside greenlet on the create/patch response.** Initial router fetched the persisted `CalendarEvent` then walked `event.equipment_record.customer` for serialization without `selectinload` — same trap Phase 2 hit on intake photos. Fixed via `_hydrate_event` helper that re-fetches with explicit eager-load chain.
+- **`httpx.Response` raise_for_status on test mocks** — the `Response` constructor needs an attached `Request` to call `raise_for_status`. Updated all `fake_get` test helpers to attach `httpx.Request("GET", url)`.
+
+**Known limitation:** UI was not interactively browser-verified this sprint. Backend is exhaustively integration-tested through the HTTP surface; frontend type-checks + lints clean and the build succeeds. Interactive UI verification is deferred to **Phase 3 Sprint 6 (Playwright + axe + Lighthouse gate)**.
+
+**Deferred (flagged, not regressed):**
+- **Google Maps API key provisioning** — tracked in `known-issues.md` with Cloud Console setup steps + cost expectation. Until provisioned, drive-time math uses the 60-min AppConfig fallback and metro-area rules silently no-op.
+- **Searchable appraiser / sales-rep / customer pickers** — Phase 4 (Admin Panel) ships the picker. Today the schedule modal takes raw UUIDs.
+- **Cache retention sweep** — `drive_time_cache` + `geocode_cache` rows accumulate until manually cleaned. Next migration that touches `fn_sweep_retention()` should add both. Not urgent at POC volume.
+- **Appraiser color persistence** — palette is computed on the client per render based on appraiser order in the visible window. Phase 4 settings could optionally persist a per-appraiser color override.
+
+**Endpoints (new in Sprint 4):**
+- `GET    /api/v1/calendar/events?start=&end=&appraiser_id=` — list within window, optional appraiser filter
+- `POST   /api/v1/calendar/events` — create with atomic conflict check; 409 body has `next_available_at`
+- `PATCH  /api/v1/calendar/events/{id}` — sparse update; re-runs conflict check on time/appraiser change
+- `DELETE /api/v1/calendar/events/{id}` — cancel; reverts record to `new_request`, emails appraiser + customer
+
+**Routes (new in the web app):**
+- `/sales/calendar` — month / week / day calendar with appraiser filter
+
+---
+
 ## Phase 4–8 — Not started

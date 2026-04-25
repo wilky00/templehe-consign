@@ -10,6 +10,7 @@ import { IntakeFormPage } from "./pages/IntakeForm";
 import { LoginPage } from "./pages/Login";
 import { NotFoundPage } from "./pages/NotFound";
 import { RegisterPage } from "./pages/Register";
+import { SalesCalendarPage } from "./pages/SalesCalendar";
 import { SalesDashboardPage } from "./pages/SalesDashboard";
 import { SalesEquipmentDetailPage } from "./pages/SalesEquipmentDetail";
 import { VerifyEmailPage } from "./pages/VerifyEmail";
@@ -80,6 +81,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <SalesDashboardPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/sales/calendar"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SalesCalendarPage />
             </Layout>
           </ProtectedRoute>
         }

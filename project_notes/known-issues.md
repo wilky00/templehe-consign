@@ -131,3 +131,20 @@ fly machine run . --app temple-sweeper \
 1. Jim provides the seed CSV / JSON (per-category components with weights, inspection prompts, photo slots, red flag rules) for the default 15 categories.
 2. Extend `scripts/seed.py` to import those tables idempotently, or ship a one-off Alembic data migration.
 3. Keep the Admin Panel (Phase 4) as the long-term CRUD surface — this import is the bootstrap, not the ongoing management path.
+
+## OPEN — Google Maps API key not provisioned (Phase 3 Sprint 4)
+**Status:** Sprint 4 (2026-04-25) shipped the Distance Matrix + Geocoding integrations behind `settings.google_maps_api_key`. The setting is unset in dev / test / staging today.
+**Impact:** Without a key, the calendar uses the AppConfig fallback (`drive_time_fallback_minutes = 60` — block any back-to-back appointment within 60 min) and metro-area routing rules silently no-op (the matcher falls through to the next geographic rule). Direct overlap conflicts still work — only the drive-time-buffer math and metro-area routing depend on the key.
+**Action when Jim is ready to test live drive-time:**
+1. Open Google Cloud Console → create or pick a project (POC is fine on the personal account).
+2. **Billing** → enable billing on the project (Google requires a billing account even for free-tier). Set a low daily budget alert (~$1) before enabling APIs.
+3. **APIs & Services** → enable both: *Distance Matrix API* and *Geocoding API*.
+4. **Credentials** → Create credentials → API key. Restrict the key:
+   - **Application restrictions:** None for now (server-side use only — no need for HTTP referrer or IP allowlist while we're calling from Fly's egress).
+   - **API restrictions:** Limit the key to *Distance Matrix API* + *Geocoding API* only.
+5. Set the key on the API: `fly secrets set GOOGLE_MAPS_API_KEY=AIza... -a temple-api-dev` (and `-staging` / `-prod` when ready).
+6. Confirm by hitting `/api/v1/calendar/events` POST with two same-day appointments far apart and inspecting the conflict response — should now reflect real Google duration_in_traffic.
+
+**Cost expectation (POC volume):** Distance Matrix is ~$5 per 1,000 element calls, Geocoding is ~$5 per 1,000. Google gives every account a $200/month free credit (~40k calls each). At our volume — ≤20 appraisal scheduling attempts/day + ≤20 intakes/day with metro-area rules — we're 3–4 orders of magnitude under the free credit. Cap the daily quota at 1,000 calls per API in Cloud Console as belt-and-suspenders.
+
+**Service contract preserved across the swap:** `services/google_maps_service.py` is the only call site for both APIs; cache reads (Postgres `drive_time_cache` + `geocode_cache`) gate every API call. GCP migration swaps the cache to Redis SETEX without touching the public surface.

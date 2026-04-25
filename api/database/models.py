@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -859,6 +860,42 @@ class RecordLock(Base):
     overridden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (UniqueConstraint("record_id", "record_type"),)
+
+
+class DriveTimeCache(Base):
+    """6h-TTL cache for Google Distance Matrix calls — Phase 3 Sprint 4.
+
+    Composite-key stand-in for ``SETEX`` in the GCP migration.
+    """
+
+    __tablename__ = "drive_time_cache"
+
+    origin_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    dest_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GeocodeCache(Base):
+    """30d-TTL cache for Google Geocoding calls — Phase 3 Sprint 4.
+
+    Used by metro-area routing rules and (eventually) by the calendar UI's
+    address autocomplete. Addresses move rarely; the longer TTL keeps API
+    spend low without sacrificing correctness.
+    """
+
+    __tablename__ = "geocode_cache"
+
+    address_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class AppConfig(Base):

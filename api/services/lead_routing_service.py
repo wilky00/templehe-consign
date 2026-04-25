@@ -36,6 +36,7 @@ Public surface (callers depend only on these):
 
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -53,6 +54,7 @@ from database.models import (
     Role,
     User,
 )
+from services import google_maps_service
 
 logger = structlog.get_logger(__name__)
 
@@ -119,14 +121,18 @@ async def route_for_record(
         key=lambda r: r.priority,
     )
     for rule in geo_rules:
-        if _geo_matches(rule, state=customer.address_state, zip_code=customer.address_zip):
-            if rule.assigned_user_id is not None:
-                return RoutingDecision(
-                    assigned_user_id=rule.assigned_user_id,
-                    rule_id=rule.id,
-                    rule_type="geographic",
-                    trigger="lead_routing",
-                )
+        matched = _geo_matches(
+            rule, state=customer.address_state, zip_code=customer.address_zip
+        )
+        if not matched:
+            matched = await _metro_matches(db, rule, customer=customer)
+        if matched and rule.assigned_user_id is not None:
+            return RoutingDecision(
+                assigned_user_id=rule.assigned_user_id,
+                rule_id=rule.id,
+                rule_type="geographic",
+                trigger="lead_routing",
+            )
 
     # 3. Round robin — pick the lowest-priority active RR rule.
     rr_rules = sorted(
@@ -240,6 +246,75 @@ def _geo_matches(
                 if isinstance(entry, str) and _zip_entry_matches(entry, norm_zip):
                     return True
     return False
+
+
+async def _metro_matches(
+    db: AsyncSession,
+    rule: LeadRoutingRule,
+    *,
+    customer: Customer,
+) -> bool:
+    """Metro-area rule shape (Sprint 4):
+        {"metro_area": {"center_lat": 33.7, "center_lon": -84.4, "radius_miles": 50}}
+
+    Geocodes the customer's address via google_maps_service (cache-first,
+    silent fallback when no API key) and compares the haversine distance
+    against the metro radius. Returns False if any input is missing or
+    the geocode fails — never raises so a flaky geocoder can't drop a
+    customer's intake.
+    """
+    cond = rule.conditions or {}
+    metro = cond.get("metro_area")
+    if not isinstance(metro, dict):
+        return False
+    try:
+        center_lat = float(metro["center_lat"])
+        center_lon = float(metro["center_lon"])
+        radius_miles = float(metro["radius_miles"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if radius_miles <= 0:
+        return False
+
+    address = _format_customer_address(customer)
+    if not address:
+        return False
+    coords = await google_maps_service.geocode(db, address=address)
+    if coords is None:
+        return False
+    customer_lat, customer_lon = coords
+    distance_miles = _haversine_miles(
+        center_lat, center_lon, customer_lat, customer_lon
+    )
+    return distance_miles <= radius_miles
+
+
+def _format_customer_address(customer: Customer) -> str | None:
+    """Build a single-string address suitable for the Google Geocoding API.
+
+    Returns None when there's nothing useful to geocode.
+    """
+    parts = [
+        customer.address_street,
+        customer.address_city,
+        customer.address_state,
+        customer.address_zip,
+    ]
+    cleaned = [p.strip() for p in parts if isinstance(p, str) and p.strip()]
+    if not cleaned:
+        return None
+    return ", ".join(cleaned)
+
+
+def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in statute miles."""
+    earth_radius_miles = 3958.7613
+    rlat1, rlat2 = math.radians(lat1), math.radians(lat2)
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2) ** 2
+    c = 2 * math.asin(math.sqrt(a))
+    return earth_radius_miles * c
 
 
 def _normalize_zip(raw: str) -> int | None:
@@ -453,13 +528,33 @@ def _validate_conditions(rule_type: str, conditions: dict | None) -> None:
         if not isinstance(conditions, dict):
             raise HTTPException(
                 status_code=422,
-                detail="geographic rules require conditions with state_list and/or zip_list",
+                detail="geographic rules require conditions with state_list, zip_list, or metro_area",
             )
-        if not conditions.get("state_list") and not conditions.get("zip_list"):
+        if (
+            not conditions.get("state_list")
+            and not conditions.get("zip_list")
+            and not conditions.get("metro_area")
+        ):
             raise HTTPException(
                 status_code=422,
-                detail="geographic rules need at least one of state_list or zip_list",
+                detail="geographic rules need at least one of state_list, zip_list, or metro_area",
             )
+        metro = conditions.get("metro_area")
+        if metro is not None:
+            if not isinstance(metro, dict):
+                raise HTTPException(
+                    status_code=422, detail="metro_area must be an object"
+                )
+            for key in ("center_lat", "center_lon", "radius_miles"):
+                if not isinstance(metro.get(key), (int, float)):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"metro_area.{key} must be a number",
+                    )
+            if metro["radius_miles"] <= 0:
+                raise HTTPException(
+                    status_code=422, detail="metro_area.radius_miles must be > 0"
+                )
     elif rule_type == "round_robin":
         if not isinstance(conditions, dict) or not isinstance(conditions.get("rep_ids"), list):
             raise HTTPException(

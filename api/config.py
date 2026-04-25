@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_workspace_domain: str = ""
 
+    # Google Maps Platform — Distance Matrix + Geocoding for Phase 3 Sprint 4.
+    # Optional; when unset (dev/test/staging without billing), the calendar
+    # falls back to AppConfig key `drive_time_fallback_minutes` and metro-area
+    # routing rules silently no-op.
+    google_maps_api_key: str = ""
+
     # Application
     environment: str = "development"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

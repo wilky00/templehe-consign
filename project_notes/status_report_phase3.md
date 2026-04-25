@@ -162,3 +162,53 @@ None introduced; the duplicate-change-request guard was carry-over from Phase 2'
 
 - **Sprint 4 — Scheduling + Shared Calendar + Drive-Time + Metro-Area Routing.** Calendar events, appraiser availability, drive-time buffers via Google Distance Matrix, and the metro-area routing rules that drop into the existing waterfall.
 
+---
+
+## Sprint 4 — Shared Calendar, Scheduling, Drive-Time, Metro-Area Routing
+
+**Closed: 2026-04-25** — backend exhaustively tested (291/291 backend tests green); frontend type-checks + lints clean and builds without errors but was **not** interactively browser-verified this sprint (deferred to Sprint 6 Playwright gate).
+
+**Scope:** Epic 3.4 in full (Features 3.4.1 calendar view, 3.4.2 schedule + atomic conflict, 3.4.3 Google Maps drive-time buffer, 3.4.4 edit/cancel) plus Sprint 3's deferred metro-area routing matcher.
+
+### What landed
+
+**Postgres-backed caches (`migration 011`).** Two new tables — `drive_time_cache` (composite PK on origin/dest hashes, 6h TTL) and `geocode_cache` (address_hash PK, 30d TTL) — both indexed on `expires_at` for the retention sweeper. Seeds `AppConfig.drive_time_fallback_minutes = 60`. Same Redis-swap contract pattern as record locks (ADR-013) and the round-robin counter (ADR-014); GCP migration drops in `SETEX` without touching the public `services/google_maps_service.py` surface.
+
+**Google Maps integration that works without a key (`services/google_maps_service.py`).** Distance Matrix + Geocoding clients with read-through cache. SHA-256 of lowercased + stripped string is the cache key. **Returns `None` on every failure mode and never raises** — no API key, network timeout, non-OK status, malformed body all collapse to the same sentinel. Callers treat `None` as "use the AppConfig fallback minutes" (calendar) or "this rule does not match" (metro-area routing). Tests run end-to-end without a key; httpx is mocked at the transport layer so live API calls never happen in CI.
+
+**Calendar service with atomic conflict detection (`services/calendar_service.py`).** `list_events`, `create_event`, `update_event`, `cancel_event`. Conflict path opens `SELECT … FOR UPDATE` over the appraiser's same-day events; concurrent schedule attempts serialize on the row lock. Drive-time buffer applied either side: real Distance Matrix call (cached) → fallback minutes when unavailable. Returns a `CalendarConflict` dataclass on collision; the router maps it to a 409 with structured body `{detail, next_available_at, conflicting_event_id}` so the UI can offer a one-click reschedule. Status transitions go through `equipment_status_service.record_transition` (`new_request → appraisal_scheduled` on create, revert on cancel). Every mutation writes an audit row with `actor_role` so manager / admin can review sales-rep changes after the fact.
+
+**Three new notification templates.** `appraisal_scheduled_appraiser`, `appraisal_cancelled_appraiser`, `appraisal_cancelled_customer`. Idempotency keys keyed on `event_id`, distinct from the customer-side `status_appraisal_scheduled` (which fires from `record_transition` for free, Phase 2 chokepoint). All four route through `notification_service.enqueue` so Phase 5's iOS push channel can drop in alongside email without touching the call sites.
+
+**Metro-area routing carry-forward (`lead_routing_service._metro_matches`).** New rule shape `{"metro_area": {"center_lat", "center_lon", "radius_miles"}}` slots into the existing geographic loop **after** the state/zip matchers. The matcher builds a single-string address from `customer.address_street + city + state + zip`, geocodes via the cached `google_maps_service.geocode`, and computes haversine distance in statute miles. Falls through silently when geocode returns `None`. `_validate_conditions` extended to accept metro_area as a valid geographic-rule shape with type/positive-radius checks.
+
+**HTTP surface (`routers/calendar.py`).** GET / POST / PATCH / DELETE `/calendar/events` behind `require_roles("sales", "sales_manager", "admin")` per spec line 179 (sales role can author edits; audit captures who). `_hydrate_event` re-fetches with explicit `selectinload` chain so serialization never lazy-loads outside a greenlet — same trap Phase 2 hit on intake photos.
+
+**Frontend (`react-big-calendar` skinned to match Tailwind).** New `/sales/calendar` page with month / week / day views. Eight-tone appraiser color palette via `eventPropGetter`, cycles for >8 appraisers. Multi-select filter chips with aria-pressed; click event → record detail. New `ScheduleAppraisalModal` component wired from the `SalesEquipmentDetail` page for `new_request` records — gated behind the existing record lock; renders the 409 conflict with `next_available_at` in local time. New nav link in `Layout.tsx`. Build clean, lint zero warnings.
+
+### Test results
+
+- `make test-api`: **291/291 passed** (≥85% coverage floor maintained).
+- New test files:
+  - `tests/integration/test_google_maps_service.py` — 10 tests covering both APIs end-to-end with httpx mocks: no-key fallback, blank inputs, cache hit on second call (verified by counting calls), HTTP error → None, non-OK Google status → None, falls back to `duration` when `duration_in_traffic` absent, geocode case-insensitive cache hit, ZERO_RESULTS handled, AppConfig fallback minutes returns seeded 60.
+  - `tests/integration/test_calendar.py` — 10 tests: create happy path with status transition + audit + appraiser email + customer email, non-appraiser rejected, schedule blocked when not in `new_request`, overlapping event 409 with structured body, drive-time buffer blocks via fallback path, different appraisers don't conflict, PATCH reschedule re-runs conflict check, cancel reverts status + dual emails, list filters by appraiser + window, customer 403.
+  - `tests/integration/test_lead_routing.py` (extended) — 2 metro-area tests: assigned when geocode places customer in radius (mocked at 5 mi from Atlanta center), unassigned when geocode is far (Boise outside Atlanta radius).
+- Frontend: `tsc -b && vite build` clean (1286 modules, 460 KB main JS); `eslint` zero warnings.
+
+### Bugs found + fixed
+
+- **Greenlet-less lazy-load on calendar event serialization.** Initial router fetched the persisted event then walked `event.equipment_record.customer` without `selectinload` chain — exact trap Phase 2 hit on intake photos. Fixed via `_hydrate_event` helper that re-fetches with explicit eager-load.
+- **`httpx.Response.raise_for_status` needs an attached request.** Test mocks initially constructed `httpx.Response(200, json=…)` directly; calling `raise_for_status()` on that errored. Fix: attach `httpx.Request("GET", url)` in every fake.
+
+### Open follow-ups for later sprints
+
+- **Google Maps API key provisioning** — full Cloud Console setup steps and cost expectation captured in `known-issues.md` (free credit covers ~40k calls / month; our POC volume is 3-4 orders of magnitude under). Until provisioned, drive-time math uses the 60-min fallback and metro-area rules silently no-op. Direct overlap conflicts still work without a key.
+- **Searchable appraiser / sales-rep / customer pickers** — Phase 4 (Admin Panel) ships the picker; the schedule modal takes raw UUIDs today. Acceptable for dogfooding.
+- **Cache retention sweep** — `drive_time_cache` + `geocode_cache` rows accumulate until manually cleaned. Next migration that touches `fn_sweep_retention()` should add both. Not urgent at POC volume.
+- **Interactive browser verification** — calendar UI was not exercised in a browser this sprint. Type-check + build + lint all green; behavioral verification is the Sprint 6 Playwright + axe + Lighthouse gate's job.
+
+### Next
+
+- **Sprint 5 — Automated workflow notifications + per-employee notification-preference UI (Epic 3.2).** Manager approval emails (3.2.1), eSign completion emails (3.2.2). Plus the per-user notification-preference page that lets sales reps opt out of specific notification types.
+- **Sprint 6 — Phase 3 Gate.** Playwright E2E for the calendar + sales detail flows; axe-core accessibility checks; Lighthouse ≥ 90.
+

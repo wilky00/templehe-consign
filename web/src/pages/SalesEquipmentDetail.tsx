@@ -21,6 +21,7 @@ import { Spinner } from "../components/ui/Spinner";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { PhoneLink } from "../components/PhoneLink";
 import { RecordLockIndicator } from "../components/RecordLockIndicator";
+import { ScheduleAppraisalModal } from "../components/ScheduleAppraisalModal";
 import type {
   AssignmentPatch,
   SalesChangeRequest,
@@ -125,6 +126,10 @@ export function SalesEquipmentDetailPage() {
       </div>
 
       <AssignmentCard detail={detail} canWrite={canWrite} recordId={id} />
+
+      {detail.status === "new_request" && (
+        <ScheduleCard detail={detail} canWrite={canWrite} recordId={id} />
+      )}
 
       {detail.status === PUBLISH_STATUS && (
         <PublishCard detail={detail} canWrite={canWrite} recordId={id} />
@@ -325,6 +330,47 @@ function AssignmentCard({
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+function ScheduleCard({
+  detail,
+  canWrite,
+  recordId,
+}: {
+  detail: SalesEquipmentDetail;
+  canWrite: boolean;
+  recordId: string;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  return (
+    <Card>
+      <h2 className="text-base font-medium text-gray-900">Schedule appraisal</h2>
+      <p className="mt-1 text-sm text-gray-500">
+        Book an on-site appraisal for this record. Conflict + drive-time
+        checks run automatically against the appraiser's calendar.
+      </p>
+      <div className="mt-3">
+        <Button
+          type="button"
+          disabled={!canWrite}
+          onClick={() => setOpen(true)}
+        >
+          Schedule appraisal
+        </Button>
+      </div>
+      <ScheduleAppraisalModal
+        open={open}
+        recordId={recordId}
+        defaultSiteAddress={detail.location_text}
+        onClose={() => setOpen(false)}
+        onScheduled={() => {
+          qc.invalidateQueries({ queryKey: ["sales-equipment", recordId] });
+          qc.invalidateQueries({ queryKey: ["calendar-events"] });
+        }}
+      />
     </Card>
   );
 }

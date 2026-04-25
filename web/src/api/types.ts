@@ -320,3 +320,57 @@ export interface PublishResponse {
   public_listing_id: UUID;
   published_at: ISODateTime;
 }
+
+// --- Phase 3 Sprint 4 — Calendar -------------------------------------------
+
+export interface CalendarEventCustomer {
+  id: UUID;
+  name: string | null;
+  business_name: string | null;
+}
+
+export interface CalendarEventEquipment {
+  id: UUID;
+  reference_number: string | null;
+  make: string | null;
+  model: string | null;
+  location_text: string | null;
+}
+
+export interface CalendarEvent {
+  id: UUID;
+  equipment_record_id: UUID;
+  appraiser_id: UUID;
+  scheduled_at: ISODateTime;
+  duration_minutes: number;
+  site_address: string | null;
+  cancelled_at: ISODateTime | null;
+  customer: CalendarEventCustomer | null;
+  equipment: CalendarEventEquipment | null;
+}
+
+export interface CalendarEventListResponse {
+  events: CalendarEvent[];
+  total: number;
+}
+
+export interface CalendarEventCreateRequest {
+  equipment_record_id: UUID;
+  appraiser_id: UUID;
+  scheduled_at: ISODateTime;
+  duration_minutes?: number;
+  site_address?: string | null;
+}
+
+export interface CalendarEventPatchRequest {
+  appraiser_id?: UUID;
+  scheduled_at?: ISODateTime;
+  duration_minutes?: number;
+  site_address?: string | null;
+}
+
+export interface CalendarConflict {
+  detail: string;
+  next_available_at: ISODateTime | null;
+  conflicting_event_id: UUID | null;
+}

@@ -434,3 +434,55 @@ Phase 3 Sprint 3 ships the lead routing engine (Epic 3.3) that auto-assigns inco
 - Phase spec: `dev_plan/03_phase3_sales_crm.md` Epic 3.3.
 - Implementation: `api/services/lead_routing_service.py`, `api/routers/admin_routing.py`, `api/alembic/versions/010_phase3_lead_routing_audit_columns.py`.
 - Tests: `api/tests/unit/test_lead_routing_service.py` (16 tests), `api/tests/integration/test_lead_routing.py` (11 tests), `api/tests/integration/test_admin_routing_rules.py` (7 tests).
+
+---
+
+## ADR-015: Phase 3 Sprint 4 — Shared Calendar, Drive-Time Buffer, Metro-Area Routing
+
+**Date:** 2026-04-25
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 3 Sprint 4 ships Epic 3.4 in full (calendar + scheduling + Google Distance Matrix drive-time buffer + edit/cancel) and the Sprint 3 carry-forward (metro-area routing rules). Several decisions warrant their own ADR so Phase 4 (Admin Panel), Phase 5 (iOS push), and the GCP migration build on the same contract.
+
+### Decisions
+
+1. **Drive-time + geocode caches live in Postgres for the POC.** Two new tables in migration `011`: `drive_time_cache(origin_hash, dest_hash, duration_seconds, fetched_at, expires_at)` with composite PK and 6h TTL, plus `geocode_cache(address_hash, lat, lon, fetched_at, expires_at)` with 30d TTL (addresses move rarely; longer cache reduces API call volume substantially). Both are read-through: services check the cache first, hit the API only on miss, write back. This is the same Redis-swap-contract pattern as record locks (ADR-013) and the round-robin counter (ADR-014). GCP migration swaps to `SETEX 21600` / `SETEX 2592000` without touching the public service surface in `services/google_maps_service.py`.
+
+2. **`google_maps_service` returns `None` on every failure mode — never raises.** No API key configured (`settings.google_maps_api_key=""`), network timeout, non-OK Google status, malformed response body — all collapse to `None`. Callers (`calendar_service` + `lead_routing_service`) treat `None` as documented sentinels: the calendar substitutes the AppConfig fallback minutes (`drive_time_fallback_minutes`, seeded to 60); the metro-area matcher falls through to the next geographic rule. This keeps the calendar and intake paths working in dev / test / staging *without* a key, and prevents a flaky API from dropping a customer's intake.
+
+3. **Conflict detection uses `SELECT … FOR UPDATE` over the appraiser's day window.** `calendar_service._check_conflict` opens a row lock on the appraiser's same-day events before checking the proposed window. Concurrent schedule attempts serialize on that lock; only the first wins, the second sees the conflict. Drive-time buffer is applied on both sides — the new event must start `buffer` after the previous event ends AND end `buffer` before the next event starts. Buffer source: real Distance Matrix call (cached) → fallback minutes when the call fails or is unconfigured. Tested with `test_drive_time_buffer_blocks_when_addresses_far_apart` using the fallback path.
+
+4. **409 response carries `next_available_at` and `conflicting_event_id`.** The router returns a structured JSON body (not just a `detail` string) so the UI can offer a one-click reschedule to the next slot. The schema (`CalendarConflictResponse`) is deliberately distinct from FastAPI's default 422 body shape; clients must check status before parsing.
+
+5. **Calendar editing is open to `sales`, `sales_manager`, and `admin`.** Per spec line 179 (updated 2026-04-24), all three roles can create / edit / cancel / reschedule. Audit rows capture `actor_role` so managers can review sales-rep changes via the audit trail. Customer role is rejected at the RBAC dependency.
+
+6. **Schedule transitions `new_request → appraisal_scheduled`; cancel reverts to `new_request`.** Both transitions go through `equipment_status_service.record_transition` so the customer status email (`status_appraisal_scheduled` template, Phase 2 Sprint 3) fires for free on schedule. Cancel does not re-fire the status email — it sends the dedicated `appraisal_cancelled_customer` template instead, since "we cancelled your appointment" is a different message than "your status changed". Idempotency key for cancel email: `appraisal_cancelled_customer:{event_id}`.
+
+7. **Metro-area routing geocodes the customer address, applies haversine vs metro center.** New rule shape: `{"metro_area": {"center_lat": …, "center_lon": …, "radius_miles": …}}`. The matcher (`lead_routing_service._metro_matches`) builds a single-string address from `customer.address_street + city + state + zip`, geocodes via the cached `google_maps_service.geocode`, and computes the haversine distance in statute miles. This sits **after** the existing state/zip matchers in the geographic loop — a rule with `state_list` AND `metro_area` matches if either path hits, so admins can layer broad state coverage with a tighter Atlanta-metro carve-out without writing two rules.
+
+8. **`appraisal_scheduled_appraiser` and `appraisal_cancelled_appraiser` are dedicated templates.** Distinct from `record_assigned` (lead routing / manual reassignment). The appraiser cares about a different surface — when, where, and a reference to the equipment record. Idempotency keys: `appraisal_scheduled:{event_id}:{user_id}` and `appraisal_cancelled:{event_id}:{user_id}`. Same template chokepoint pattern as ADR-014 #5.
+
+9. **`react-big-calendar` skinned to match Tailwind, not hand-rolled.** A custom calendar grid would re-invent month/week/day pagination, accessibility, and keyboard navigation. The lib's stock CSS imported once; appraiser color coding via `eventPropGetter`; click-to-detail via `onSelectEvent`. The eight-tone palette in `pages/SalesCalendar.tsx` cycles for >8 appraisers — a contract surface for future "global appraiser color settings" if it matters.
+
+### Consequences
+
+- Migration `011` adds two cache tables + the `drive_time_fallback_minutes` AppConfig key (seeded to 60). The hourly `fn_sweep_retention()` function should drop expired rows from both caches in the next migration that touches it; for now the caches grow until manually cleaned. Tracked in `known-issues.md` as a follow-up.
+- The Distance Matrix + Geocoding integrations require a Google Maps API key for live behavior. Today both fall back to the AppConfig minutes / silent no-op. Provisioning steps + cost expectations documented in `known-issues.md` "OPEN — Google Maps API key not provisioned".
+- Calendar UI works without a key — direct overlap conflicts are exact, drive-time buffer just applies a flat 60-min minimum. This is acceptable for POC + early staging.
+- Phase 4 (Admin Panel) ships:
+  - The searchable user picker (sales rep / appraiser / customer) the calendar modal hand-rolls today
+  - The CRUD UI for `lead_routing_rules` the API delivered in Sprint 3
+  - The settings page that edits `drive_time_fallback_minutes` and (if Jim provides one) `default_sales_rep_id`
+- Phase 5 (iOS) reuses `appraisal_scheduled_appraiser` for push notifications — both routes will go through `notification_service.enqueue` so idempotency stays consistent.
+- Phase 3 Sprint 6 gate (Playwright + axe + Lighthouse) covers the calendar UI E2E. This sprint did **not** browser-verify the page — I verified TypeScript build + ESLint zero-warnings, but interactive UI testing is deferred to the gate sprint per project convention.
+
+### References
+
+- Working branch: `phase3-sales-crm`.
+- Phase spec: `dev_plan/03_phase3_sales_crm.md` Epic 3.4 + Phase 1 Carry-Forward Notes.
+- Implementation: `api/services/google_maps_service.py`, `api/services/calendar_service.py`, `api/routers/calendar.py`, `api/schemas/calendar.py`, `api/alembic/versions/011_phase3_drive_time_geocode_caches.py`, `api/services/lead_routing_service.py` (`_metro_matches`).
+- Tests: `api/tests/integration/test_google_maps_service.py` (10), `api/tests/integration/test_calendar.py` (10), metro-area additions to `api/tests/integration/test_lead_routing.py` (+2). Full backend gate **291/291**.
+- Frontend: `web/src/api/calendar.ts`, `web/src/pages/SalesCalendar.tsx`, `web/src/components/ScheduleAppraisalModal.tsx`, `web/src/components/Layout.tsx` (Calendar nav link), `web/src/App.tsx` (`/sales/calendar` route), `web/src/pages/SalesEquipmentDetail.tsx` (ScheduleCard).
