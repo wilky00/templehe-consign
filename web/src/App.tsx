@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AccountPage } from "./pages/Account";
+import { AccountNotificationsPage } from "./pages/AccountNotifications";
 import { DashboardPage } from "./pages/Dashboard";
 import { EquipmentDetailPage } from "./pages/EquipmentDetail";
 import { IntakeFormPage } from "./pages/IntakeForm";
@@ -70,6 +71,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <AccountPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/account/notifications"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AccountNotificationsPage />
             </Layout>
           </ProtectedRoute>
         }

@@ -374,3 +374,22 @@ export interface CalendarConflict {
   next_available_at: ISODateTime | null;
   conflicting_event_id: UUID | null;
 }
+
+// ---------------------------------------------------------------------------
+// Notification preferences (Phase 3 Sprint 5)
+// ---------------------------------------------------------------------------
+
+export type NotificationChannel = "email" | "sms" | "slack";
+
+export interface NotificationPreference {
+  channel: NotificationChannel;
+  phone_number: string | null;
+  slack_user_id: string | null;
+  read_only: boolean;
+}
+
+export interface NotificationPreferenceUpdateRequest {
+  channel: NotificationChannel;
+  phone_number?: string | null;
+  slack_user_id?: string | null;
+}

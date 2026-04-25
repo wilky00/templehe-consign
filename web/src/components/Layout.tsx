@@ -56,6 +56,12 @@ export function Layout({ children }: { children: ReactNode }) {
                   Calendar
                 </NavLink>
                 <NavLink
+                  to="/account/notifications"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Notifications
+                </NavLink>
+                <NavLink
                   to="/portal/account"
                   className={({ isActive }) => navLinkClasses(isActive)}
                 >
@@ -72,6 +78,12 @@ export function Layout({ children }: { children: ReactNode }) {
                   className={({ isActive }) => navLinkClasses(isActive)}
                 >
                   Submit Equipment
+                </NavLink>
+                <NavLink
+                  to="/account/notifications"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Notifications
                 </NavLink>
                 <NavLink
                   to="/portal/account"
