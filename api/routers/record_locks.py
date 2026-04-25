@@ -11,11 +11,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.base import get_db
-from database.models import AuditLog, Role, User
+from database.models import AuditLog, EquipmentRecord, Role, User
 from middleware.auth import get_current_user
 from middleware.rbac import require_roles
 from schemas.record_lock import LockAcquireRequest, LockConflictOut, LockInfoOut
-from services import record_lock_service
+from services import (
+    notification_preferences_service,
+    notification_service,
+    record_lock_service,
+)
 from services.record_lock_service import (
     LockExpiredError,
     LockHeldError,
@@ -172,3 +176,86 @@ async def override_lock(
         )
     )
     await db.flush()
+    await _notify_prior_lock_holder(
+        db,
+        prior_user_id=prior.locked_by,
+        record_id=record_id,
+        record_type=record_type,
+        manager_first_name=current_user.first_name or "a manager",
+    )
+
+
+async def _notify_prior_lock_holder(
+    db: AsyncSession,
+    *,
+    prior_user_id: uuid.UUID,
+    record_id: uuid.UUID,
+    record_type: str,
+    manager_first_name: str,
+) -> None:
+    """Spec Feature 3.5.2 — tell the user whose lock was just broken.
+
+    Best-effort: skips silently if the user is gone or inactive. Channel
+    resolves via the user's preferred channel; SMS dispatch falls back
+    to email when no phone number is on file.
+    """
+    prior = (await db.execute(select(User).where(User.id == prior_user_id))).scalar_one_or_none()
+    if prior is None or prior.status != "active":
+        return
+
+    ref = await _record_reference(db, record_id=record_id, record_type=record_type)
+    resolved = await notification_preferences_service.resolve_channel(db, user=prior)
+    idem = f"lock_overridden:{record_id}:{prior_user_id}"
+
+    if resolved.channel == "sms" and resolved.destination:
+        await notification_service.enqueue(
+            db,
+            idempotency_key=idem,
+            user_id=prior.id,
+            channel="sms",
+            template="record_lock_overridden",
+            payload={
+                "to_number": resolved.destination,
+                "body": (
+                    f"TempleHE: your editing lock on {ref} was released by {manager_first_name}."
+                ),
+                "reference_number": ref,
+            },
+        )
+        return
+
+    if not resolved.destination:
+        return
+
+    subject = f"Your editing lock on {ref} was released"
+    body = (
+        f"<p>Hi {prior.first_name or 'team'},</p>"
+        f"<p>Your editing lock on <strong>{ref}</strong> was released "
+        f"by {manager_first_name} so the record could be edited.</p>"
+        "<p>Reopen the record from the sales dashboard if you still need to make changes.</p>"
+    )
+    await notification_service.enqueue(
+        db,
+        idempotency_key=idem,
+        user_id=prior.id,
+        channel="email",
+        template="record_lock_overridden",
+        payload={
+            "to_email": resolved.destination,
+            "subject": subject,
+            "html_body": body,
+            "reference_number": ref,
+        },
+    )
+
+
+async def _record_reference(db: AsyncSession, *, record_id: uuid.UUID, record_type: str) -> str:
+    """Best-effort human-readable label for the locked record."""
+    if record_type != "equipment_record":
+        return str(record_id)
+    ref = (
+        await db.execute(
+            select(EquipmentRecord.reference_number).where(EquipmentRecord.id == record_id)
+        )
+    ).scalar_one_or_none()
+    return ref or str(record_id)

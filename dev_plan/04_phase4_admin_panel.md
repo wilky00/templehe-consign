@@ -6,6 +6,13 @@
 
 ---
 
+## Pre-flight Items (carry-forward from Phase 3)
+
+- **YAML-seeded org config (decision in ADR-016).** Pattern: YAML in `config/` is seed/recovery state; UI writes to DB only; on demand, `scripts/seed_config.py` upserts YAML → DB. Drift visible via `seed_config.py --check` (exits non-zero when DB diverges from YAML for keys YAML claims to own). Apply to the org-wide config tables — `app_config` keys (e.g. `default_sales_rep_id`, `drive_time_fallback_minutes`, `notification_preferences_hidden_roles`) and `lead_routing_rules`. Do **not** apply to per-user state (`notification_preferences`, `equipment_records`, etc.) — DB-only by design.
+- **`notification_preferences_hidden_roles`** is the first AppConfig key landed under this pattern (Phase 3 Sprint 5, migration 012). Format: `{"roles": ["customer", ...]}`. Used by `notification_preferences_service.is_hidden_for_role` to 404 the `/me/notification-preferences` route. The Phase 4 Admin Panel owns the UI for editing it.
+
+---
+
 ## Epic 4.1 — Global Operations View
 
 ### Feature 4.1.1 — All Sales & Consignments Dashboard

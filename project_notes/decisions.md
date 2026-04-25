@@ -486,3 +486,47 @@ Phase 3 Sprint 4 ships Epic 3.4 in full (calendar + scheduling + Google Distance
 - Implementation: `api/services/google_maps_service.py`, `api/services/calendar_service.py`, `api/routers/calendar.py`, `api/schemas/calendar.py`, `api/alembic/versions/011_phase3_drive_time_geocode_caches.py`, `api/services/lead_routing_service.py` (`_metro_matches`).
 - Tests: `api/tests/integration/test_google_maps_service.py` (10), `api/tests/integration/test_calendar.py` (10), metro-area additions to `api/tests/integration/test_lead_routing.py` (+2). Full backend gate **291/291**.
 - Frontend: `web/src/api/calendar.ts`, `web/src/pages/SalesCalendar.tsx`, `web/src/components/ScheduleAppraisalModal.tsx`, `web/src/components/Layout.tsx` (Calendar nav link), `web/src/App.tsx` (`/sales/calendar` route), `web/src/pages/SalesEquipmentDetail.tsx` (ScheduleCard).
+
+---
+
+## ADR-016: Phase 3 Sprint 5 — Workflow Notifications + Per-Employee Channel Preferences
+
+**Date:** 2026-04-25
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 3 Sprint 5 wires Epic 3.2 (manager-approval + eSign-completion sales-rep notifications), Feature 3.5.2 (lock-override notification to the prior holder), and the per-employee notification preferences UI. The Phase 6 triggers for the Epic 3.2 transitions don't exist yet — manager approval and eSign webhook are Phase 6 work — so Sprint 5 wires the *dispatch* on the existing `record_transition` chokepoint and lets Phase 6 plug the trigger in by simply calling `record_transition(to_status=...)`. Decisions captured here for Phase 4 (admin panel — needs the channel-pref data model), Phase 6 (eSign — needs the trigger contract), and Phase 5 (iOS push — needs the channel-resolution path).
+
+### Decisions
+
+1. **Sales-rep dispatch lives on `equipment_status_service.record_transition`, not on a Phase 6 webhook handler.** Adding a `_SALES_REP_NOTIFY_STATUSES = {"approved_pending_esign", "esigned_pending_publish"}` set + a `_notify_sales_rep` helper inside the same service the customer-email block already uses keeps a single chokepoint for "status changed → tell people". Phase 6's eSign webhook calls `record_transition(to_status="esigned_pending_publish", ...)` and the sales-rep notification fires for free; same for the manager-approval endpoint and `approved_pending_esign`. No new wiring needed at trigger time.
+
+2. **Idempotency key: `sales_rep_status:{record_id}:{to_status}`.** Distinct from the customer-email key (`status_update:{record_id}:{to_status}`) so the same transition can deliver both, but a re-fired transition collapses each to one delivery. Same chokepoint pattern as ADR-014 #5 + ADR-015 #8.
+
+3. **`notification_preferences_service.resolve_channel` collapses Slack to email.** No Slack dispatch path exists in `notification_service` — Phase 4/8 ships the Slack integration. Until then, accepting a Slack preference but routing through email keeps the user-facing model honest (your preference is recorded; we'll honor it the moment Slack ships) without enqueueing guaranteed-fail rows. SMS without a phone number falls back to email for the same reason — better email delivery than a queue full of failed SMS jobs.
+
+4. **One row per user — `UNIQUE(user_id)` on `notification_preferences`.** The Phase 1 schema allowed multiple rows per user (one per channel); no caller ever wrote that way. The spec language is "preferred channel" (singular). Migration `012` adds the constraint and the upsert path uses `INSERT ... ON CONFLICT (user_id) DO UPDATE`. The `User.notification_preference` relationship switches to `Mapped[NotificationPreference | None]` with `uselist=False`.
+
+5. **Two role-based gates: `is_hidden_for_role` (configurable) and `is_read_only_for_role` (hardcoded).** Customer is RO by default — they only have one channel (email) in practice and don't need the picker. The hidden-roles flag (`app_config` key `notification_preferences_hidden_roles`, default `[]`) lets an admin hide the page from any role entirely without a code change — same shape as the future YAML-seeded admin config (see #7). Editing the policy is two flags, not one combined "visibility" enum, because hiding and reducing-to-RO are conceptually different operations and tend to apply to different roles.
+
+6. **Lock-override notification goes through the same `resolve_channel` path.** `routers/record_locks.py:override_lock` calls `_notify_prior_lock_holder` after the audit log writes; idempotency key `lock_overridden:{record_id}:{prior_user_id}`. SMS-preferred users get a short message; everyone else gets HTML email. Skipped silently when the prior user is gone or inactive — no good user-facing recovery for an orphan FK and the audit row already captured the override.
+
+7. **Org-wide configurable settings get a YAML escape hatch (Phase 4).** Sprint 5 lands the first such flag (`notification_preferences_hidden_roles`) seeded by alembic for now. Phase 4 (Admin Panel) ships `scripts/seed_config.py` to read a `config/*.yaml` and upsert into `app_config` + `lead_routing_rules`; UI writes to DB only, YAML is seed/recovery state, drift is visible via `seed_config.py --check`. Per-user state (notification_preferences, equipment records) stays DB-only — YAML is for org-wide config that benefits from git-audited history. See `dev_plan/04_phase4_admin_panel.md` Pre-flight (added in this commit).
+
+### Consequences
+
+- Migration `012` adds the unique constraint + seeds the visibility flag; `_EXPECTED_MIGRATION_HEAD` bumps to `"012"` in `routers/health.py`.
+- Phase 6 eSign + manager-approval triggers become a one-line call (`record_transition(...)`); no notification wiring added at that layer.
+- Phase 5 iOS push reuses the same `resolve_channel` shape — when an iOS user opts into push, that's a fourth channel value the resolver returns, and `notification_service` gains a `_dispatch_push` branch. Public surface unchanged.
+- The `account/notifications` route exists; nav link added for both customer + sales-side flows. The page is built but not browser-verified this sprint — interactive UI verification deferred to Phase 3 Sprint 6 gate.
+- `notification_preferences_hidden_roles` is the first AppConfig key intended for the YAML-seed pattern; format chosen (`{"roles": [...]}`) so the YAML loader can read+validate without a dedicated enum.
+
+### References
+
+- Working branch: `phase3-sales-crm`.
+- Phase spec: `dev_plan/03_phase3_sales_crm.md` Epic 3.2 + Feature 3.5.2 + Phase 1 Carry-Forward Notes.
+- Implementation: `api/alembic/versions/012_phase3_notification_preferences_unique_and_visibility.py`, `api/services/notification_preferences_service.py`, `api/services/equipment_status_service.py` (sales-rep notify block), `api/routers/me_notifications.py`, `api/routers/record_locks.py` (override notify), `api/schemas/notification_preferences.py`, `api/database/models.py` (relationship + unique constraint), `api/main.py` (router mount), `api/routers/health.py` (head bump).
+- Tests: `api/tests/integration/test_notification_preferences.py` (7), `api/tests/integration/test_sales_rep_status_notifications.py` (6), `api/tests/integration/test_record_locks.py` (+2 override-notify). Full backend gate **307/307** at 96% coverage.
+- Frontend: `web/src/api/notifications.ts`, `web/src/api/types.ts` (notification types), `web/src/pages/AccountNotifications.tsx`, `web/src/App.tsx` (`/account/notifications` route), `web/src/components/Layout.tsx` (Notifications nav link, both flows).

@@ -87,8 +87,11 @@ class User(Base):
     totp_recovery_codes: Mapped[list[TotpRecoveryCode]] = relationship(
         "TotpRecoveryCode", back_populates="user", cascade="all, delete-orphan"
     )
-    notification_preferences: Mapped[list[NotificationPreference]] = relationship(
-        "NotificationPreference", back_populates="user", cascade="all, delete-orphan"
+    notification_preference: Mapped[NotificationPreference | None] = relationship(
+        "NotificationPreference",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
     customer_profile: Mapped[Customer | None] = relationship(
         "Customer", back_populates="user", uselist=False
@@ -192,7 +195,9 @@ class NotificationPreference(Base):
     slack_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
-    user: Mapped[User] = relationship("User", back_populates="notification_preferences")
+    user: Mapped[User] = relationship("User", back_populates="notification_preference")
+
+    __table_args__ = (UniqueConstraint("user_id"),)
 
 
 class DataExportJob(Base):

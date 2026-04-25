@@ -23,10 +23,11 @@ import uuid
 
 import structlog
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import EquipmentRecord, StatusEvent, User
-from services import notification_service
+from services import notification_preferences_service, notification_service
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +44,18 @@ _CUSTOMER_EMAIL_STATUSES = frozenset(
         "listed",
         "sold",
         "declined",
+    }
+)
+
+# Destination statuses that notify the assigned sales rep on the rep's
+# preferred channel. Spec features 3.2.1 (manager approval → ready for
+# eSign) and 3.2.2 (eSign complete → ready to publish). Phase 6 plugs
+# the actual triggers in by calling ``record_transition(...)`` for these
+# statuses; today the wiring fires the moment those transitions happen.
+_SALES_REP_NOTIFY_STATUSES = frozenset(
+    {
+        "approved_pending_esign",
+        "esigned_pending_publish",
     }
 )
 
@@ -141,6 +154,9 @@ async def record_transition(
                 "to_status": to_status,
             },
         )
+
+    if to_status in _SALES_REP_NOTIFY_STATUSES and record.assigned_sales_rep_id is not None:
+        await _notify_sales_rep(db, record=record, to_status=to_status)
     return event
 
 
@@ -148,3 +164,119 @@ def _email_idempotency_key(record_id: uuid.UUID, to_status: str) -> str:
     """One email per (record, destination status). A bounce-back re-transition
     to the same status is blocked upstream, so this key never double-delivers."""
     return f"status_update:{record_id}:{to_status}"
+
+
+def _sales_rep_idempotency_key(record_id: uuid.UUID, to_status: str) -> str:
+    return f"sales_rep_status:{record_id}:{to_status}"
+
+
+def _compose_sales_rep_email(
+    *, rep: User, record: EquipmentRecord, to_status: str
+) -> tuple[str, str]:
+    ref = record.reference_number or str(record.id)
+    make_model = (
+        " ".join(part for part in (record.customer_make, record.customer_model) if part)
+        or "your equipment record"
+    )
+    if to_status == "approved_pending_esign":
+        subject = f"[Approved] Appraisal for {ref} — Ready for eSign"
+        body = (
+            f"<p>Hi {rep.first_name or 'team'},</p>"
+            f"<p>The manager has approved the appraisal for "
+            f"<strong>{ref}</strong> ({make_model}). The record is now "
+            f"<strong>ready for eSign</strong>.</p>"
+            "<p>Open the record in the sales dashboard to start the eSign flow.</p>"
+        )
+    elif to_status == "esigned_pending_publish":
+        subject = f"[Signed] {ref} ready to publish"
+        body = (
+            f"<p>Hi {rep.first_name or 'team'},</p>"
+            f"<p>The customer has signed the consignment agreement for "
+            f"<strong>{ref}</strong> ({make_model}). The listing is "
+            f"<strong>ready to publish</strong>.</p>"
+            "<p>Open the record in the sales dashboard and tap "
+            "<em>Publish Listing</em> when you're ready.</p>"
+        )
+    else:
+        subject = f"Status update — {ref}"
+        body = (
+            f"<p>Hi {rep.first_name or 'team'},</p>"
+            f"<p>Record <strong>{ref}</strong> moved to "
+            f"<strong>{to_status}</strong>.</p>"
+        )
+    return subject, body
+
+
+def _compose_sales_rep_sms(*, record: EquipmentRecord, to_status: str) -> str:
+    ref = record.reference_number or str(record.id)
+    if to_status == "approved_pending_esign":
+        return f"Manager approved {ref}. Log in to initiate eSign."
+    if to_status == "esigned_pending_publish":
+        return f"TempleHE: customer signed {ref}. Ready to publish."
+    return f"TempleHE: {ref} moved to {to_status}."
+
+
+async def _notify_sales_rep(
+    db: AsyncSession,
+    *,
+    record: EquipmentRecord,
+    to_status: str,
+) -> None:
+    """Enqueue the sales-rep notification on the rep's preferred channel.
+
+    No-ops silently if the rep user is missing/inactive — there's no good
+    user-facing recovery for an orphan FK and we already wrote the audit
+    trail upstream.
+    """
+    rep = (
+        await db.execute(select(User).where(User.id == record.assigned_sales_rep_id))
+    ).scalar_one_or_none()
+    if rep is None or rep.status != "active":
+        return
+
+    resolved = await notification_preferences_service.resolve_channel(db, user=rep)
+    idem = _sales_rep_idempotency_key(record.id, to_status)
+
+    if resolved.channel == "sms" and resolved.destination:
+        body = _compose_sales_rep_sms(record=record, to_status=to_status)
+        await notification_service.enqueue(
+            db,
+            idempotency_key=idem,
+            user_id=rep.id,
+            channel="sms",
+            template=f"sales_rep_{to_status}",
+            payload={
+                "to_number": resolved.destination,
+                "body": body,
+                "reference_number": record.reference_number,
+                "to_status": to_status,
+            },
+        )
+        return
+
+    if not resolved.destination:
+        # Email destination missing — caller's User row has no email.
+        # Skip rather than enqueue a guaranteed-fail row.
+        logger.warning(
+            "sales_rep_notify_skipped_no_destination",
+            user_id=str(rep.id),
+            record_id=str(record.id),
+            to_status=to_status,
+        )
+        return
+
+    subject, body = _compose_sales_rep_email(rep=rep, record=record, to_status=to_status)
+    await notification_service.enqueue(
+        db,
+        idempotency_key=idem,
+        user_id=rep.id,
+        channel="email",
+        template=f"sales_rep_{to_status}",
+        payload={
+            "to_email": resolved.destination,
+            "subject": subject,
+            "html_body": body,
+            "reference_number": record.reference_number,
+            "to_status": to_status,
+        },
+    )

@@ -1,5 +1,10 @@
 # Known Issues & Blockers
 
+## OPEN — Pre-existing E501 lint debt in routers/admin_routing.py + routers/calendar.py
+**Status:** `cd api && uv run ruff check .` fails on 3 long-line ABOUTME comments — `routers/admin_routing.py:2` (101 chars) and `routers/calendar.py:1-2` (107 chars each). Surfaced 2026-04-25 during Sprint 5 lint sweep. Both files committed in earlier Phase 3 sprint commits (3 + 4); CI must have been bypassed or failed-but-merged at the time.
+**Impact:** `make lint` is currently red on `phase3-sales-crm`. Sprint 5 changes themselves lint clean.
+**Action:** One-line wrap on each ABOUTME comment; no functional change. Can land in a tiny cleanup PR or get bundled with Sprint 6.
+
 ## PENDING CONFIRMATION — Twilio A2P 10DLC Registration
 **Status:** Registration submitted, appears approved — awaiting Jim's confirmation (2026-04-21)
 **Impact:** SMS notifications come online once the brand + campaign show "Approved" in the Twilio console

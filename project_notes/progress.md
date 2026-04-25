@@ -685,4 +685,61 @@ Spec: Epic 3.4 (Features 3.4.1 calendar view, 3.4.2 schedule + conflict, 3.4.3 G
 
 ---
 
+### Sprint 5: Workflow Notifications + Per-Employee Channel Preferences — COMPLETE (verified green 2026-04-25)
+
+Spec: Epic 3.2 (Features 3.2.1 manager-approval notify, 3.2.2 eSign-completion notify), Feature 3.5.2 (lock-override notify), per-employee notification preferences UI.
+
+**Backend (all new unless noted):**
+- [x] `api/alembic/versions/012_phase3_notification_preferences_unique_and_visibility.py` — adds `UNIQUE(user_id)` to `notification_preferences` + seeds AppConfig key `notification_preferences_hidden_roles = {"roles": []}`. Idempotent + reversible.
+- [x] `api/database/models.py` (modified) — `User.notification_preference` switches from `list[]` to `NotificationPreference | None` (`uselist=False`); `NotificationPreference` gains `__table_args__ = (UniqueConstraint("user_id"),)`.
+- [x] `api/services/notification_preferences_service.py` — `get_for_user`, `upsert_for_user` (Postgres ON CONFLICT (user_id) DO UPDATE), `resolve_channel` (returns `ResolvedChannel(channel, destination)` — slack→email + sms-without-phone→email fallbacks here so no caller has to reason about it), `is_hidden_for_role` (reads AppConfig), `is_read_only_for_role` (pure function, customer-only today).
+- [x] `api/schemas/notification_preferences.py` — `NotificationPreferenceOut` (channel + destinations + read_only flag), `NotificationPreferenceUpdate` (model_validator enforces channel-specific destination requirements).
+- [x] `api/routers/me_notifications.py` — `GET /me/notification-preferences` (returns email default if no row), `PUT /me/notification-preferences` (upsert). Hidden role → 404 on both methods; read-only role → 403 on PUT only.
+- [x] `api/services/equipment_status_service.py` (modified) — adds `_SALES_REP_NOTIFY_STATUSES = {"approved_pending_esign", "esigned_pending_publish"}` + `_notify_sales_rep` helper (loads rep User by FK, resolves channel, builds inline email/SMS templates, enqueues with idempotency key `sales_rep_status:{record_id}:{to_status}`). Wired into the existing `record_transition` chokepoint after the customer-email block.
+- [x] `api/routers/record_locks.py` (modified) — `override_lock` now calls `_notify_prior_lock_holder` after the audit log; loads prior holder + record reference, resolves channel, enqueues with key `lock_overridden:{record_id}:{prior_user_id}`. Skips silently if the prior user is gone/inactive.
+- [x] `api/main.py` (modified) — mounts `me_notifications_router`.
+- [x] `api/routers/health.py` (modified) — bumps `_EXPECTED_MIGRATION_HEAD` to `"012"`.
+
+**Frontend (all new unless noted):**
+- [x] `web/src/api/types.ts` (modified) — `NotificationChannel`, `NotificationPreference`, `NotificationPreferenceUpdateRequest`.
+- [x] `web/src/api/notifications.ts` — `getNotificationPreferences()` (returns `{ hidden: true }` on 404 so the page can render the unavailable state without an error path), `updateNotificationPreferences(body)`.
+- [x] `web/src/pages/AccountNotifications.tsx` — radio group for channel + conditional phone/Slack inputs + save button; renders read-only mode when `read_only: true` from server; renders "unavailable" card when role is hidden.
+- [x] `web/src/App.tsx` (modified) — `/account/notifications` route, `ProtectedRoute + Layout` wrapped.
+- [x] `web/src/components/Layout.tsx` (modified) — Notifications nav link inserted between Calendar/Submit and Account for both sales-side and customer-side users.
+
+**Tests (all new unless noted):**
+- [x] `api/tests/integration/test_notification_preferences.py` — 7 tests: GET default email when no row, PUT upserts + GET reflects + only one row exists (UNIQUE enforced), PUT sms without phone 422, PUT slack without slack_user_id 422, customer GET 200 with `read_only=true` + PUT 403, hidden-role 404 on both methods (with AppConfig flip), unauth 401.
+- [x] `api/tests/integration/test_sales_rep_status_notifications.py` — 6 tests: approved_pending_esign → email enqueued (subject contains "Ready for eSign"), esigned_pending_publish → email enqueued (subject contains "ready to publish"), SMS pref routes to sms channel + uses stored phone, slack pref falls back to email, no rep assigned → no enqueue, internal status (`appraiser_assigned`) → no enqueue.
+- [x] `api/tests/integration/test_record_locks.py` (extended, +2 tests) — override notifies prior holder via email; SMS-preferred prior holder gets sms channel.
+
+**Full test gate: 307/307 backend tests green** at 96% coverage. Frontend `tsc -b && vite build` clean (1288 modules, 465 KB). `eslint` zero warnings.
+
+**Design decisions this sprint:** captured as **ADR-016** in `decisions.md`. Highlights:
+- Sales-rep dispatch lives on `record_transition` so Phase 6 triggers (manager approval, eSign webhook) plug in by calling the existing entry point.
+- One row per user in `notification_preferences` (UNIQUE(user_id)) — preferred channel is singular per the spec.
+- Slack→email fallback (and sms-without-phone→email) lives in `resolve_channel` so callers get one channel + one destination back; no reasoning at the call site.
+- Two role-gates (visibility + read-only) split — different concepts, different defaults.
+- `notification_preferences_hidden_roles` is the first AppConfig key intended for the Phase 4 YAML-seed pattern; shape (`{"roles": [...]}`) chosen for clean YAML round-trip.
+
+**Bugs found + fixed this sprint:** none.
+
+**Known limitation:** UI was not interactively browser-verified this sprint. Type-check + lint clean, build succeeds (465 KB), backend round-trip exercised via curl from the sales + customer roles. Interactive UI verification deferred to **Phase 3 Sprint 6 (Playwright + axe + Lighthouse gate)**.
+
+**Pre-existing lint debt flagged (NOT my changes):** `api/routers/admin_routing.py:2` and `api/routers/calendar.py:1-2` carry E501 long-line violations from earlier sprint commits — `make lint` fails on them. Not blocking Sprint 5 work; tracking in `known-issues.md`.
+
+**Deferred (flagged, not regressed):**
+- **Phase 6 trigger wiring** — the `approved_pending_esign` (manager approval) + `esigned_pending_publish` (eSign webhook) transitions are still Phase 6 work. Sprint 5 wired the dispatch on the chokepoint; Phase 6 just calls `record_transition(to_status=...)` and the email/SMS flies.
+- **Slack dispatch path** — `_dispatch_slack` doesn't exist in `notification_service`. Slack-preferred users still get email via `resolve_channel`. Phase 4 or 8 ships the integration; the data model + UI accept the preference today.
+- **Twilio A2P 10DLC approval** — already tracked in `known-issues.md`. SMS preferences accepted; dispatch no-ops with `sms_skipped_not_configured` until Twilio creds + A2P brand approval land.
+- **YAML-seeded config** — first AppConfig key (`notification_preferences_hidden_roles`) is in place; the loader (`scripts/seed_config.py`) ships in Phase 4 with the rest of the admin-editable surface.
+
+**Endpoints (new in Sprint 5):**
+- `GET /api/v1/me/notification-preferences` — current user's preferred channel; returns email default when no row exists; 404 if role is hidden.
+- `PUT /api/v1/me/notification-preferences` — upsert preferred channel; 422 on missing destination for sms/slack; 403 for read-only roles; 404 if role is hidden.
+
+**Routes (new in the web app):**
+- `/account/notifications` — channel picker (email / sms / slack) with conditional phone / slack-user-id fields.
+
+---
+
 ## Phase 4–8 — Not started

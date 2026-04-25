@@ -11,7 +11,14 @@ from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import AuditLog, RecordLock, Role, User
+from database.models import (
+    AuditLog,
+    NotificationJob,
+    NotificationPreference,
+    RecordLock,
+    Role,
+    User,
+)
 
 _VALID_PASSWORD = "TestPassword1!"
 
@@ -83,10 +90,14 @@ async def test_acquire_lock_returns_lock_info_and_audit_event(
 
     # Audit event written
     events = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.event_type == "record_lock.acquired")
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "record_lock.acquired")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(e.target_id == record_id for e in events)
 
 
@@ -117,9 +128,7 @@ async def test_acquire_conflict_returns_409_with_lock_info(
 
 
 @pytest.mark.asyncio
-async def test_acquire_same_user_refreshes_expiry(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_acquire_same_user_refreshes_expiry(client: AsyncClient, db_session: AsyncSession):
     cust = await _active_user_with_role(client, db_session, "lock_c@example.com", "customer")
     record_id = uuid.uuid4()
 
@@ -183,9 +192,7 @@ async def test_acquire_replaces_expired_lock_from_different_user(
 
 
 @pytest.mark.asyncio
-async def test_heartbeat_refreshes_expiry_for_owner(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_heartbeat_refreshes_expiry_for_owner(client: AsyncClient, db_session: AsyncSession):
     cust = await _active_user_with_role(client, db_session, "lock_e@example.com", "customer")
     record_id = uuid.uuid4()
 
@@ -214,9 +221,7 @@ async def test_heartbeat_refreshes_expiry_for_owner(
 
 
 @pytest.mark.asyncio
-async def test_heartbeat_without_lock_returns_404(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_heartbeat_without_lock_returns_404(client: AsyncClient, db_session: AsyncSession):
     cust = await _active_user_with_role(client, db_session, "lock_f@example.com", "customer")
     resp = await client.put(
         f"/api/v1/record-locks/{uuid.uuid4()}/heartbeat",
@@ -226,9 +231,7 @@ async def test_heartbeat_without_lock_returns_404(
 
 
 @pytest.mark.asyncio
-async def test_heartbeat_by_non_owner_returns_404(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_heartbeat_by_non_owner_returns_404(client: AsyncClient, db_session: AsyncSession):
     owner = await _active_user_with_role(client, db_session, "lock_g1@example.com", "customer")
     stranger = await _active_user_with_role(client, db_session, "lock_g2@example.com", "customer")
     record_id = uuid.uuid4()
@@ -253,9 +256,7 @@ async def test_heartbeat_by_non_owner_returns_404(
 
 
 @pytest.mark.asyncio
-async def test_release_by_owner_deletes_row(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_release_by_owner_deletes_row(client: AsyncClient, db_session: AsyncSession):
     cust = await _active_user_with_role(client, db_session, "lock_h@example.com", "customer")
     record_id = uuid.uuid4()
 
@@ -272,17 +273,13 @@ async def test_release_by_owner_deletes_row(
     assert resp.status_code == 204
 
     remaining = (
-        await db_session.execute(
-            select(RecordLock).where(RecordLock.record_id == record_id)
-        )
+        await db_session.execute(select(RecordLock).where(RecordLock.record_id == record_id))
     ).scalar_one_or_none()
     assert remaining is None
 
 
 @pytest.mark.asyncio
-async def test_release_is_idempotent_on_missing_lock(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_release_is_idempotent_on_missing_lock(client: AsyncClient, db_session: AsyncSession):
     cust = await _active_user_with_role(client, db_session, "lock_i@example.com", "customer")
     resp = await client.delete(
         f"/api/v1/record-locks/{uuid.uuid4()}",
@@ -302,7 +299,9 @@ async def test_manager_override_removes_lock_and_audits(
     client: AsyncClient, db_session: AsyncSession
 ):
     owner = await _active_user_with_role(client, db_session, "lock_j1@example.com", "customer")
-    manager = await _active_user_with_role(client, db_session, "lock_j2@example.com", "sales_manager")
+    manager = await _active_user_with_role(
+        client, db_session, "lock_j2@example.com", "sales_manager"
+    )
     record_id = uuid.uuid4()
 
     await client.post(
@@ -318,17 +317,19 @@ async def test_manager_override_removes_lock_and_audits(
     assert resp.status_code == 204
 
     remaining = (
-        await db_session.execute(
-            select(RecordLock).where(RecordLock.record_id == record_id)
-        )
+        await db_session.execute(select(RecordLock).where(RecordLock.record_id == record_id))
     ).scalar_one_or_none()
     assert remaining is None
 
     override_events = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.event_type == "record_lock.overridden")
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "record_lock.overridden")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     match = next((e for e in override_events if e.target_id == record_id), None)
     assert match is not None
     assert match.actor_id == uuid.UUID(manager["user_id"])
@@ -336,9 +337,7 @@ async def test_manager_override_removes_lock_and_audits(
 
 
 @pytest.mark.asyncio
-async def test_customer_cannot_override_lock(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_customer_cannot_override_lock(client: AsyncClient, db_session: AsyncSession):
     owner = await _active_user_with_role(client, db_session, "lock_k1@example.com", "customer")
     other = await _active_user_with_role(client, db_session, "lock_k2@example.com", "customer")
     record_id = uuid.uuid4()
@@ -354,6 +353,87 @@ async def test_customer_cannot_override_lock(
         headers=_auth(other["access_token"]),
     )
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_override_notifies_prior_lock_holder(client: AsyncClient, db_session: AsyncSession):
+    """Spec Feature 3.5.2 — broken-lock notification."""
+    owner = await _active_user_with_role(
+        client, db_session, "lock_notify_owner@example.com", "sales"
+    )
+    manager = await _active_user_with_role(
+        client, db_session, "lock_notify_mgr@example.com", "sales_manager"
+    )
+    record_id = uuid.uuid4()
+
+    await client.post(
+        "/api/v1/record-locks",
+        json={"record_id": str(record_id)},
+        headers=_auth(owner["access_token"]),
+    )
+    resp = await client.delete(
+        f"/api/v1/record-locks/{record_id}/override",
+        headers=_auth(manager["access_token"]),
+    )
+    assert resp.status_code == 204
+
+    jobs = (
+        (
+            await db_session.execute(
+                select(NotificationJob).where(NotificationJob.template == "record_lock_overridden")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job.channel == "email"
+    assert job.user_id == uuid.UUID(owner["user_id"])
+    assert job.payload["to_email"] == "lock_notify_owner@example.com"
+
+
+@pytest.mark.asyncio
+async def test_override_notification_uses_sms_when_preferred(
+    client: AsyncClient, db_session: AsyncSession
+):
+    owner = await _active_user_with_role(client, db_session, "lock_sms_owner@example.com", "sales")
+    manager = await _active_user_with_role(
+        client, db_session, "lock_sms_mgr@example.com", "sales_manager"
+    )
+    db_session.add(
+        NotificationPreference(
+            user_id=uuid.UUID(owner["user_id"]),
+            channel="sms",
+            phone_number="+15555550100",
+        )
+    )
+    await db_session.flush()
+
+    record_id = uuid.uuid4()
+    await client.post(
+        "/api/v1/record-locks",
+        json={"record_id": str(record_id)},
+        headers=_auth(owner["access_token"]),
+    )
+    resp = await client.delete(
+        f"/api/v1/record-locks/{record_id}/override",
+        headers=_auth(manager["access_token"]),
+    )
+    assert resp.status_code == 204
+
+    jobs = (
+        (
+            await db_session.execute(
+                select(NotificationJob).where(NotificationJob.template == "record_lock_overridden")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(jobs) == 1
+    assert jobs[0].channel == "sms"
+    assert jobs[0].payload["to_number"] == "+15555550100"
 
 
 # ---------------------------------------------------------------------------
