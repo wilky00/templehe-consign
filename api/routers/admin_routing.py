@@ -1,5 +1,5 @@
 # ABOUTME: Admin endpoints for lead routing rule CRUD — admin-only RBAC, soft delete.
-# ABOUTME: Phase 4 will ship the UI; Sprint 3 ships the API so admins can configure rules pre-launch.
+# ABOUTME: Phase 4 ships the UI; Sprint 3 ships the API so admins can configure rules early.
 from __future__ import annotations
 
 import uuid

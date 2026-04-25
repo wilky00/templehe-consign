@@ -1,5 +1,5 @@
 # ABOUTME: Phase 3 Sprint 3 — Pydantic shapes for the admin lead-routing-rules API.
-# ABOUTME: rule_type-specific condition validation lives in the service; schemas keep the surface narrow.
+# ABOUTME: rule_type-specific validation lives in the service; schemas keep the surface narrow.
 from __future__ import annotations
 
 import uuid

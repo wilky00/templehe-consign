@@ -279,9 +279,7 @@ async def test_new_request_allowed_after_prior_is_resolved(
     # here we flip the row directly).
     row = (
         await db_session.execute(
-            select(ChangeRequest).where(
-                ChangeRequest.equipment_record_id == uuid.UUID(record_id)
-            )
+            select(ChangeRequest).where(ChangeRequest.equipment_record_id == uuid.UUID(record_id))
         )
     ).scalar_one()
     row.status = "resolved"

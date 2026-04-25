@@ -1,5 +1,5 @@
-# ABOUTME: Sales rep endpoints — dashboard, record detail, assignment, cascade, publish, change-request resolution.
-# ABOUTME: sales / sales_manager / admin only. Writes to a record require the caller to hold its lock.
+# ABOUTME: Sales rep endpoints — dashboard, detail, assignment, cascade, publish, change-resolve.
+# ABOUTME: sales/sales_manager/admin only. Writes require the caller to hold the record's lock.
 from __future__ import annotations
 
 import uuid
@@ -247,9 +247,7 @@ async def cascade_customer_assignments(
         appraiser_id=body.assigned_appraiser_id,
     )
     skipped_reason = (
-        f"{len(skipped)} record(s) past 'new_request' were left untouched"
-        if skipped
-        else None
+        f"{len(skipped)} record(s) past 'new_request' were left untouched" if skipped else None
     )
     return CascadeResult(
         updated_record_ids=updated,
@@ -311,9 +309,7 @@ async def resolve_change_request(
     # Re-read the record status since the withdraw path may have flipped it.
     refreshed = (
         await db.execute(
-            select(ChangeRequest.equipment_record_id).where(
-                ChangeRequest.id == change_request_id
-            )
+            select(ChangeRequest.equipment_record_id).where(ChangeRequest.id == change_request_id)
         )
     ).scalar_one()
     from database.models import EquipmentRecord

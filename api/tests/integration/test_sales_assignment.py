@@ -82,9 +82,7 @@ def _auth(tok: str) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_patch_without_lock_returns_409(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_patch_without_lock_returns_409(client: AsyncClient, db_session: AsyncSession):
     mgr = await _user_with_role(client, db_session, "pat_nolock@example.com", "sales_manager")
     rec_id = await _customer_record(client, db_session, "pat_nolock_c@example.com")
 
@@ -122,10 +120,14 @@ async def test_patch_sales_rep_assignment_writes_audit_event(
     assert resp.json()["assigned_sales_rep_id"] == rep["user_id"]
 
     events = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.event_type == "equipment_record.assignment_changed")
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "equipment_record.assignment_changed")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     match = next((e for e in events if e.target_id == rec_id), None)
     assert match is not None
     assert match.actor_id == uuid.UUID(mgr["user_id"])
@@ -157,9 +159,7 @@ async def test_patch_rejects_assigning_customer_as_sales_rep(
 
 
 @pytest.mark.asyncio
-async def test_patch_clearing_assignment_is_allowed(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_patch_clearing_assignment_is_allowed(client: AsyncClient, db_session: AsyncSession):
     mgr = await _user_with_role(client, db_session, "pat_clear_m@example.com", "sales_manager")
     rep = await _user_with_role(client, db_session, "pat_clear_r@example.com", "sales")
     rec_id = await _customer_record(client, db_session, "pat_clear_c@example.com")
@@ -186,9 +186,7 @@ async def test_patch_clearing_assignment_is_allowed(
 
 
 @pytest.mark.asyncio
-async def test_patch_missing_fields_returns_422(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_patch_missing_fields_returns_422(client: AsyncClient, db_session: AsyncSession):
     mgr = await _user_with_role(client, db_session, "pat_empty_m@example.com", "sales_manager")
     rec_id = await _customer_record(client, db_session, "pat_empty_c@example.com")
 

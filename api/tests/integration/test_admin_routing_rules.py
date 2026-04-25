@@ -1,5 +1,5 @@
-# ABOUTME: Phase 3 Sprint 3 — admin CRUD over /admin/routing-rules with admin-only RBAC + soft delete.
-# ABOUTME: Validates condition shape per rule_type, sparse PATCH, and the include_deleted query knob.
+# ABOUTME: Phase 3 Sprint 3 — admin CRUD over /admin/routing-rules with admin-only RBAC.
+# ABOUTME: Condition shape per rule_type, sparse PATCH, and the include_deleted query knob.
 from __future__ import annotations
 
 import uuid
@@ -51,9 +51,7 @@ def _auth(tok: str) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_create_ad_hoc_rule_as_admin_succeeds(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_create_ad_hoc_rule_as_admin_succeeds(client: AsyncClient, db_session: AsyncSession):
     admin = await _user_with_role(client, db_session, "ar_admin@example.com", "admin")
     rep = await _user_with_role(client, db_session, "ar_rep@example.com", "sales")
 
@@ -114,9 +112,7 @@ async def test_round_robin_requires_non_empty_rep_ids(
 
 
 @pytest.mark.asyncio
-async def test_assigned_user_must_have_sales_role(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_assigned_user_must_have_sales_role(client: AsyncClient, db_session: AsyncSession):
     admin = await _user_with_role(client, db_session, "ar_role_admin@example.com", "admin")
     customer = await _user_with_role(client, db_session, "ar_cust@example.com", "customer")
 

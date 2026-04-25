@@ -30,7 +30,11 @@ class LockInfoOut(BaseModel):
 
 
 class LockConflictOut(BaseModel):
-    """Body of a 409 when another user holds the lock. Mirrors LockInfoOut but is a distinct shape so the caller can render a friendly "editing by X" banner."""
+    """Body of a 409 when another user holds the lock.
+
+    Mirrors LockInfoOut but is a distinct shape so the caller can render
+    a friendly "editing by X" banner.
+    """
 
     detail: str
     locked_by: uuid.UUID

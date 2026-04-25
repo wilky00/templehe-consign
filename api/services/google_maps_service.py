@@ -1,5 +1,5 @@
-# ABOUTME: Phase 3 Sprint 4 — Google Maps Distance Matrix + Geocoding clients with read-through cache + fallback.
-# ABOUTME: When the API key is unset or a call fails, callers get a documented sentinel so the calendar/routing path can no-op gracefully.
+# ABOUTME: Phase 3 Sprint 4 — Google Maps Distance Matrix + Geocoding with read-through cache.
+# ABOUTME: Returns None on every failure (no key, network, bad status) so callers can no-op.
 """Google Maps Platform integration.
 
 Two surfaces:
@@ -302,9 +302,7 @@ async def read_drive_time_fallback_minutes(db: AsyncSession) -> int:
     60 if missing or malformed.
     """
     raw = (
-        await db.execute(
-            select(AppConfig.value).where(AppConfig.key == _FALLBACK_MINUTES_KEY)
-        )
+        await db.execute(select(AppConfig.value).where(AppConfig.key == _FALLBACK_MINUTES_KEY))
     ).scalar_one_or_none()
     if isinstance(raw, dict):
         minutes = raw.get("minutes")

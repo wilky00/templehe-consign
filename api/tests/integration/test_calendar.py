@@ -1,5 +1,5 @@
-# ABOUTME: Phase 3 Sprint 4 — /calendar/events end-to-end: list / create / update / cancel + atomic conflict.
-# ABOUTME: Drive-time service is mocked; tests exercise the fallback path that runs without a Google API key.
+# ABOUTME: Phase 3 Sprint 4 — /calendar/events end-to-end: list/create/update/cancel + conflict.
+# ABOUTME: Drive-time service is mocked; tests exercise the fallback path (no Google API key).
 from __future__ import annotations
 
 import uuid
@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
     AuditLog,
-    CalendarEvent,
     EquipmentRecord,
     NotificationJob,
     Role,
@@ -106,9 +105,7 @@ async def test_create_event_happy_path_transitions_record_and_audits(
     client: AsyncClient, db_session: AsyncSession
 ):
     sales = await _user_with_role(client, db_session, "cal_create_s@example.com", "sales")
-    appraiser = await _user_with_role(
-        client, db_session, "cal_create_a@example.com", "appraiser"
-    )
+    appraiser = await _user_with_role(client, db_session, "cal_create_a@example.com", "appraiser")
     rec_id = await _customer_record(
         client, db_session, "cal_create_c@example.com", address="123 Main St, Atlanta, GA"
     )
@@ -136,30 +133,34 @@ async def test_create_event_happy_path_transitions_record_and_audits(
     assert record.status == "appraisal_scheduled"
 
     audits = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.event_type == "calendar_event.created")
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "calendar_event.created")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(a.actor_id == uuid.UUID(sales["user_id"]) for a in audits)
 
     notifs = (
-        await db_session.execute(
-            select(NotificationJob).where(
-                NotificationJob.template == "appraisal_scheduled_appraiser"
+        (
+            await db_session.execute(
+                select(NotificationJob).where(
+                    NotificationJob.template == "appraisal_scheduled_appraiser"
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(notifs) >= 1
 
 
 @pytest.mark.asyncio
-async def test_create_event_rejects_non_appraiser(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_create_event_rejects_non_appraiser(client: AsyncClient, db_session: AsyncSession):
     sales = await _user_with_role(client, db_session, "cal_role_s@example.com", "sales")
-    not_appraiser = await _user_with_role(
-        client, db_session, "cal_role_x@example.com", "sales"
-    )
+    not_appraiser = await _user_with_role(client, db_session, "cal_role_x@example.com", "sales")
     rec_id = await _customer_record(client, db_session, "cal_role_c@example.com")
 
     resp = await client.post(
@@ -180,9 +181,7 @@ async def test_create_blocked_when_record_not_in_new_request(
     client: AsyncClient, db_session: AsyncSession
 ):
     sales = await _user_with_role(client, db_session, "cal_st_s@example.com", "sales")
-    appraiser = await _user_with_role(
-        client, db_session, "cal_st_a@example.com", "appraiser"
-    )
+    appraiser = await _user_with_role(client, db_session, "cal_st_a@example.com", "appraiser")
     rec_id = await _customer_record(client, db_session, "cal_st_c@example.com")
 
     rec = (
@@ -211,9 +210,7 @@ async def test_overlapping_event_for_same_appraiser_returns_409(
     client: AsyncClient, db_session: AsyncSession
 ):
     sales = await _user_with_role(client, db_session, "cal_ov_s@example.com", "sales")
-    appraiser = await _user_with_role(
-        client, db_session, "cal_ov_a@example.com", "appraiser"
-    )
+    appraiser = await _user_with_role(client, db_session, "cal_ov_a@example.com", "appraiser")
     rec_a = await _customer_record(client, db_session, "cal_ov_c1@example.com")
     rec_b = await _customer_record(client, db_session, "cal_ov_c2@example.com")
 
@@ -254,9 +251,7 @@ async def test_drive_time_buffer_blocks_when_addresses_far_apart(
     """Two events same day, far apart — fallback minutes should block them
     if scheduled too close even when the times don't directly overlap."""
     sales = await _user_with_role(client, db_session, "cal_dt_s@example.com", "sales")
-    appraiser = await _user_with_role(
-        client, db_session, "cal_dt_a@example.com", "appraiser"
-    )
+    appraiser = await _user_with_role(client, db_session, "cal_dt_a@example.com", "appraiser")
     rec_a = await _customer_record(client, db_session, "cal_dt_c1@example.com")
     rec_b = await _customer_record(client, db_session, "cal_dt_c2@example.com")
 
@@ -293,9 +288,7 @@ async def test_drive_time_buffer_blocks_when_addresses_far_apart(
 
 
 @pytest.mark.asyncio
-async def test_different_appraisers_no_conflict(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_different_appraisers_no_conflict(client: AsyncClient, db_session: AsyncSession):
     sales = await _user_with_role(client, db_session, "cal_diff_s@example.com", "sales")
     a1 = await _user_with_role(client, db_session, "cal_diff_a1@example.com", "appraiser")
     a2 = await _user_with_role(client, db_session, "cal_diff_a2@example.com", "appraiser")
@@ -336,9 +329,7 @@ async def test_patch_reschedule_re_runs_conflict_check(
     client: AsyncClient, db_session: AsyncSession
 ):
     sales = await _user_with_role(client, db_session, "cal_patch_s@example.com", "sales")
-    appraiser = await _user_with_role(
-        client, db_session, "cal_patch_a@example.com", "appraiser"
-    )
+    appraiser = await _user_with_role(client, db_session, "cal_patch_a@example.com", "appraiser")
     rec1 = await _customer_record(client, db_session, "cal_patch_c1@example.com")
     rec2 = await _customer_record(client, db_session, "cal_patch_c2@example.com")
 
@@ -387,9 +378,7 @@ async def test_cancel_reverts_status_and_emails_both_parties(
     client: AsyncClient, db_session: AsyncSession
 ):
     sales = await _user_with_role(client, db_session, "cal_can_s@example.com", "sales")
-    appraiser = await _user_with_role(
-        client, db_session, "cal_can_a@example.com", "appraiser"
-    )
+    appraiser = await _user_with_role(client, db_session, "cal_can_a@example.com", "appraiser")
     rec_id = await _customer_record(client, db_session, "cal_can_c@example.com")
 
     base = datetime.now(UTC).replace(microsecond=0) + timedelta(days=7, hours=10)
@@ -418,19 +407,27 @@ async def test_cancel_reverts_status_and_emails_both_parties(
     assert record.status == "new_request"
 
     appraiser_emails = (
-        await db_session.execute(
-            select(NotificationJob).where(
-                NotificationJob.template == "appraisal_cancelled_appraiser"
+        (
+            await db_session.execute(
+                select(NotificationJob).where(
+                    NotificationJob.template == "appraisal_cancelled_appraiser"
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     customer_emails = (
-        await db_session.execute(
-            select(NotificationJob).where(
-                NotificationJob.template == "appraisal_cancelled_customer"
+        (
+            await db_session.execute(
+                select(NotificationJob).where(
+                    NotificationJob.template == "appraisal_cancelled_customer"
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(appraiser_emails) >= 1
     assert len(customer_emails) >= 1
 
@@ -439,9 +436,7 @@ async def test_cancel_reverts_status_and_emails_both_parties(
 
 
 @pytest.mark.asyncio
-async def test_list_filters_by_appraiser_and_window(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_list_filters_by_appraiser_and_window(client: AsyncClient, db_session: AsyncSession):
     sales = await _user_with_role(client, db_session, "cal_l_s@example.com", "sales")
     a1 = await _user_with_role(client, db_session, "cal_l_a1@example.com", "appraiser")
     a2 = await _user_with_role(client, db_session, "cal_l_a2@example.com", "appraiser")
@@ -501,9 +496,7 @@ async def test_list_filters_by_appraiser_and_window(
 
 
 @pytest.mark.asyncio
-async def test_customer_cannot_access_calendar(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_customer_cannot_access_calendar(client: AsyncClient, db_session: AsyncSession):
     cust = await _user_with_role(client, db_session, "cal_rbac@example.com", "customer")
     resp = await client.get(
         "/api/v1/calendar/events",

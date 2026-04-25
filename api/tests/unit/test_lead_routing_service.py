@@ -80,7 +80,16 @@ def test_geo_does_not_match_when_neither_field_present():
 
 def test_geo_skips_metro_area_silently():
     """Metro-area routing is deferred to Sprint 4 — must not blow up if present."""
-    rule = _rule({"metro_area": {"name": "LA", "center_lat": 34, "center_lon": -118, "radius_miles": 50}})
+    rule = _rule(
+        {
+            "metro_area": {
+                "name": "LA",
+                "center_lat": 34,
+                "center_lon": -118,
+                "radius_miles": 50,
+            }
+        }
+    )
     assert _geo_matches(rule, state="CA", zip_code="90210") is False
 
 

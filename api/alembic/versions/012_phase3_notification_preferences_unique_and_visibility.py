@@ -66,9 +66,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DELETE FROM app_config WHERE key = 'notification_preferences_hidden_roles'"
-    )
+    op.execute("DELETE FROM app_config WHERE key = 'notification_preferences_hidden_roles'")
     op.drop_constraint(
         "uq_notification_preferences_user_id",
         "notification_preferences",

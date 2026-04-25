@@ -1,5 +1,5 @@
-# ABOUTME: Phase 3 Sprint 3 — full waterfall test: ad_hoc → geographic → round_robin → AppConfig fallback.
-# ABOUTME: Drives routing through the real intake endpoint and inspects record + audit + notification side effects.
+# ABOUTME: Phase 3 Sprint 3 — waterfall test: ad_hoc → geographic → round_robin → fallback.
+# ABOUTME: Drives the real intake endpoint and inspects record + audit + notification side effects.
 from __future__ import annotations
 
 import uuid
@@ -119,10 +119,10 @@ async def _intake(client: AsyncClient, tok: str) -> uuid.UUID:
 
 async def _routing_audit_for(db: AsyncSession, record_id: uuid.UUID) -> AuditLog:
     rows = (
-        await db.execute(
-            select(AuditLog).where(AuditLog.event_type == "equipment_record.routed")
-        )
-    ).scalars().all()
+        (await db.execute(select(AuditLog).where(AuditLog.event_type == "equipment_record.routed")))
+        .scalars()
+        .all()
+    )
     match = next((a for a in rows if a.target_id == record_id), None)
     assert match is not None, f"no routing audit row for record {record_id}"
     return match
@@ -132,9 +132,7 @@ async def _routing_audit_for(db: AsyncSession, record_id: uuid.UUID) -> AuditLog
 
 
 @pytest.mark.asyncio
-async def test_ad_hoc_customer_id_match_assigns_rep(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_ad_hoc_customer_id_match_assigns_rep(client: AsyncClient, db_session: AsyncSession):
     rep = await _user_with_role(client, db_session, "lr_adhoc_rep@example.com", "sales")
     cust = await _activated_customer(client, db_session, "lr_adhoc_c@example.com")
 
@@ -178,17 +176,19 @@ async def test_ad_hoc_customer_id_match_assigns_rep(
     assert audit.after_state["assigned_sales_rep_id"] == rep["user_id"]
 
     notifs = (
-        await db_session.execute(
-            select(NotificationJob).where(NotificationJob.template == "record_assigned")
+        (
+            await db_session.execute(
+                select(NotificationJob).where(NotificationJob.template == "record_assigned")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(str(rec_id) in n.idempotency_key for n in notifs)
 
 
 @pytest.mark.asyncio
-async def test_ad_hoc_email_domain_match_assigns_rep(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_ad_hoc_email_domain_match_assigns_rep(client: AsyncClient, db_session: AsyncSession):
     rep = await _user_with_role(client, db_session, "lr_em_rep@example.com", "sales")
     cust = await _activated_customer(client, db_session, "buyer@acme.example")
 
@@ -214,13 +214,9 @@ async def test_ad_hoc_email_domain_match_assigns_rep(
 
 
 @pytest.mark.asyncio
-async def test_geographic_state_match_assigns_rep(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_geographic_state_match_assigns_rep(client: AsyncClient, db_session: AsyncSession):
     rep = await _user_with_role(client, db_session, "lr_state_rep@example.com", "sales")
-    cust = await _activated_customer(
-        client, db_session, "lr_state_c@example.com", state="CA"
-    )
+    cust = await _activated_customer(client, db_session, "lr_state_c@example.com", state="CA")
 
     rule = LeadRoutingRule(
         rule_type="geographic",
@@ -248,9 +244,7 @@ async def test_geographic_zip_range_match_assigns_rep(
     client: AsyncClient, db_session: AsyncSession
 ):
     rep = await _user_with_role(client, db_session, "lr_zip_rep@example.com", "sales")
-    cust = await _activated_customer(
-        client, db_session, "lr_zip_c@example.com", zip_code="30350"
-    )
+    cust = await _activated_customer(client, db_session, "lr_zip_c@example.com", zip_code="30350")
 
     rule = LeadRoutingRule(
         rule_type="geographic",
@@ -276,14 +270,13 @@ async def test_geographic_metro_area_match_assigns_rep(
 ):
     """Metro-area routing geocodes the customer's address (mocked) and
     matches when the haversine distance is within ``radius_miles``."""
-    from unittest.mock import AsyncMock, patch as _patch
+    from unittest.mock import AsyncMock
+    from unittest.mock import patch as _patch
 
     from database.models import Customer
 
     rep = await _user_with_role(client, db_session, "lr_metro_rep@example.com", "sales")
-    cust = await _activated_customer(
-        client, db_session, "lr_metro_c@example.com"
-    )
+    cust = await _activated_customer(client, db_session, "lr_metro_c@example.com")
 
     # Pre-create profile with a usable address.
     customer = (
@@ -342,14 +335,13 @@ async def test_geographic_metro_area_match_assigns_rep(
 async def test_geographic_metro_area_skips_when_outside_radius(
     client: AsyncClient, db_session: AsyncSession
 ):
-    from unittest.mock import AsyncMock, patch as _patch
+    from unittest.mock import AsyncMock
+    from unittest.mock import patch as _patch
 
     from database.models import Customer
 
     rep = await _user_with_role(client, db_session, "lr_metro_far_rep@example.com", "sales")
-    cust = await _activated_customer(
-        client, db_session, "lr_metro_far_c@example.com"
-    )
+    cust = await _activated_customer(client, db_session, "lr_metro_far_c@example.com")
     customer = Customer(
         user_id=uuid.UUID(cust["user_id"]),
         submitter_name="C U",
@@ -392,14 +384,10 @@ async def test_geographic_metro_area_skips_when_outside_radius(
 
 
 @pytest.mark.asyncio
-async def test_ad_hoc_takes_priority_over_geographic(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_ad_hoc_takes_priority_over_geographic(client: AsyncClient, db_session: AsyncSession):
     rep_adhoc = await _user_with_role(client, db_session, "lr_pr_a@example.com", "sales")
     rep_geo = await _user_with_role(client, db_session, "lr_pr_g@example.com", "sales")
-    cust = await _activated_customer(
-        client, db_session, "lr_pr_c@example.com", state="CA"
-    )
+    cust = await _activated_customer(client, db_session, "lr_pr_c@example.com", state="CA")
 
     db_session.add(
         LeadRoutingRule(
@@ -432,9 +420,7 @@ async def test_ad_hoc_takes_priority_over_geographic(
 
 
 @pytest.mark.asyncio
-async def test_round_robin_cycles_through_reps(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_round_robin_cycles_through_reps(client: AsyncClient, db_session: AsyncSession):
     rep_a = await _user_with_role(client, db_session, "lr_rr_a@example.com", "sales")
     rep_b = await _user_with_role(client, db_session, "lr_rr_b@example.com", "sales")
     cust1 = await _activated_customer(client, db_session, "lr_rr_c1@example.com")
@@ -510,9 +496,7 @@ async def test_appconfig_default_fallback_when_no_rule_matches(
 
 
 @pytest.mark.asyncio
-async def test_unassigned_when_nothing_matches(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_unassigned_when_nothing_matches(client: AsyncClient, db_session: AsyncSession):
     cust = await _activated_customer(client, db_session, "lr_ua_c@example.com")
     rec_id = await _intake(client, cust["access_token"])
 
@@ -530,9 +514,7 @@ async def test_unassigned_when_nothing_matches(
 
 
 @pytest.mark.asyncio
-async def test_routing_failure_does_not_block_intake(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_routing_failure_does_not_block_intake(client: AsyncClient, db_session: AsyncSession):
     cust = await _activated_customer(client, db_session, "lr_fail_c@example.com")
 
     with patch(
@@ -564,9 +546,7 @@ async def test_soft_deleted_rule_excluded_from_waterfall(
     from datetime import UTC, datetime
 
     rep = await _user_with_role(client, db_session, "lr_sd_rep@example.com", "sales")
-    cust = await _activated_customer(
-        client, db_session, "lr_sd_c@example.com", state="CA"
-    )
+    cust = await _activated_customer(client, db_session, "lr_sd_c@example.com", state="CA")
 
     rule = LeadRoutingRule(
         rule_type="geographic",
@@ -587,13 +567,9 @@ async def test_soft_deleted_rule_excluded_from_waterfall(
 
 
 @pytest.mark.asyncio
-async def test_inactive_rule_excluded_from_waterfall(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_inactive_rule_excluded_from_waterfall(client: AsyncClient, db_session: AsyncSession):
     rep = await _user_with_role(client, db_session, "lr_inact_rep@example.com", "sales")
-    cust = await _activated_customer(
-        client, db_session, "lr_inact_c@example.com", state="CA"
-    )
+    cust = await _activated_customer(client, db_session, "lr_inact_c@example.com", state="CA")
 
     rule = LeadRoutingRule(
         rule_type="geographic",

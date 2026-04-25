@@ -51,12 +51,14 @@ async def test_drive_time_returns_none_when_no_api_key(db_session: AsyncSession)
 
 @pytest.mark.asyncio
 async def test_drive_time_returns_none_when_origin_or_dest_blank(db_session: AsyncSession):
-    assert await google_maps_service.get_drive_time_seconds(
-        db_session, origin="", destination="X"
-    ) is None
-    assert await google_maps_service.get_drive_time_seconds(
-        db_session, origin="X", destination=""
-    ) is None
+    assert (
+        await google_maps_service.get_drive_time_seconds(db_session, origin="", destination="X")
+        is None
+    )
+    assert (
+        await google_maps_service.get_drive_time_seconds(db_session, origin="X", destination="")
+        is None
+    )
 
 
 @pytest.mark.asyncio
@@ -83,9 +85,7 @@ async def test_drive_time_caches_first_call(db_session: AsyncSession):
     assert second == 1234
     assert captured["calls"] == 1, "second call must hit the cache"
 
-    rows = (
-        await db_session.execute(select(DriveTimeCache))
-    ).scalars().all()
+    rows = (await db_session.execute(select(DriveTimeCache))).scalars().all()
     assert len(rows) == 1
     assert rows[0].duration_seconds == 1234
     assert rows[0].expires_at > datetime.now(UTC) + timedelta(hours=5)
@@ -186,9 +186,7 @@ async def test_geocode_caches_first_call(db_session: AsyncSession):
 async def test_geocode_returns_none_on_zero_results(db_session: AsyncSession):
     async def fake_get(self, url, params=None):  # noqa: ARG001
         req = httpx.Request("GET", url)
-        return httpx.Response(
-            200, json={"status": "ZERO_RESULTS", "results": []}, request=req
-        )
+        return httpx.Response(200, json={"status": "ZERO_RESULTS", "results": []}, request=req)
 
     with (
         patch.object(google_maps_service.settings, "google_maps_api_key", "TEST_KEY"),

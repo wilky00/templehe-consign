@@ -47,12 +47,7 @@ def upgrade() -> None:
             """
         )
     )
-    op.execute(
-        sa.text(
-            "CREATE INDEX ix_drive_time_cache_expires "
-            "ON drive_time_cache(expires_at)"
-        )
-    )
+    op.execute(sa.text("CREATE INDEX ix_drive_time_cache_expires ON drive_time_cache(expires_at)"))
 
     op.execute(
         sa.text(
@@ -67,12 +62,7 @@ def upgrade() -> None:
             """
         )
     )
-    op.execute(
-        sa.text(
-            "CREATE INDEX ix_geocode_cache_expires "
-            "ON geocode_cache(expires_at)"
-        )
-    )
+    op.execute(sa.text("CREATE INDEX ix_geocode_cache_expires ON geocode_cache(expires_at)"))
 
     # Seed the drive-time fallback. Idempotent — safe on re-runs.
     op.execute(

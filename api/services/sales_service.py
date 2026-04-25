@@ -20,16 +20,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database.models import (
-    AppraisalReport,
     AuditLog,
-    ChangeRequest,
-    ConsignmentContract,
     Customer,
     EquipmentRecord,
     PublicListing,
     RecordLock,
     Role,
-    StatusEvent,
     User,
 )
 from services import equipment_service, equipment_status_service
@@ -222,11 +218,7 @@ async def apply_assignment(
     # Spec Feature 3.3.3: notify the newly-assigned sales rep on a manual
     # change. Only fire when the assignment actually changed to a non-null
     # user — re-assigning the same rep or clearing the field is a no-op.
-    if (
-        set_sales_rep
-        and sales_rep_id is not None
-        and sales_rep_id != prior_sales_rep_id
-    ):
+    if set_sales_rep and sales_rep_id is not None and sales_rep_id != prior_sales_rep_id:
         await equipment_service.enqueue_assignment_notification(
             db,
             record=record,
@@ -391,9 +383,7 @@ async def publish_record(
             target_id=record.id,
             after_state={
                 "public_listing_id": str(listing.id),
-                "published_at": listing.published_at.isoformat()
-                if listing.published_at
-                else None,
+                "published_at": listing.published_at.isoformat() if listing.published_at else None,
             },
         )
     )
@@ -405,15 +395,11 @@ async def _require_user_has_role(
     db: AsyncSession, user_id: uuid.UUID, allowed_slugs: tuple[str, ...]
 ) -> None:
     result = await db.execute(
-        select(User, Role.slug)
-        .join(Role, Role.id == User.role_id)
-        .where(User.id == user_id)
+        select(User, Role.slug).join(Role, Role.id == User.role_id).where(User.id == user_id)
     )
     row = result.first()
     if row is None:
-        raise HTTPException(
-            status_code=422, detail=f"assigned user {user_id} not found"
-        )
+        raise HTTPException(status_code=422, detail=f"assigned user {user_id} not found")
     _, slug = row
     if slug not in allowed_slugs:
         raise HTTPException(

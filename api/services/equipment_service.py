@@ -170,9 +170,7 @@ async def _route_and_assign(
         # but the user relation may not be hydrated.
         if customer.user is None:
             customer.user = user
-        decision = await lead_routing_service.route_for_record(
-            db, record=record, customer=customer
-        )
+        decision = await lead_routing_service.route_for_record(db, record=record, customer=customer)
     except Exception:
         logger.exception(
             "lead_routing_failed",

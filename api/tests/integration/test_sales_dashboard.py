@@ -94,9 +94,7 @@ def _auth(tok: str) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_dashboard_requires_sales_role(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_dashboard_requires_sales_role(client: AsyncClient, db_session: AsyncSession):
     cust = await _user_with_role(client, db_session, "dash_cust@example.com", "customer")
     resp = await client.get("/api/v1/sales/dashboard", headers=_auth(cust["access_token"]))
     assert resp.status_code == 403
@@ -185,9 +183,7 @@ async def test_dashboard_groups_records_under_same_customer(
     mgr = await _user_with_role(client, db_session, "dash_group_m@example.com", "sales_manager")
     ids = await _customer_with_records(client, db_session, "dash_group_c@example.com", 3)
 
-    resp = await client.get(
-        "/api/v1/sales/dashboard?scope=all", headers=_auth(mgr["access_token"])
-    )
+    resp = await client.get("/api/v1/sales/dashboard?scope=all", headers=_auth(mgr["access_token"]))
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["customers"]) == 1

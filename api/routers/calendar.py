@@ -1,16 +1,15 @@
-# ABOUTME: Phase 3 Sprint 4 — /calendar/events HTTP surface; sales+ RBAC, 409 surfaces next-available slot.
-# ABOUTME: Editing per Feature 3.4.1: sales / sales_manager / admin can all author; audit log captures who.
+# ABOUTME: Phase 3 Sprint 4 — /calendar/events HTTP surface; sales+ RBAC; 409 has next-available.
+# ABOUTME: Per Feature 3.4.1, sales / sales_manager / admin all author; audit log captures who.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy.orm import selectinload
 
 from database.base import get_db
@@ -92,7 +91,7 @@ def _ensure_aware(value: datetime) -> datetime:
     schemas elsewhere.
     """
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 
@@ -112,9 +111,7 @@ async def _hydrate_event(db: AsyncSession, event_id: uuid.UUID) -> CalendarEvent
         await db.execute(
             select(CalendarEvent)
             .options(
-                selectinload(CalendarEvent.equipment_record).selectinload(
-                    EquipmentRecord.customer
-                ),
+                selectinload(CalendarEvent.equipment_record).selectinload(EquipmentRecord.customer),
             )
             .where(CalendarEvent.id == event_id)
         )

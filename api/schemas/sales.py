@@ -1,5 +1,5 @@
-# ABOUTME: Request/response shapes for the sales rep dashboard, record view, cascade, publish, resolution.
-# ABOUTME: The dashboard groups records by customer; individual record view is a richer equipment payload.
+# ABOUTME: Sales-rep request/response shapes — dashboard, record view, cascade, publish, resolve.
+# ABOUTME: Dashboard groups records by customer; record view is a richer equipment payload.
 from __future__ import annotations
 
 import uuid

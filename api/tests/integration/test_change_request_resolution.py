@@ -125,12 +125,16 @@ async def test_resolve_happy_path_persists_and_emails_customer(
     assert cr.resolved_at is not None
 
     emails = (
-        await db_session.execute(
-            select(NotificationJob).where(
-                NotificationJob.template == "customer_change_request_resolution"
+        (
+            await db_session.execute(
+                select(NotificationJob).where(
+                    NotificationJob.template == "customer_change_request_resolution"
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(emails) == 1
     assert "resolved" in emails[0].payload["subject"].lower()
 
@@ -159,9 +163,7 @@ async def test_resolve_withdraw_flips_record_to_withdrawn(
 
 
 @pytest.mark.asyncio
-async def test_resolve_rejected_does_not_flip_status(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_resolve_rejected_does_not_flip_status(client: AsyncClient, db_session: AsyncSession):
     mgr = await _user_with_role(client, db_session, "crres_rej_m@example.com", "sales_manager")
     rec_id, cr_id = await _customer_with_change_request(
         client, db_session, "crres_rej_c@example.com", "withdraw"
@@ -177,9 +179,7 @@ async def test_resolve_rejected_does_not_flip_status(
 
 
 @pytest.mark.asyncio
-async def test_resolve_already_resolved_returns_409(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_resolve_already_resolved_returns_409(client: AsyncClient, db_session: AsyncSession):
     mgr = await _user_with_role(client, db_session, "crres_dup_m@example.com", "sales_manager")
     _rec_id, cr_id = await _customer_with_change_request(
         client, db_session, "crres_dup_c@example.com", "edit_details"
@@ -213,10 +213,14 @@ async def test_resolve_writes_audit_event(client: AsyncClient, db_session: Async
         headers=_auth(mgr["access_token"]),
     )
     events = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.event_type == "change_request.resolved")
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "change_request.resolved")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(e.target_id == cr_id for e in events)
 
 
@@ -227,9 +231,7 @@ async def test_customer_cannot_resolve_change_request(
     _rec_id, cr_id = await _customer_with_change_request(
         client, db_session, "crres_forbid_c@example.com", "edit_details"
     )
-    cust2 = await _user_with_role(
-        client, db_session, "crres_forbid_other@example.com", "customer"
-    )
+    cust2 = await _user_with_role(client, db_session, "crres_forbid_other@example.com", "customer")
     resp = await client.patch(
         f"/api/v1/sales/change-requests/{cr_id}",
         json={"status": "resolved"},

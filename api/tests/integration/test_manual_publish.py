@@ -1,5 +1,5 @@
 # ABOUTME: Phase 3 Sprint 2 — POST /sales/equipment/{id}/publish.
-# ABOUTME: Validates status=esigned_pending_publish + signed contract + appraisal report. Transitions to 'listed'.
+# ABOUTME: Validates pre-reqs (signed contract + appraisal report) then transitions to 'listed'.
 from __future__ import annotations
 
 import uuid
@@ -56,9 +56,7 @@ async def _user_with_role(
     return body
 
 
-async def _customer_record(
-    client: AsyncClient, db: AsyncSession, email: str
-) -> uuid.UUID:
+async def _customer_record(client: AsyncClient, db: AsyncSession, email: str) -> uuid.UUID:
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         reg = await client.post(
             "/api/v1/auth/register",
@@ -148,25 +146,31 @@ async def test_publish_happy_path_creates_listing_and_sends_email(
 
     # Customer email queued (via equipment_status_service — 'listed' is in the set)
     emails = (
-        await db_session.execute(
-            select(NotificationJob).where(NotificationJob.template == "status_listed")
+        (
+            await db_session.execute(
+                select(NotificationJob).where(NotificationJob.template == "status_listed")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(e.payload.get("reference_number") for e in emails) or emails
 
     # Audit entry
     events = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.event_type == "equipment_record.published")
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "equipment_record.published")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(e.target_id == rec_id for e in events)
 
 
 @pytest.mark.asyncio
-async def test_publish_wrong_status_returns_400(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_publish_wrong_status_returns_400(client: AsyncClient, db_session: AsyncSession):
     mgr = await _user_with_role(client, db_session, "pub_bad_m@example.com", "sales_manager")
     rec_id = await _customer_record(client, db_session, "pub_bad_c@example.com")
 

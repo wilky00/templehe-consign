@@ -1,5 +1,5 @@
-# ABOUTME: Phase 3 Sprint 4 — appraisal calendar: list / create / update / cancel with atomic conflict detection.
-# ABOUTME: Conflict check uses SELECT … FOR UPDATE on the appraiser's overlapping window + drive-time buffer from Google Maps.
+# ABOUTME: Phase 3 Sprint 4 — appraisal calendar: list/create/update/cancel + atomic conflict.
+# ABOUTME: SELECT … FOR UPDATE over the appraiser's day; drive-time buffer via Google Maps.
 """Shared calendar + scheduling service.
 
 The conflict-detection contract:
@@ -97,9 +97,7 @@ async def list_events(
     stmt = (
         select(CalendarEvent)
         .options(
-            selectinload(CalendarEvent.equipment_record).selectinload(
-                EquipmentRecord.customer
-            ),
+            selectinload(CalendarEvent.equipment_record).selectinload(EquipmentRecord.customer),
         )
         .where(
             CalendarEvent.scheduled_at >= start,
@@ -218,9 +216,7 @@ async def update_event(
     """Re-run the conflict check on any time/appraiser change."""
     event = await _get_event_or_404(db, event_id)
     if event.cancelled_at is not None:
-        raise HTTPException(
-            status_code=409, detail="Cannot edit a cancelled appointment."
-        )
+        raise HTTPException(status_code=409, detail="Cannot edit a cancelled appointment.")
 
     before = _event_state(event)
 
@@ -378,14 +374,10 @@ async def _check_conflict(
     fallback_minutes = await google_maps_service.read_drive_time_fallback_minutes(db)
 
     for existing in same_day_events:
-        existing_end = existing.scheduled_at + timedelta(
-            minutes=existing.duration_minutes
-        )
+        existing_end = existing.scheduled_at + timedelta(minutes=existing.duration_minutes)
 
         # Direct overlap (no buffer needed).
-        if _ranges_overlap(
-            proposed_start, proposed_end, existing.scheduled_at, existing_end
-        ):
+        if _ranges_overlap(proposed_start, proposed_end, existing.scheduled_at, existing_end):
             return CalendarConflict(
                 message=(
                     f"Appraiser is already scheduled "
@@ -433,9 +425,7 @@ async def _check_conflict(
     return None
 
 
-def _ranges_overlap(
-    a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime
-) -> bool:
+def _ranges_overlap(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> bool:
     return a_start < b_end and b_start < a_end
 
 
@@ -462,9 +452,7 @@ async def _resolve_buffer_seconds(
 # --------------------------------------------------------------------------- #
 
 
-async def _load_record_or_404(
-    db: AsyncSession, record_id: uuid.UUID
-) -> EquipmentRecord:
+async def _load_record_or_404(db: AsyncSession, record_id: uuid.UUID) -> EquipmentRecord:
     record = (
         await db.execute(
             select(EquipmentRecord)
@@ -479,9 +467,7 @@ async def _load_record_or_404(
     return record
 
 
-async def _get_event_or_404(
-    db: AsyncSession, event_id: uuid.UUID
-) -> CalendarEvent:
+async def _get_event_or_404(db: AsyncSession, event_id: uuid.UUID) -> CalendarEvent:
     event = (
         await db.execute(select(CalendarEvent).where(CalendarEvent.id == event_id))
     ).scalar_one_or_none()
@@ -493,15 +479,11 @@ async def _get_event_or_404(
 async def _require_appraiser(db: AsyncSession, user_id: uuid.UUID) -> User:
     row = (
         await db.execute(
-            select(User, Role.slug)
-            .join(Role, Role.id == User.role_id)
-            .where(User.id == user_id)
+            select(User, Role.slug).join(Role, Role.id == User.role_id).where(User.id == user_id)
         )
     ).first()
     if row is None:
-        raise HTTPException(
-            status_code=422, detail=f"appraiser {user_id} not found"
-        )
+        raise HTTPException(status_code=422, detail=f"appraiser {user_id} not found")
     user, slug = row
     if slug != "appraiser":
         raise HTTPException(
@@ -516,9 +498,7 @@ def _event_state(event: CalendarEvent) -> dict:
         "id": str(event.id),
         "equipment_record_id": str(event.equipment_record_id),
         "appraiser_id": str(event.appraiser_id),
-        "scheduled_at": event.scheduled_at.isoformat()
-        if event.scheduled_at
-        else None,
+        "scheduled_at": event.scheduled_at.isoformat() if event.scheduled_at else None,
         "duration_minutes": event.duration_minutes,
         "site_address": event.site_address,
         "cancelled_at": event.cancelled_at.isoformat() if event.cancelled_at else None,

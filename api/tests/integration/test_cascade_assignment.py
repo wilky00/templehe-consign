@@ -1,5 +1,5 @@
 # ABOUTME: Phase 3 Sprint 2 — PATCH /sales/customers/{id}/cascade-assignments.
-# ABOUTME: Only new_request rows are updated; later-status rows are skipped; one audit event lists both.
+# ABOUTME: Only new_request rows update; later-status rows skip; one audit event lists both.
 from __future__ import annotations
 
 import uuid
@@ -99,9 +99,7 @@ async def test_cascade_updates_only_new_request_records(
 
     # Advance one record past new_request to exercise the skip branch.
     advanced = (
-        await db_session.execute(
-            select(EquipmentRecord).where(EquipmentRecord.id == record_ids[0])
-        )
+        await db_session.execute(select(EquipmentRecord).where(EquipmentRecord.id == record_ids[0]))
     ).scalar_one()
     advanced.status = "appraisal_scheduled"
     await db_session.flush()
@@ -120,10 +118,14 @@ async def test_cascade_updates_only_new_request_records(
 
     # The advanced record's assignment stays None; the other two flip.
     rows = (
-        await db_session.execute(
-            select(EquipmentRecord).where(EquipmentRecord.customer_id == customer_id)
+        (
+            await db_session.execute(
+                select(EquipmentRecord).where(EquipmentRecord.customer_id == customer_id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for r in rows:
         if r.id == record_ids[0]:
             assert r.assigned_sales_rep_id is None
@@ -149,10 +151,14 @@ async def test_cascade_writes_single_audit_event_with_affected_ids(
     assert resp.status_code == 200
 
     events = (
-        await db_session.execute(
-            select(AuditLog).where(AuditLog.event_type == "customer.cascade_assignment")
+        (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "customer.cascade_assignment")
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     match = next((e for e in events if e.target_id == customer_id), None)
     assert match is not None
     assert match.after_state["assigned_sales_rep_id"] == rep["user_id"]
@@ -178,9 +184,7 @@ async def test_cascade_requires_sales_manager_or_admin_for_others_customers(
 
 
 @pytest.mark.asyncio
-async def test_cascade_unknown_customer_returns_404(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_cascade_unknown_customer_returns_404(client: AsyncClient, db_session: AsyncSession):
     mgr = await _user_with_role(client, db_session, "casc_404_m@example.com", "sales_manager")
     rep = await _user_with_role(client, db_session, "casc_404_r@example.com", "sales")
     resp = await client.patch(

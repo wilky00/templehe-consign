@@ -1,5 +1,5 @@
 # ABOUTME: Pessimistic record locks — 15-min TTL, heartbeat refresh, manager override.
-# ABOUTME: Swaps to Redis on GCP migration — the interface (acquire/heartbeat/release/override) stays identical.
+# ABOUTME: Swaps to Redis on GCP — acquire/heartbeat/release/override surface is fixed.
 """RecordLockService — POC impl backed by the ``record_locks`` Postgres table.
 
 Per ADR-001 + ADR-002, the POC uses a single Postgres table with a
@@ -104,9 +104,7 @@ async def acquire(
     existing = await _find(db, record_id=record_id, record_type=record_type)
     if existing is not None:
         if existing.expires_at <= _now():
-            await db.execute(
-                delete(RecordLock).where(RecordLock.id == existing.id)
-            )
+            await db.execute(delete(RecordLock).where(RecordLock.id == existing.id))
             await db.flush()
             existing = None
         elif existing.locked_by == user_id:
@@ -171,9 +169,7 @@ async def heartbeat(
     )
     row = result.scalar_one_or_none()
     if row is None:
-        raise LockExpiredError(
-            f"no active lock for user {user_id} on {record_type}/{record_id}"
-        )
+        raise LockExpiredError(f"no active lock for user {user_id} on {record_type}/{record_id}")
     return _to_info(row)
 
 

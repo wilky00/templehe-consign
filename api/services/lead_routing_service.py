@@ -1,5 +1,5 @@
-# ABOUTME: Phase 3 Sprint 3 — lead routing waterfall: ad_hoc → geographic → round_robin → AppConfig fallback.
-# ABOUTME: Pure routing decision; caller (equipment_service.submit_intake) owns assignment, audit, notification.
+# ABOUTME: Phase 3 Sprint 3 — lead routing waterfall: ad_hoc → geographic → round_robin → fallback.
+# ABOUTME: Pure routing decision; caller owns the assignment, audit, and notification side effects.
 """Lead routing engine.
 
 The waterfall (spec Feature 3.3.2):
@@ -121,9 +121,7 @@ async def route_for_record(
         key=lambda r: r.priority,
     )
     for rule in geo_rules:
-        matched = _geo_matches(
-            rule, state=customer.address_state, zip_code=customer.address_zip
-        )
+        matched = _geo_matches(rule, state=customer.address_state, zip_code=customer.address_zip)
         if not matched:
             matched = await _metro_matches(db, rule, customer=customer)
         if matched and rule.assigned_user_id is not None:
@@ -193,8 +191,8 @@ def _ad_hoc_matches(
     customer_email: str | None,
 ) -> bool:
     """Ad-hoc rule shape:
-        {"condition_type": "customer_id", "value": "<uuid>"}
-        {"condition_type": "email_domain", "value": "@acme.com"}
+    {"condition_type": "customer_id", "value": "<uuid>"}
+    {"condition_type": "email_domain", "value": "@acme.com"}
     """
     cond = rule.conditions or {}
     ctype = cond.get("condition_type")
@@ -283,9 +281,7 @@ async def _metro_matches(
     if coords is None:
         return False
     customer_lat, customer_lon = coords
-    distance_miles = _haversine_miles(
-        center_lat, center_lon, customer_lat, customer_lon
-    )
+    distance_miles = _haversine_miles(center_lat, center_lon, customer_lat, customer_lon)
     return distance_miles <= radius_miles
 
 
@@ -425,9 +421,7 @@ async def list_rules(
 
 
 async def get_rule(db: AsyncSession, rule_id: uuid.UUID) -> LeadRoutingRule:
-    result = await db.execute(
-        select(LeadRoutingRule).where(LeadRoutingRule.id == rule_id)
-    )
+    result = await db.execute(select(LeadRoutingRule).where(LeadRoutingRule.id == rule_id))
     rule = result.scalar_one_or_none()
     if rule is None or rule.deleted_at is not None:
         raise HTTPException(status_code=404, detail="routing rule not found")
@@ -528,7 +522,9 @@ def _validate_conditions(rule_type: str, conditions: dict | None) -> None:
         if not isinstance(conditions, dict):
             raise HTTPException(
                 status_code=422,
-                detail="geographic rules require conditions with state_list, zip_list, or metro_area",
+                detail=(
+                    "geographic rules require conditions with state_list, zip_list, or metro_area"
+                ),
             )
         if (
             not conditions.get("state_list")
@@ -542,9 +538,7 @@ def _validate_conditions(rule_type: str, conditions: dict | None) -> None:
         metro = conditions.get("metro_area")
         if metro is not None:
             if not isinstance(metro, dict):
-                raise HTTPException(
-                    status_code=422, detail="metro_area must be an object"
-                )
+                raise HTTPException(status_code=422, detail="metro_area must be an object")
             for key in ("center_lat", "center_lon", "radius_miles"):
                 if not isinstance(metro.get(key), (int, float)):
                     raise HTTPException(
@@ -552,9 +546,7 @@ def _validate_conditions(rule_type: str, conditions: dict | None) -> None:
                         detail=f"metro_area.{key} must be a number",
                     )
             if metro["radius_miles"] <= 0:
-                raise HTTPException(
-                    status_code=422, detail="metro_area.radius_miles must be > 0"
-                )
+                raise HTTPException(status_code=422, detail="metro_area.radius_miles must be > 0")
     elif rule_type == "round_robin":
         if not isinstance(conditions, dict) or not isinstance(conditions.get("rep_ids"), list):
             raise HTTPException(
@@ -570,9 +562,7 @@ def _validate_conditions(rule_type: str, conditions: dict | None) -> None:
 
 async def _require_sales_role(db: AsyncSession, user_id: uuid.UUID) -> None:
     result = await db.execute(
-        select(User, Role.slug)
-        .join(Role, Role.id == User.role_id)
-        .where(User.id == user_id)
+        select(User, Role.slug).join(Role, Role.id == User.role_id).where(User.id == user_id)
     )
     row = result.first()
     if row is None:
