@@ -40,6 +40,7 @@ from services import (
     notification_service,
     sanitization,
 )
+from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)
 
@@ -113,7 +114,7 @@ async def submit_intake(
 
     record = EquipmentRecord(
         customer_id=customer.id,
-        status="new_request",
+        status=Status.NEW_REQUEST.value,
         reference_number=reference,
         category_id=payload.category_id,
         customer_make=sanitized["customer_make"],

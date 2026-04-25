@@ -39,7 +39,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from database.models import AppConfig, DriveTimeCache, GeocodeCache
+from database.models import DriveTimeCache, GeocodeCache
+from services import app_config_registry
 
 logger = structlog.get_logger(__name__)
 
@@ -48,8 +49,6 @@ _GEOCODE_TTL = timedelta(days=30)
 _DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
 _GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 _HTTP_TIMEOUT_SECONDS = 5.0
-_FALLBACK_MINUTES_KEY = "drive_time_fallback_minutes"
-_DEFAULT_FALLBACK_MINUTES = 60
 
 
 def _hash(value: str) -> str:
@@ -296,16 +295,8 @@ async def _upsert_geocode(
 
 
 async def read_drive_time_fallback_minutes(db: AsyncSession) -> int:
-    """Return the manager-configured fallback minutes.
-
-    Read from ``app_config`` key ``drive_time_fallback_minutes``; default
-    60 if missing or malformed.
-    """
-    raw = (
-        await db.execute(select(AppConfig.value).where(AppConfig.key == _FALLBACK_MINUTES_KEY))
-    ).scalar_one_or_none()
-    if isinstance(raw, dict):
-        minutes = raw.get("minutes")
-        if isinstance(minutes, int) and minutes > 0:
-            return minutes
-    return _DEFAULT_FALLBACK_MINUTES
+    """Return the manager-configured fallback minutes via the
+    AppConfig registry. Default + validation live with the KeySpec."""
+    return await app_config_registry.get_typed(
+        db, app_config_registry.DRIVE_TIME_FALLBACK_MINUTES.name
+    )

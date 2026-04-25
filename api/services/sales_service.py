@@ -29,13 +29,14 @@ from database.models import (
     User,
 )
 from services import equipment_service, equipment_status_service
+from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)
 
 # Statuses that block a cascade assignment. Records past new_request have
 # real work attached (scheduled appraisers, signed contracts) — a cascade
 # re-assignment would clobber that context. Spec Feature 3.1.3.
-_CASCADE_ASSIGNABLE_STATUSES = frozenset({"new_request"})
+_CASCADE_ASSIGNABLE_STATUSES = frozenset({Status.NEW_REQUEST.value})
 
 
 async def list_dashboard(
@@ -333,11 +334,12 @@ async def publish_record(
     if record is None:
         raise HTTPException(status_code=404, detail="record not found")
 
-    if record.status != "esigned_pending_publish":
+    if record.status != Status.ESIGNED_PENDING_PUBLISH.value:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"record is in '{record.status}', not 'esigned_pending_publish'; "
+                f"record is in '{record.status}', not "
+                f"'{Status.ESIGNED_PENDING_PUBLISH.value}'; "
                 "publish is only valid after eSign"
             ),
         )
@@ -368,7 +370,7 @@ async def publish_record(
     await equipment_status_service.record_transition(
         db,
         record=record,
-        to_status="listed",
+        to_status=Status.LISTED.value,
         changed_by=acting_user,
         note="Listing published by sales rep.",
         customer=record.customer.user,

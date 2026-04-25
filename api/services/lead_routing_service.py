@@ -47,19 +47,17 @@ from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
-    AppConfig,
     Customer,
     EquipmentRecord,
     LeadRoutingRule,
     Role,
     User,
 )
-from services import google_maps_service
+from services import app_config_registry, google_maps_service
 
 logger = structlog.get_logger(__name__)
 
 _ALLOWED_RULE_TYPES = frozenset({"ad_hoc", "geographic", "round_robin"})
-_DEFAULT_SALES_REP_KEY = "default_sales_rep_id"
 
 
 @dataclass(frozen=True)
@@ -386,18 +384,13 @@ async def _claim_next_round_robin(
 
 
 async def _read_default_sales_rep(db: AsyncSession) -> uuid.UUID | None:
-    result = await db.execute(
-        select(AppConfig.value).where(AppConfig.key == _DEFAULT_SALES_REP_KEY)
-    )
-    raw = result.scalar_one_or_none()
+    """Resolve the AppConfig fallback rep. Registry returns the raw
+    UUID string; coerce here so callers downstream stay typed."""
+    raw = await app_config_registry.get_typed(db, app_config_registry.DEFAULT_SALES_REP_ID.name)
     if not raw:
         return None
-    # Stored as {"user_id": "<uuid>"} or null.
-    user_id = raw.get("user_id") if isinstance(raw, dict) else None
-    if not user_id:
-        return None
     try:
-        return uuid.UUID(str(user_id))
+        return uuid.UUID(str(raw))
     except (ValueError, TypeError):
         return None
 
