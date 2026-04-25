@@ -7,7 +7,18 @@ export type ISODateTime = string;
 export interface CurrentUser {
   id: UUID;
   email: string;
+  /**
+   * Primary role — drives default landing-page routing (sales-side vs
+   * customer-side). Phase 4 admin's "change primary role" updates this.
+   * Capability checks should prefer `roles` (the full set).
+   */
   role: string;
+  /**
+   * Every role slug the user holds, including the primary. Phase 4 pre-
+   * work (multi-role users): use this for capability checks. Defaults
+   * to `[role]` for back-compat in case the server omits it.
+   */
+  roles: string[];
   status: string;
   first_name: string;
   last_name: string;

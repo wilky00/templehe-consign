@@ -622,3 +622,48 @@ The Phase 3 close-out architectural debt review surfaced 16 items across the Pha
 - Implementation: `api/services/equipment_status_machine.py`, `api/services/app_config_registry.py`, `api/services/category_versioning_service.py`, migrations 013 + 014, refactors across `equipment_status_service`, `calendar_service`, `sales_service`, `change_request_service`, `equipment_service`, `legal_service`, `google_maps_service`, `lead_routing_service`, `notification_preferences_service`.
 - Tests: `api/tests/unit/test_equipment_status_machine.py` (12), `api/tests/unit/test_app_config_registry.py` (15), `api/tests/integration/test_category_versioning.py` (7). Full backend gate **341/341** (was 319 + 22 new pre-work tests).
 - Deferred items: `dev_plan/04_phase4_admin_panel.md` § Architectural Debt to Address.
+
+---
+
+## ADR-019: Phase 3 → Phase 4 Pre-work — Multi-Role Users
+
+**Date:** 2026-04-25
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+The fourth Critical item from ADR-018 (multi-role users). Split into its own PR per the prework packaging plan because the diff touches middleware, schemas, every test that flips roles, the registration path, and the frontend type — bundling it would have inflated the prework PR (#31) past reviewable size.
+
+Phase 1's `users.role_id` FK enforced one role per user. The moment Phase 4 admin lets Jim grant a sales rep the appraiser role too (so the rep can cover field shifts), the FK breaks down. Migrating data and rewriting RBAC after Phase 4's admin UI ships costs strictly more than doing it now.
+
+### Decisions
+
+1. **`user_roles` join table is the live source of truth for `require_roles()`.** Migration 015 adds `(user_id, role_id, granted_at, granted_by)`, primary key `(user_id, role_id)`, indexes on both columns. ON DELETE CASCADE on user_id (drop the user → drop the grants); ON DELETE RESTRICT on role_id (don't accidentally drop a built-in role); ON DELETE SET NULL on granted_by (admin who issued the grant may leave the company).
+
+2. **`users.role_id` is preserved as the user's *primary* role, not retired.** The primary role drives default landing-page routing in the SPA (`Layout.tsx`'s sales-vs-customer split) and the snapshot in `audit_logs.actor_role` (the role the user was acting as for that action — semantically a single string, not a set). Multi-role users have one primary + N secondary grants. Phase 4 admin "change primary role" is `set_primary_role()` — flips `users.role_id` AND inserts the join row in one operation.
+
+3. **Mirror invariant: every `users.role_id` write also writes a `user_roles` row.** Enforced via a SQLAlchemy `before_flush` event listener in `database/models.py`. The listener catches every dirty/new User where `role_id` changed and emits an idempotent `INSERT ... ON CONFLICT DO NOTHING` against `user_roles`. Without this, raw assignments like `user.role_id = role.id` (used in 12 test files + future admin paths we haven't built yet) would silently break the invariant; the listener centralizes the enforcement so callers don't have to know.
+
+   For raw-SQL writers (the seeders), the listener doesn't fire — those have an explicit `INSERT INTO user_roles` next to the user insert. The auth_service.register_user path also issues an explicit `user_roles_service.grant()` call after the first flush, since the User's auto-generated id isn't visible to the listener until after that flush.
+
+4. **`CurrentUser` schema gains `roles: list[str]`; `role: str` is preserved as the primary role.** Backwards-compatible — clients that only read `role` (today: every existing call site) keep working unchanged; `Layout.tsx` updates to check the full `roles` set so a sales rep who also has the customer role still gets the sales-side shell. `useMe.ts` returns the same shape; the type lives in `web/src/api/types.ts`.
+
+5. **`require_roles(*slugs)` checks set intersection.** A user passes if at least one of their granted roles is in the allowed set. Reads through `user_roles_service.role_slugs_for_user()` so the join table is the single read path; eliminates the prior `select(Role)` join that only saw the primary role.
+
+6. **`revoke()` refuses to remove the primary role.** The mirror invariant requires `users.role_id` to have a corresponding `user_roles` row; revoking the primary would break it. Phase 4 admin's "change primary role" flow is `set_primary_role()` — flips primary AND ensures the join row exists, so the prior primary stays grantable as a secondary.
+
+### Consequences
+
+- Migration 015 adds the table + backfills every existing user's primary role into a `user_roles` row in the same transaction. Production rollout is one-step; no data migration sequencing required.
+- Health check expected migration head bumps to `015`.
+- The mirror invariant + before_flush listener mean Phase 4 admin's "grant role" UI is a one-call-to-`grant()` operation; it doesn't have to think about the primary-vs-secondary distinction.
+- Tests that flip `user.role_id` directly (12 files, ~12 sites) keep working unchanged thanks to the listener — no test refactor needed for this PR.
+- `notification_jobs.actor_role` and `audit_logs.actor_role` continue to hold a single role string (snapshot of the role the user was acting as for that request). Phase 4 may add an `acting_as` UI control that lets a multi-role user explicitly pick which role the action audits as; for now the primary role is the snapshot.
+
+### References
+
+- Working branch: `phase4-prework-multirole` (off `phase4-prework`).
+- Implementation: `api/alembic/versions/015_phase4_prework_multirole_users.py`, `api/database/models.py` (UserRole + User.roles + User.role_grants + before_flush mirror listener), `api/services/user_roles_service.py` (grant / revoke / set_primary_role / role_slugs_for_user), `api/middleware/rbac.py` (intersection check), `api/routers/auth.py` (CurrentUser.roles populated via the service), `api/schemas/auth.py` (CurrentUser.roles field), `api/services/auth_service.py` (registration grants customer role explicitly), `web/src/api/types.ts` (CurrentUser.roles), `web/src/components/Layout.tsx` (sales-side check across all roles), `scripts/seed.py` + `scripts/seed_e2e_phase3.py` (raw-SQL paths write the join row).
+- Tests: `tests/integration/test_rbac.py` extended with two new cases — multi-role user passes both checks; revoke refuses the primary. Full backend gate **344/344** (was 341 + 3 new RBAC tests).
+- Phase 4 admin user-management UI now plugs into `user_roles_service.grant()` / `revoke()` / `set_primary_role()` rather than inventing its own write path.

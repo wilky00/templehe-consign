@@ -166,6 +166,82 @@ async def test_rbac_multi_role_excluded_returns_403(client: AsyncClient, db_sess
     assert resp.status_code == 403
 
 
+@pytest.mark.asyncio
+async def test_rbac_user_with_two_roles_passes_either_check(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Phase 4 pre-work — a user can hold multiple roles. A sales rep
+    granted the appraiser role passes a require_roles("appraiser") check
+    AND keeps passing require_roles("sales", "sales_manager")."""
+    from services import user_roles_service
+
+    login_data = await _create_active_user(
+        client, db_session, "sales_plus_appraiser@example.com", "sales"
+    )
+    token = login_data["access_token"]
+
+    # Primary check (sales) passes.
+    resp = await client.get(_SALES_OR_MANAGER_ROUTE, headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+
+    # Grant the secondary appraiser role.
+    user = (
+        await db_session.execute(
+            select(User).where(User.email == "sales_plus_appraiser@example.com")
+        )
+    ).scalar_one()
+    await user_roles_service.grant(db_session, user=user, role_slug="appraiser", granted_by=None)
+
+    # Held roles include the original customer grant (from /register),
+    # the primary sales role mirrored in by the event listener, and the
+    # explicit appraiser grant. Phase 4 admin "change primary" doesn't
+    # revoke the prior role; an explicit revoke does.
+    held = await user_roles_service.role_slugs_for_user(db_session, user=user)
+    assert {"sales", "appraiser"}.issubset(held)
+
+
+@pytest.mark.asyncio
+async def test_rbac_revoke_blocks_subsequent_requests(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Revoke a non-primary role and require_roles() denies the next call."""
+    from services import user_roles_service
+
+    await _create_active_user(client, db_session, "sales_revoke@example.com", "sales")
+    user = (
+        await db_session.execute(select(User).where(User.email == "sales_revoke@example.com"))
+    ).scalar_one()
+    await user_roles_service.grant(
+        db_session, user=user, role_slug="sales_manager", granted_by=None
+    )
+
+    # Manager check passes thanks to the secondary grant.
+    held = await user_roles_service.role_slugs_for_user(db_session, user=user)
+    assert "sales_manager" in held
+
+    await user_roles_service.revoke(db_session, user=user, role_slug="sales_manager")
+    held = await user_roles_service.role_slugs_for_user(db_session, user=user)
+    assert "sales_manager" not in held
+    assert "sales" in held  # Primary role intact.
+
+
+@pytest.mark.asyncio
+async def test_rbac_revoke_refuses_primary_role(client: AsyncClient, db_session: AsyncSession):
+    """The mirror invariant requires the primary role to stay in the
+    join table; revoke() refuses to break that."""
+    from fastapi import HTTPException
+
+    from services import user_roles_service
+
+    await _create_active_user(client, db_session, "primary_revoke@example.com", "sales")
+    user = (
+        await db_session.execute(select(User).where(User.email == "primary_revoke@example.com"))
+    ).scalar_one()
+    with pytest.raises(HTTPException) as exc:
+        await user_roles_service.revoke(db_session, user=user, role_slug="sales")
+    assert exc.value.status_code == 409
+
+
 # ---------------------------------------------------------------------------
 # Tests: security headers present on responses
 # ---------------------------------------------------------------------------
