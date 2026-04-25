@@ -16,10 +16,14 @@ const statusToTone: Record<string, Tone> = {
   appraiser_assigned: "blue",
   appraisal_scheduled: "amber",
   appraisal_complete: "purple",
+  pending_manager_approval: "amber",
+  approved_pending_esign: "purple",
+  esigned_pending_publish: "purple",
   offer_ready: "purple",
   listed: "green",
   sold: "green",
   declined: "red",
+  withdrawn: "red",
   pending_deletion: "red",
 };
 
@@ -28,10 +32,14 @@ const statusLabels: Record<string, string> = {
   appraiser_assigned: "Appraiser assigned",
   appraisal_scheduled: "Appraisal scheduled",
   appraisal_complete: "Appraisal complete",
+  pending_manager_approval: "Pending approval",
+  approved_pending_esign: "Approved — pending eSign",
+  esigned_pending_publish: "eSigned — pending publish",
   offer_ready: "Offer ready",
   listed: "Listed",
   sold: "Sold",
   declined: "Declined",
+  withdrawn: "Withdrawn",
 };
 
 interface Props {

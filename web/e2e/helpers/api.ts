@@ -127,3 +127,22 @@ export async function uiLogin(page: Page, user: TestUser): Promise<void> {
   await page.getByRole("button", { name: /log in/i }).click();
   await page.waitForURL(/\/portal$/);
 }
+
+/**
+ * Log the browser in as a pre-seeded staff user (sales/appraiser/etc).
+ * The login page redirects every role to /portal; this helper waits for
+ * that landing then jumps to the staff-side route the test wants. The
+ * fakeIp is required so per-IP rate limiters don't leak between tests.
+ */
+export async function uiLoginAsStaff(
+  page: Page,
+  args: { email: string; password: string; fakeIp: string; landingPath: string },
+): Promise<void> {
+  await page.context().setExtraHTTPHeaders({ "CF-Connecting-IP": args.fakeIp });
+  await page.goto("/login");
+  await page.getByLabel(/email/i).fill(args.email);
+  await page.getByLabel(/password/i).fill(args.password);
+  await page.getByRole("button", { name: /log in/i }).click();
+  await page.waitForURL(/\/portal$/);
+  await page.goto(args.landingPath);
+}

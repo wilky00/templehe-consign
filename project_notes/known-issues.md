@@ -1,5 +1,10 @@
 # Known Issues & Blockers
 
+## FIXED — Pre-existing lint debt across Phase 3 Sprint 1–4 commits
+**Fixed:** 2026-04-25 — small cleanup commit on `phase3-sales-crm` after Sprint 5 surfaced the breakage. Wrapped 14 long ABOUTME / docstring lines, removed 5 unused imports (sales_service.py, test_calendar.py), sorted 3 unsorted import blocks, added a missing trailing newline (calendar_service.py), and converted one `timezone.utc` → `datetime.UTC` (UP017). Plus a `ruff format` pass on 20 files that had drifted.
+**Was:** `cd api && uv run ruff check .` failed with 33 errors across services, schemas, routers, and tests — mostly long ABOUTME comments from earlier sprints, plus auto-fixable cleanup. CI must have been bypassed or failed-but-merged at the time the offending commits landed.
+**Confirmation:** `make lint` clean; full backend test suite still 307/307.
+
 ## PENDING CONFIRMATION — Twilio A2P 10DLC Registration
 **Status:** Registration submitted, appears approved — awaiting Jim's confirmation (2026-04-21)
 **Impact:** SMS notifications come online once the brand + campaign show "Approved" in the Twilio console
@@ -15,10 +20,26 @@
 **Impact:** Google SSO (Phase 1 stub, not yet implemented) will need the `hd` (hosted domain) claim value
 **Action:** Provide the Google Workspace domain (e.g. `templehe.com`) before SSO implementation
 
-## OPEN — Fly.io first deploy
-**Status:** Apps created, secrets staged, pending first `flyctl deploy`
-**Impact:** Staging is not yet live; E2E phase gate cannot run until this fires
-**Action:** Merge PR #17 — CI will trigger `flyctl deploy` on staging automatically, which activates the staged secrets. No manual step needed.
+## FIXED — Fly.io first deploy (staging)
+**Fixed:** 2026-04-24 — first `flyctl deploy` to staging fired automatically on the PR #28 merge-to-main push and succeeded. Staged secrets activated on both `temple-api-staging` and `temple-web-staging`.
+**Remaining:** Production deploy is gated behind manual `workflow_dispatch` — fires when the prod-go-live bundle below is complete.
+
+## FIXED — Change request duplicate submission (Phase 3 Sprint 1)
+**Fixed:** 2026-04-24 — commit `feb18d1` on `phase3-sales-crm`. Migration 009 added partial UNIQUE index `ux_change_requests_one_pending_per_record` on `(equipment_record_id) WHERE status='pending'`. `change_request_service.submit_change_request` catches the resulting `IntegrityError` and maps to 409 with human-readable detail. Two new integration tests verify the 409 path and that a new request is accepted after the prior one is resolved.
+**Was:** `ChangeRequestService.submit_change_request` let a customer file unlimited pending requests on the same record; Phase 2 Feature 2.4.1 required one-at-a-time enforcement.
+**Enforcement point:** DB-level partial unique index — impossible to violate from any callsite (direct SQL, seed script, future sales endpoint).
+
+## OPEN — SMS warning copy not present on registration / profile UI
+**Status:** Account page has an SMS opt-in checkbox with description "Text message updates (requires a cell number on your profile)". The Phase 2 spec (Feature 2.1.1) calls for visible inline text: *"Standard SMS messaging rates may apply based on your carrier plan."* No such copy is rendered anywhere in the web app today.
+**Impact:** Regulatory — A2P 10DLC + CAN-SPAM best practice mandates that consent capture include rate/fee language. Not a blocker until SMS actually dispatches (today `twilio_messaging_service_sid` is empty → SMS is skipped with an audit entry).
+**Action:** Add the inline warning under the SMS opt-in checkbox in `web/src/pages/Account.tsx` and on the register page whenever SMS preferences are surfaced. Bundle with the A2P go-live gate below.
+**Location:** `web/src/pages/Account.tsx:105-110`.
+
+## OPEN — httpx per-request cookies DeprecationWarning in test suite
+**Status:** `test_auth_flows.py::test_refresh_cookie_full_cycle` + `test_email_change_revokes_sessions` trigger `DeprecationWarning: Setting per-request cookies=<...> is being deprecated`. Tests still pass; warning is from httpx (ASGI test client).
+**Impact:** None today; will break when httpx removes the API.
+**Action:** Switch from `client.post(..., cookies={...})` to setting the cookie on the test client instance or using `client.cookies.set(...)` in the refresh-cookie tests.
+**Location:** `api/tests/integration/test_auth_flows.py` (two callsites).
 
 ## OPEN — Neon PITR on prod branch
 **Status:** Neon project + 3 branches (dev/staging/prod) created; PITR not yet enabled
@@ -115,3 +136,20 @@ fly machine run . --app temple-sweeper \
 1. Jim provides the seed CSV / JSON (per-category components with weights, inspection prompts, photo slots, red flag rules) for the default 15 categories.
 2. Extend `scripts/seed.py` to import those tables idempotently, or ship a one-off Alembic data migration.
 3. Keep the Admin Panel (Phase 4) as the long-term CRUD surface — this import is the bootstrap, not the ongoing management path.
+
+## OPEN — Google Maps API key not provisioned (Phase 3 Sprint 4)
+**Status:** Sprint 4 (2026-04-25) shipped the Distance Matrix + Geocoding integrations behind `settings.google_maps_api_key`. The setting is unset in dev / test / staging today.
+**Impact:** Without a key, the calendar uses the AppConfig fallback (`drive_time_fallback_minutes = 60` — block any back-to-back appointment within 60 min) and metro-area routing rules silently no-op (the matcher falls through to the next geographic rule). Direct overlap conflicts still work — only the drive-time-buffer math and metro-area routing depend on the key.
+**Action when Jim is ready to test live drive-time:**
+1. Open Google Cloud Console → create or pick a project (POC is fine on the personal account).
+2. **Billing** → enable billing on the project (Google requires a billing account even for free-tier). Set a low daily budget alert (~$1) before enabling APIs.
+3. **APIs & Services** → enable both: *Distance Matrix API* and *Geocoding API*.
+4. **Credentials** → Create credentials → API key. Restrict the key:
+   - **Application restrictions:** None for now (server-side use only — no need for HTTP referrer or IP allowlist while we're calling from Fly's egress).
+   - **API restrictions:** Limit the key to *Distance Matrix API* + *Geocoding API* only.
+5. Set the key on the API: `fly secrets set GOOGLE_MAPS_API_KEY=AIza... -a temple-api-dev` (and `-staging` / `-prod` when ready).
+6. Confirm by hitting `/api/v1/calendar/events` POST with two same-day appointments far apart and inspecting the conflict response — should now reflect real Google duration_in_traffic.
+
+**Cost expectation (POC volume):** Distance Matrix is ~$5 per 1,000 element calls, Geocoding is ~$5 per 1,000. Google gives every account a $200/month free credit (~40k calls each). At our volume — ≤20 appraisal scheduling attempts/day + ≤20 intakes/day with metro-area rules — we're 3–4 orders of magnitude under the free credit. Cap the daily quota at 1,000 calls per API in Cloud Console as belt-and-suspenders.
+
+**Service contract preserved across the swap:** `services/google_maps_service.py` is the only call site for both APIs; cache reads (Postgres `drive_time_cache` + `geocode_cache`) gate every API call. GCP migration swaps the cache to Redis SETEX without touching the public surface.

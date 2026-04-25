@@ -4,12 +4,16 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AccountPage } from "./pages/Account";
+import { AccountNotificationsPage } from "./pages/AccountNotifications";
 import { DashboardPage } from "./pages/Dashboard";
 import { EquipmentDetailPage } from "./pages/EquipmentDetail";
 import { IntakeFormPage } from "./pages/IntakeForm";
 import { LoginPage } from "./pages/Login";
 import { NotFoundPage } from "./pages/NotFound";
 import { RegisterPage } from "./pages/Register";
+import { SalesCalendarPage } from "./pages/SalesCalendar";
+import { SalesDashboardPage } from "./pages/SalesDashboard";
+import { SalesEquipmentDetailPage } from "./pages/SalesEquipmentDetail";
 import { VerifyEmailPage } from "./pages/VerifyEmail";
 
 function PhasePlaceholder({ title }: { title: string }) {
@@ -71,8 +75,47 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/account/notifications"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AccountNotificationsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
 
-      <Route path="/sales/*" element={<PhasePlaceholder title="Sales CRM" />} />
+      <Route
+        path="/sales"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SalesDashboardPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/sales/calendar"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SalesCalendarPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/sales/equipment/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <SalesEquipmentDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
       <Route path="/admin/*" element={<PhasePlaceholder title="Admin Panel" />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

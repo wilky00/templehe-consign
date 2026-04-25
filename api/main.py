@@ -13,11 +13,16 @@ from middleware.request_id import RequestIDMiddleware
 from middleware.security_headers import SecurityHeadersMiddleware
 from middleware.structured_logging import StructuredLoggingMiddleware
 from routers import account as account_router
+from routers import admin_routing as admin_routing_router
 from routers import auth as auth_router
+from routers import calendar as calendar_router
 from routers import customers as customers_router
 from routers import equipment as equipment_router
 from routers import health as health_router
 from routers import legal as legal_router
+from routers import me_notifications as me_notifications_router
+from routers import record_locks as record_locks_router
+from routers import sales as sales_router
 
 logger = structlog.get_logger(__name__)
 
@@ -53,8 +58,13 @@ app.add_middleware(
 
 
 app.include_router(account_router.router, prefix="/api/v1")
+app.include_router(admin_routing_router.router, prefix="/api/v1")
 app.include_router(auth_router.router, prefix="/api/v1")
+app.include_router(calendar_router.router, prefix="/api/v1")
 app.include_router(customers_router.router, prefix="/api/v1")
 app.include_router(equipment_router.router, prefix="/api/v1")
 app.include_router(health_router.router, prefix="/api/v1")
 app.include_router(legal_router.router, prefix="/api/v1")
+app.include_router(me_notifications_router.router, prefix="/api/v1")
+app.include_router(record_locks_router.router, prefix="/api/v1")
+app.include_router(sales_router.router, prefix="/api/v1")

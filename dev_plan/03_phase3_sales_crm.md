@@ -176,7 +176,7 @@ As a Sales Rep, I want to see a shared calendar showing all scheduled appraisals
 - Events color-coded by appraiser
 - Filter by appraiser (multi-select dropdown)
 - Clicking an event opens the linked Equipment Record detail
-- Calendar is read-only for `sales` role; `sales_manager` and `admin` can edit events
+- **Editing:** `sales`, `sales_manager`, and `admin` can all create, edit, cancel, and reschedule events. Every create/update/delete writes an `audit_logs` entry with actor role + before/after state so manager + admin can audit sales-rep changes after the fact.
 - Calendar data fetched from `GET /api/v1/calendar/events?start=<ISO>&end=<ISO>&appraiser_id=<id>`
 
 ---

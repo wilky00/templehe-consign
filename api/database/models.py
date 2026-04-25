@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -86,8 +87,11 @@ class User(Base):
     totp_recovery_codes: Mapped[list[TotpRecoveryCode]] = relationship(
         "TotpRecoveryCode", back_populates="user", cascade="all, delete-orphan"
     )
-    notification_preferences: Mapped[list[NotificationPreference]] = relationship(
-        "NotificationPreference", back_populates="user", cascade="all, delete-orphan"
+    notification_preference: Mapped[NotificationPreference | None] = relationship(
+        "NotificationPreference",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
     customer_profile: Mapped[Customer | None] = relationship(
         "Customer", back_populates="user", uselist=False
@@ -191,7 +195,9 @@ class NotificationPreference(Base):
     slack_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
-    user: Mapped[User] = relationship("User", back_populates="notification_preferences")
+    user: Mapped[User] = relationship("User", back_populates="notification_preference")
+
+    __table_args__ = (UniqueConstraint("user_id"),)
 
 
 class DataExportJob(Base):
@@ -741,6 +747,9 @@ class ChangeRequest(Base):
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
 
     equipment_record: Mapped[EquipmentRecord] = relationship(
         "EquipmentRecord", back_populates="change_requests"
@@ -760,6 +769,13 @@ class LeadRoutingRule(Base):
     )
     round_robin_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class CalendarEvent(Base):
@@ -849,6 +865,42 @@ class RecordLock(Base):
     overridden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (UniqueConstraint("record_id", "record_type"),)
+
+
+class DriveTimeCache(Base):
+    """6h-TTL cache for Google Distance Matrix calls — Phase 3 Sprint 4.
+
+    Composite-key stand-in for ``SETEX`` in the GCP migration.
+    """
+
+    __tablename__ = "drive_time_cache"
+
+    origin_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    dest_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GeocodeCache(Base):
+    """30d-TTL cache for Google Geocoding calls — Phase 3 Sprint 4.
+
+    Used by metro-area routing rules and (eventually) by the calendar UI's
+    address autocomplete. Addresses move rarely; the longer TTL keeps API
+    spend low without sacrificing correctness.
+    """
+
+    __tablename__ = "geocode_cache"
+
+    address_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class AppConfig(Base):

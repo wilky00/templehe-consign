@@ -315,6 +315,54 @@ After Phase 1 Sprint 5 landed the full infrastructure + auth stack, a triaged co
 
 ---
 
+## ADR-013: Phase 2 Customer Portal — Notification Queue, Right-to-Erasure, Access Response Shape
+
+**Date:** 2026-04-24
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 2 shipped the customer portal end-to-end: registration with ToS/Privacy consent, equipment intake with reference numbers, photo upload to R2, status timeline with customer-facing emails, change requests, GDPR-lite data export, and 30-day-grace account deletion. Several decisions made during implementation deserve their own ADR entry so future phases can build on the same contract.
+
+### Decisions
+
+1. **`notification_jobs` durable queue = Postgres, claimed via `SELECT … FOR UPDATE SKIP LOCKED` using `clock_timestamp()`.** Enqueue is idempotent on an optional `idempotency_key` (UNIQUE partial index when NOT NULL). Failures retry with exponential backoff (30s → 1m → 5m → 30m → 6h, cap 5 attempts). Tests and dev can run `scripts/notification_worker.py` as a single-pass drain (`WORKER_SINGLE_PASS=1`); prod/staging run it as a long-running Fly Machine per `infra/fly/temple-notifications.toml`. This is the concrete implementation of the `NotificationService` interface promised in ADR-001.
+
+2. **Customer-facing status emails are enqueued from a single entry point: `equipment_status_service.record_transition()`.** Six watched destinations (`appraisal_scheduled`, `appraisal_complete`, `offer_ready`, `listed`, `sold`, `declined`) each enqueue one message, keyed as `status_update:{record_id}:{to_status}` so retries + bounce-back same-status transitions don't duplicate. Phase 3 sales-rep endpoints will call this same function; no parallel transition paths.
+
+3. **Right-to-erasure = pseudonymization, not hard delete.** At grace expiry (`fn_delete_expired_accounts()`), `users.email`, `users.first_name`, + the `customers` PII fields are nulled or replaced with `[deleted]` markers; `status` → `deleted`; session secrets are wiped. Equipment records, consignments, and appraisal history remain as business facts, detached from the scrubbed identity. Deleted users can no longer authenticate — any surviving access token 401s via the `middleware.auth.get_current_user` status check. This trades "full row removal" (which would cascade into business-critical tables and break reporting) for a cleaner defense of the retention promise: the identity is gone, the transaction record stays.
+
+4. **`audit_logs` PII scrubber bypasses the append-only trigger via a session GUC, not a role or role-grant.** `fn_scrub_audit_pii(days)` sets `templehe.pii_scrub='on'` for the duration of its transaction; the trigger body explicitly recognizes that GUC and yields. Application-code UPDATEs and DELETEs against `audit_logs` outside that function are still blocked. Rationale: the scrubber runs as the same DB user as the app, so role-based trigger bypass would require an elevated connection and a second pool. A GUC is narrower (only the scrubber stored proc sets it), easier to audit in the trigger body, and survives pg_dump/restore.
+
+5. **Reference numbers are Crockford-32 encoded, format `THE-XXXXXXXX` (8 chars).** Crockford-32 chosen over base32 to drop ambiguous glyphs (I/1, O/0) — customers read these over the phone to sales reps. `secrets.token_bytes(5)` → Crockford encode → take first 8 chars, uppercase. UNIQUE constraint on `equipment_records.reference_number` with regenerate-on-collision loop. Collision probability at POC volume is vanishingly small; the retry loop is belt-and-suspenders.
+
+6. **Cross-customer record access returns 404, not 403.** Spec (Phase 2 Gate in `dev_plan/09_testing_strategy.md`) says "returns 403". We deliberately return 404 instead so the response shape doesn't differentiate "this record doesn't exist" from "this record exists but you can't see it" — no ID-space enumeration. This posture is enforced in `equipment_service.get_record_for_user` and asserted in `test_equipment_intake.py`. It supersedes the "403" wording in the spec for every customer-scoped record lookup.
+
+7. **Email verification on web uses React Query, not a `useEffect`+`useMutation`.** StrictMode double-mount fires the verification token at `/auth/verify-email` twice; the first succeeds and flips the user to `active`, the second 400s on an already-consumed token. `useQuery` dedupes by key and caches the success state, which is the right primitive for a one-shot idempotent read on page load. Future one-shot token-gated reads should follow this pattern.
+
+8. **macOS networking traps neutralized at the config boundary.**
+   - `smtp_host` defaults to `127.0.0.1` (not `localhost`) because macOS's getaddrinfo returns `::1` first and Mailpit binds IPv4; the fallback took ~35s per email.
+   - `smtplib.SMTP(..., local_hostname="localhost", timeout=10)` skips `socket.getfqdn()` which hangs ~35s on macOS mDNS with no responder.
+   - Vite's `/api` proxy `target` is `http://127.0.0.1:8000` for the same IPv6-first reason.
+   Same trap class — IPv6-preferring resolver vs. IPv4-only listener on macOS. Any future outbound localhost connection from Python or Node dev should pin to 127.0.0.1 explicitly.
+
+### Consequences
+
+- `temple-notifications` + `temple-sweeper` Fly apps must be created before production handles real customer data (see `known-issues.md`). Without `temple-notifications`, the portal accepts submissions and fills the queue silently; no user-facing regression, but emails never leave.
+- The notification queue's `idempotency_key` index is a PK-shaped UNIQUE partial index. Future services enqueuing notifications should pick collision-free keys (e.g., `status_update:<record_id>:<status>`, `export:<export_id>`) so retries remain safe.
+- `fn_delete_expired_accounts()` does not cascade through equipment_records. Any future Phase 3+ report that joins users ↔ equipment_records must handle the `users.status='deleted'` case; anonymized users appear as `[deleted]` rather than disappearing.
+- Phase 3 sales-rep change-request resolution endpoints will reuse `record_transition()` for status updates, reuse `NotificationService.enqueue` for resolution emails, and must add the "one pending change request at a time" guard documented in `known-issues.md`.
+- Frontend tests for any token-consumed endpoint (email verify, password reset confirm) should use `useQuery` not `useMutation` to survive StrictMode.
+
+### References
+
+- Working branch: `phase2-customer-portal` (6 commits; single PR #28 to `main`, merged at `a42ad7b` on 2026-04-24).
+- Phase spec: `dev_plan/02_phase2_customer_portal.md`.
+- Deferrals + follow-ups: `project_notes/known-issues.md` (prod-go-live bundle + duplicate change-request + SMS warning copy).
+
+---
+
 ## ADR-010: Session and Rate Limiting Storage — Postgres Tables in POC
 
 **Date:** 2026-04-20
@@ -343,3 +391,142 @@ Both are accessed via `SessionService` and `RateLimitService` interfaces. The GC
 
 - `user_sessions` and `rate_limit_counters` are present in the initial Alembic migration.
 - No Redis dependency in the POC environment (docker-compose.yml has only Postgres + Mailpit).
+
+---
+
+## ADR-014: Phase 3 Sprint 3 — Lead Routing Engine
+
+**Date:** 2026-04-25
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 3 Sprint 3 ships the lead routing engine (Epic 3.3) that auto-assigns incoming `equipment_records` to a sales rep at intake time. The waterfall — ad-hoc → geographic → round-robin → AppConfig fallback — is straightforward, but two implementation choices warrant their own ADR entry so Phase 4 (admin UI), Phase 5 (iOS push), and the GCP migration build on the same contract.
+
+### Decisions
+
+1. **Round-robin counter uses `UPDATE … RETURNING` on a Postgres row, not Redis `INCR`.** ADR-002 bans Redis in POC, so the rotation index lives in `lead_routing_rules.round_robin_index`. The atomic-claim path (`services/lead_routing_service._claim_next_round_robin`) issues a single statement: `UPDATE lead_routing_rules SET round_robin_index = round_robin_index + 1 WHERE id = :id RETURNING round_robin_index`. Postgres's row-level lock serializes concurrent intakes; each sees a distinct counter value, same semantics as Redis `INCR`. The rep is selected with `rep_ids[(returned_index - 1) % len(rep_ids)]` so the very first intake against a fresh rule lands on `rep_ids[0]`. GCP migration can swap to `redis.incr` without touching the public service signature.
+
+2. **Routing is non-blocking on intake.** `equipment_service.submit_intake` calls `_route_and_assign` after `db.flush() + db.refresh()` and before the customer confirmation enqueue. The whole call is wrapped in `try/except Exception` — if routing crashes (bad rule data, race with admin edits, transient DB issue), we log `lead_routing_failed` and the record stays unassigned. Customers always see their submission accepted; a manager triages the orphan from the dashboard. Tested in `test_routing_failure_does_not_block_intake`.
+
+3. **Soft delete via `deleted_at` timestamp, never row removal.** `LeadRoutingRule.deleted_at` (added in migration `010`) preserves historical rules so audit rows that reference `rule_id` keep resolving. Soft-deleted rules are excluded from the waterfall via the partial index `ix_lead_routing_rules_active ON (priority) WHERE deleted_at IS NULL AND is_active = true`. `GET /admin/routing-rules?include_deleted=true` is the escape hatch for forensics.
+
+4. **`AppConfig.default_sales_rep_id` is the floor.** When no rule matches, the engine reads `AppConfig` key `default_sales_rep_id` (shape `{"user_id": "<uuid>"}`). If the key is unset or the user is invalid, the record stays unassigned and the audit row is written with `trigger='unassigned'` so managers can reconcile. The default rep is set by admins via Phase 4's settings UI; for the POC it's set directly in the DB.
+
+5. **One shared `record_assigned` notification template, idempotency keyed by trigger.** Both routing-time assignment (`trigger='lead_routing'` or `'default_sales_rep'`) and manual reassignment via the Phase 3 Sprint 2 PATCH (`trigger='manual_override'`) use the same `record_assigned` template. The idempotency key is `record_assigned:{record_id}:{user_id}:{trigger}` — distinct triggers don't collide, so a manual reassignment after auto-routing produces two emails (correct UX: the rep gets one when the record lands, another when ownership shifts).
+
+6. **Service-level condition validation before persistence.** The Pydantic schemas accept any `dict` for `conditions`; `services/lead_routing_service._validate_conditions` enforces the rule-type-specific shape (ad_hoc needs `condition_type` + `value`; geographic needs at least one of `state_list` / `zip_list`; round_robin needs a non-empty `rep_ids` list). A malformed rule body returns 422 instead of silently never matching. Same guardrail runs on PATCH.
+
+7. **Geographic metro-area matching is deferred to Sprint 4.** The matcher silently skips `metro_area` keys without erroring (`test_geo_skips_metro_area_silently`). Sprint 4's calendar work brings Google geocoding; metro-area routing slots in then without breaking existing rules.
+
+### Consequences
+
+- Migration `010` extends `lead_routing_rules` with `created_by`, `created_at`, `deleted_at` and the partial active-rules index. The pre-existing table from Phase 1's initial migration kept its `round_robin_index`, `priority`, `is_active`, `conditions` (JSONB), and `assigned_user_id` columns.
+- `services/equipment_service.enqueue_assignment_notification` is the single chokepoint for assignment emails — both the routing path and `services/sales_service.apply_assignment` call it. Phase 4's bulk-reassignment tooling and Phase 5's iOS-push integration should call this same function rather than enqueueing parallel emails.
+- The atomic counter is exercised by `test_round_robin_cycles_through_reps` (3 sequential intakes → assignments [a, b, a], counter = 3). Concurrent intake serialization is delegated to Postgres row locks; no application-level mutex.
+- Admin RBAC on `/admin/routing-rules` is `admin`-only; sales managers cannot author rules. Phase 4's settings UI inherits this restriction.
+- `default_sales_rep_id` is **not** seeded by `scripts/seed.py` — it stays unset until an admin chooses one in Phase 4. Until then, dev/staging intakes with no matching rule produce `trigger='unassigned'` audit rows by design.
+
+### References
+
+- Working branch: `phase3-sales-crm`.
+- Phase spec: `dev_plan/03_phase3_sales_crm.md` Epic 3.3.
+- Implementation: `api/services/lead_routing_service.py`, `api/routers/admin_routing.py`, `api/alembic/versions/010_phase3_lead_routing_audit_columns.py`.
+- Tests: `api/tests/unit/test_lead_routing_service.py` (16 tests), `api/tests/integration/test_lead_routing.py` (11 tests), `api/tests/integration/test_admin_routing_rules.py` (7 tests).
+
+---
+
+## ADR-015: Phase 3 Sprint 4 — Shared Calendar, Drive-Time Buffer, Metro-Area Routing
+
+**Date:** 2026-04-25
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 3 Sprint 4 ships Epic 3.4 in full (calendar + scheduling + Google Distance Matrix drive-time buffer + edit/cancel) and the Sprint 3 carry-forward (metro-area routing rules). Several decisions warrant their own ADR so Phase 4 (Admin Panel), Phase 5 (iOS push), and the GCP migration build on the same contract.
+
+### Decisions
+
+1. **Drive-time + geocode caches live in Postgres for the POC.** Two new tables in migration `011`: `drive_time_cache(origin_hash, dest_hash, duration_seconds, fetched_at, expires_at)` with composite PK and 6h TTL, plus `geocode_cache(address_hash, lat, lon, fetched_at, expires_at)` with 30d TTL (addresses move rarely; longer cache reduces API call volume substantially). Both are read-through: services check the cache first, hit the API only on miss, write back. This is the same Redis-swap-contract pattern as record locks (ADR-013) and the round-robin counter (ADR-014). GCP migration swaps to `SETEX 21600` / `SETEX 2592000` without touching the public service surface in `services/google_maps_service.py`.
+
+2. **`google_maps_service` returns `None` on every failure mode — never raises.** No API key configured (`settings.google_maps_api_key=""`), network timeout, non-OK Google status, malformed response body — all collapse to `None`. Callers (`calendar_service` + `lead_routing_service`) treat `None` as documented sentinels: the calendar substitutes the AppConfig fallback minutes (`drive_time_fallback_minutes`, seeded to 60); the metro-area matcher falls through to the next geographic rule. This keeps the calendar and intake paths working in dev / test / staging *without* a key, and prevents a flaky API from dropping a customer's intake.
+
+3. **Conflict detection uses `SELECT … FOR UPDATE` over the appraiser's day window.** `calendar_service._check_conflict` opens a row lock on the appraiser's same-day events before checking the proposed window. Concurrent schedule attempts serialize on that lock; only the first wins, the second sees the conflict. Drive-time buffer is applied on both sides — the new event must start `buffer` after the previous event ends AND end `buffer` before the next event starts. Buffer source: real Distance Matrix call (cached) → fallback minutes when the call fails or is unconfigured. Tested with `test_drive_time_buffer_blocks_when_addresses_far_apart` using the fallback path.
+
+4. **409 response carries `next_available_at` and `conflicting_event_id`.** The router returns a structured JSON body (not just a `detail` string) so the UI can offer a one-click reschedule to the next slot. The schema (`CalendarConflictResponse`) is deliberately distinct from FastAPI's default 422 body shape; clients must check status before parsing.
+
+5. **Calendar editing is open to `sales`, `sales_manager`, and `admin`.** Per spec line 179 (updated 2026-04-24), all three roles can create / edit / cancel / reschedule. Audit rows capture `actor_role` so managers can review sales-rep changes via the audit trail. Customer role is rejected at the RBAC dependency.
+
+6. **Schedule transitions `new_request → appraisal_scheduled`; cancel reverts to `new_request`.** Both transitions go through `equipment_status_service.record_transition` so the customer status email (`status_appraisal_scheduled` template, Phase 2 Sprint 3) fires for free on schedule. Cancel does not re-fire the status email — it sends the dedicated `appraisal_cancelled_customer` template instead, since "we cancelled your appointment" is a different message than "your status changed". Idempotency key for cancel email: `appraisal_cancelled_customer:{event_id}`.
+
+7. **Metro-area routing geocodes the customer address, applies haversine vs metro center.** New rule shape: `{"metro_area": {"center_lat": …, "center_lon": …, "radius_miles": …}}`. The matcher (`lead_routing_service._metro_matches`) builds a single-string address from `customer.address_street + city + state + zip`, geocodes via the cached `google_maps_service.geocode`, and computes the haversine distance in statute miles. This sits **after** the existing state/zip matchers in the geographic loop — a rule with `state_list` AND `metro_area` matches if either path hits, so admins can layer broad state coverage with a tighter Atlanta-metro carve-out without writing two rules.
+
+8. **`appraisal_scheduled_appraiser` and `appraisal_cancelled_appraiser` are dedicated templates.** Distinct from `record_assigned` (lead routing / manual reassignment). The appraiser cares about a different surface — when, where, and a reference to the equipment record. Idempotency keys: `appraisal_scheduled:{event_id}:{user_id}` and `appraisal_cancelled:{event_id}:{user_id}`. Same template chokepoint pattern as ADR-014 #5.
+
+9. **`react-big-calendar` skinned to match Tailwind, not hand-rolled.** A custom calendar grid would re-invent month/week/day pagination, accessibility, and keyboard navigation. The lib's stock CSS imported once; appraiser color coding via `eventPropGetter`; click-to-detail via `onSelectEvent`. The eight-tone palette in `pages/SalesCalendar.tsx` cycles for >8 appraisers — a contract surface for future "global appraiser color settings" if it matters.
+
+### Consequences
+
+- Migration `011` adds two cache tables + the `drive_time_fallback_minutes` AppConfig key (seeded to 60). The hourly `fn_sweep_retention()` function should drop expired rows from both caches in the next migration that touches it; for now the caches grow until manually cleaned. Tracked in `known-issues.md` as a follow-up.
+- The Distance Matrix + Geocoding integrations require a Google Maps API key for live behavior. Today both fall back to the AppConfig minutes / silent no-op. Provisioning steps + cost expectations documented in `known-issues.md` "OPEN — Google Maps API key not provisioned".
+- Calendar UI works without a key — direct overlap conflicts are exact, drive-time buffer just applies a flat 60-min minimum. This is acceptable for POC + early staging.
+- Phase 4 (Admin Panel) ships:
+  - The searchable user picker (sales rep / appraiser / customer) the calendar modal hand-rolls today
+  - The CRUD UI for `lead_routing_rules` the API delivered in Sprint 3
+  - The settings page that edits `drive_time_fallback_minutes` and (if Jim provides one) `default_sales_rep_id`
+- Phase 5 (iOS) reuses `appraisal_scheduled_appraiser` for push notifications — both routes will go through `notification_service.enqueue` so idempotency stays consistent.
+- Phase 3 Sprint 6 gate (Playwright + axe + Lighthouse) covers the calendar UI E2E. This sprint did **not** browser-verify the page — I verified TypeScript build + ESLint zero-warnings, but interactive UI testing is deferred to the gate sprint per project convention.
+
+### References
+
+- Working branch: `phase3-sales-crm`.
+- Phase spec: `dev_plan/03_phase3_sales_crm.md` Epic 3.4 + Phase 1 Carry-Forward Notes.
+- Implementation: `api/services/google_maps_service.py`, `api/services/calendar_service.py`, `api/routers/calendar.py`, `api/schemas/calendar.py`, `api/alembic/versions/011_phase3_drive_time_geocode_caches.py`, `api/services/lead_routing_service.py` (`_metro_matches`).
+- Tests: `api/tests/integration/test_google_maps_service.py` (10), `api/tests/integration/test_calendar.py` (10), metro-area additions to `api/tests/integration/test_lead_routing.py` (+2). Full backend gate **291/291**.
+- Frontend: `web/src/api/calendar.ts`, `web/src/pages/SalesCalendar.tsx`, `web/src/components/ScheduleAppraisalModal.tsx`, `web/src/components/Layout.tsx` (Calendar nav link), `web/src/App.tsx` (`/sales/calendar` route), `web/src/pages/SalesEquipmentDetail.tsx` (ScheduleCard).
+
+---
+
+## ADR-016: Phase 3 Sprint 5 — Workflow Notifications + Per-Employee Channel Preferences
+
+**Date:** 2026-04-25
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 3 Sprint 5 wires Epic 3.2 (manager-approval + eSign-completion sales-rep notifications), Feature 3.5.2 (lock-override notification to the prior holder), and the per-employee notification preferences UI. The Phase 6 triggers for the Epic 3.2 transitions don't exist yet — manager approval and eSign webhook are Phase 6 work — so Sprint 5 wires the *dispatch* on the existing `record_transition` chokepoint and lets Phase 6 plug the trigger in by simply calling `record_transition(to_status=...)`. Decisions captured here for Phase 4 (admin panel — needs the channel-pref data model), Phase 6 (eSign — needs the trigger contract), and Phase 5 (iOS push — needs the channel-resolution path).
+
+### Decisions
+
+1. **Sales-rep dispatch lives on `equipment_status_service.record_transition`, not on a Phase 6 webhook handler.** Adding a `_SALES_REP_NOTIFY_STATUSES = {"approved_pending_esign", "esigned_pending_publish"}` set + a `_notify_sales_rep` helper inside the same service the customer-email block already uses keeps a single chokepoint for "status changed → tell people". Phase 6's eSign webhook calls `record_transition(to_status="esigned_pending_publish", ...)` and the sales-rep notification fires for free; same for the manager-approval endpoint and `approved_pending_esign`. No new wiring needed at trigger time.
+
+2. **Idempotency key: `sales_rep_status:{record_id}:{to_status}`.** Distinct from the customer-email key (`status_update:{record_id}:{to_status}`) so the same transition can deliver both, but a re-fired transition collapses each to one delivery. Same chokepoint pattern as ADR-014 #5 + ADR-015 #8.
+
+3. **`notification_preferences_service.resolve_channel` collapses Slack to email.** No Slack dispatch path exists in `notification_service` — Phase 4/8 ships the Slack integration. Until then, accepting a Slack preference but routing through email keeps the user-facing model honest (your preference is recorded; we'll honor it the moment Slack ships) without enqueueing guaranteed-fail rows. SMS without a phone number falls back to email for the same reason — better email delivery than a queue full of failed SMS jobs.
+
+4. **One row per user — `UNIQUE(user_id)` on `notification_preferences`.** The Phase 1 schema allowed multiple rows per user (one per channel); no caller ever wrote that way. The spec language is "preferred channel" (singular). Migration `012` adds the constraint and the upsert path uses `INSERT ... ON CONFLICT (user_id) DO UPDATE`. The `User.notification_preference` relationship switches to `Mapped[NotificationPreference | None]` with `uselist=False`.
+
+5. **Two role-based gates: `is_hidden_for_role` (configurable) and `is_read_only_for_role` (hardcoded).** Customer is RO by default — they only have one channel (email) in practice and don't need the picker. The hidden-roles flag (`app_config` key `notification_preferences_hidden_roles`, default `[]`) lets an admin hide the page from any role entirely without a code change — same shape as the future YAML-seeded admin config (see #7). Editing the policy is two flags, not one combined "visibility" enum, because hiding and reducing-to-RO are conceptually different operations and tend to apply to different roles.
+
+6. **Lock-override notification goes through the same `resolve_channel` path.** `routers/record_locks.py:override_lock` calls `_notify_prior_lock_holder` after the audit log writes; idempotency key `lock_overridden:{record_id}:{prior_user_id}`. SMS-preferred users get a short message; everyone else gets HTML email. Skipped silently when the prior user is gone or inactive — no good user-facing recovery for an orphan FK and the audit row already captured the override.
+
+7. **Org-wide configurable settings get a YAML escape hatch (Phase 4).** Sprint 5 lands the first such flag (`notification_preferences_hidden_roles`) seeded by alembic for now. Phase 4 (Admin Panel) ships `scripts/seed_config.py` to read a `config/*.yaml` and upsert into `app_config` + `lead_routing_rules`; UI writes to DB only, YAML is seed/recovery state, drift is visible via `seed_config.py --check`. Per-user state (notification_preferences, equipment records) stays DB-only — YAML is for org-wide config that benefits from git-audited history. See `dev_plan/04_phase4_admin_panel.md` Pre-flight (added in this commit).
+
+### Consequences
+
+- Migration `012` adds the unique constraint + seeds the visibility flag; `_EXPECTED_MIGRATION_HEAD` bumps to `"012"` in `routers/health.py`.
+- Phase 6 eSign + manager-approval triggers become a one-line call (`record_transition(...)`); no notification wiring added at that layer.
+- Phase 5 iOS push reuses the same `resolve_channel` shape — when an iOS user opts into push, that's a fourth channel value the resolver returns, and `notification_service` gains a `_dispatch_push` branch. Public surface unchanged.
+- The `account/notifications` route exists; nav link added for both customer + sales-side flows. The page is built but not browser-verified this sprint — interactive UI verification deferred to Phase 3 Sprint 6 gate.
+- `notification_preferences_hidden_roles` is the first AppConfig key intended for the YAML-seed pattern; format chosen (`{"roles": [...]}`) so the YAML loader can read+validate without a dedicated enum.
+
+### References
+
+- Working branch: `phase3-sales-crm`.
+- Phase spec: `dev_plan/03_phase3_sales_crm.md` Epic 3.2 + Feature 3.5.2 + Phase 1 Carry-Forward Notes.
+- Implementation: `api/alembic/versions/012_phase3_notification_preferences_unique_and_visibility.py`, `api/services/notification_preferences_service.py`, `api/services/equipment_status_service.py` (sales-rep notify block), `api/routers/me_notifications.py`, `api/routers/record_locks.py` (override notify), `api/schemas/notification_preferences.py`, `api/database/models.py` (relationship + unique constraint), `api/main.py` (router mount), `api/routers/health.py` (head bump).
+- Tests: `api/tests/integration/test_notification_preferences.py` (7), `api/tests/integration/test_sales_rep_status_notifications.py` (6), `api/tests/integration/test_record_locks.py` (+2 override-notify). Full backend gate **307/307** at 96% coverage.
+- Frontend: `web/src/api/notifications.ts`, `web/src/api/types.ts` (notification types), `web/src/pages/AccountNotifications.tsx`, `web/src/App.tsx` (`/account/notifications` route), `web/src/components/Layout.tsx` (Notifications nav link, both flows).
