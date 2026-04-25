@@ -528,6 +528,12 @@ class CategoryInspectionPrompt(Base):
     required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Phase 4 pre-work versioning. Edits insert a new row + set
+    # ``replaced_at`` on the old one so historical appraisals stay
+    # anchored to the prompt definition they were authored against.
+    # ``replaced_at IS NULL`` = current version. See migration 014.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     category: Mapped[EquipmentCategory] = relationship(
         "EquipmentCategory", back_populates="inspection_prompts"
@@ -583,6 +589,10 @@ class CategoryRedFlagRule(Base):
     actions: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Phase 4 pre-work versioning — see CategoryInspectionPrompt for
+    # the same shape + rationale.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     category: Mapped[EquipmentCategory] = relationship(
         "EquipmentCategory", back_populates="red_flag_rules"
@@ -620,9 +630,20 @@ class AppraisalSubmission(Base):
     suggested_consignment_price: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
     )
+    # Triggered red flags. Phase 5 iOS writers MUST embed the rule
+    # version that fired so historical reports stay correct after Phase 4
+    # admin edits the rule. Shape (versioned, post-migration 014):
+    #     [{"rule_id": "<uuid>", "rule_version": 1, "triggered_at": "<iso>"}]
     red_flags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     comparable_sales_data: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    # JSONB blob storing all inspection prompt responses keyed by prompt ID
+    # All inspection prompt responses. Phase 5 iOS writers MUST embed
+    # the prompt version that was answered so historical reports survive
+    # Phase 4 admin edits to the prompt set. Shape (versioned, post-
+    # migration 014):
+    #     [{"prompt_id": "<uuid>", "prompt_version": 1, "value": <typed>}]
+    # Keyed-by-prompt-ID dict shape from the original Phase 1 schema is
+    # accepted as legacy on read (no rows in production); writers should
+    # use the new shape exclusively.
     field_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
