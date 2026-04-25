@@ -122,17 +122,28 @@ async def acquire(
         locked_by=user_id,
         expires_at=_new_expiry(),
     )
-    db.add(row)
+    # Wrap the INSERT in a SAVEPOINT so a unique-constraint collision can be
+    # rolled back without nuking the outer transaction. The router has
+    # already loaded ``current_user`` against this session — a full
+    # ``db.rollback()`` would expire that ORM state and the next attribute
+    # access would attempt a lazy-load outside a greenlet context.
     try:
-        await db.flush()
+        async with db.begin_nested():
+            db.add(row)
+            await db.flush()
     except IntegrityError:
-        # A parallel caller beat us by microseconds — re-read and return
-        # the conflict cleanly. No advisory lock needed; the unique index
-        # is the atomic primitive.
-        await db.rollback()
+        # A parallel caller beat us by microseconds. If they're the same
+        # user (a second browser tab, or React StrictMode in dev firing
+        # the mount effect twice), surface the existing lock as success
+        # rather than a 409 against ourselves. We don't refresh the
+        # expiry: a parallel DELETE (e.g., StrictMode's first cleanup)
+        # can land between the re-read and the UPDATE and trigger
+        # StaleDataError. The next heartbeat refreshes TTL.
         conflict = await _find(db, record_id=record_id, record_type=record_type)
         if conflict is None:
             raise
+        if conflict.locked_by == user_id:
+            return _to_info(conflict)
         raise LockHeldError(_to_info(conflict)) from None
     return _to_info(row)
 

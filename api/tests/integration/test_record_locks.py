@@ -384,3 +384,97 @@ async def test_locks_on_different_records_are_independent(
     assert r2.status_code == 200
     assert r1.json()["locked_by"] == a["user_id"]
     assert r2.json()["locked_by"] == b["user_id"]
+
+
+@pytest.mark.asyncio
+async def test_acquire_integrityerror_fallback_treats_same_user_as_heartbeat(
+    db_session: AsyncSession,
+):
+    """If two acquire() calls by the same user race past the initial SELECT,
+    one wins the INSERT and the other hits the unique-constraint
+    IntegrityError fallback. The fallback must treat the same-user case as a
+    heartbeat — not raise 409 against the user against themselves. Repros
+    the React-StrictMode-double-mount and two-tab-same-user cases.
+
+    Mocked at the service layer because the deterministic race is hard to
+    stage with the conftest's nested-transaction db_session — the source of
+    truth for end-to-end behavior is ``web/e2e/phase3_calendar.spec.ts``,
+    which naturally fires the race via React StrictMode.
+    """
+    from datetime import datetime as _dt
+    from types import SimpleNamespace
+
+    from services import record_lock_service
+
+    user_id = uuid.uuid4()
+    record_id = uuid.uuid4()
+    existing_locked_at = datetime.now(UTC)
+    existing_expires_at = datetime.now(UTC) + timedelta(seconds=1)
+
+    # _find returns a RecordLock ORM row in production; SimpleNamespace
+    # gives us the same attribute surface.
+    existing_row = SimpleNamespace(
+        record_id=record_id,
+        record_type="equipment_record",
+        locked_by=user_id,  # SAME user — the key condition under test
+        locked_at=existing_locked_at,
+        expires_at=existing_expires_at,
+    )
+
+    # _find returns None first (so acquire() proceeds to INSERT and trips
+    # the unique constraint), then returns the existing same-user row on
+    # the post-rollback re-check.
+    call_count = {"n": 0}
+
+    async def fake_find(*_args, **_kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return None
+        return existing_row
+
+    # Stub the savepoint context manager and flush() so the first attempt
+    # raises IntegrityError; subsequent _find returns the existing same-
+    # user row.
+    flush_count = {"n": 0}
+    savepoint_rolled_back = {"n": 0}
+
+    async def fake_flush(_self=None):
+        flush_count["n"] += 1
+        if flush_count["n"] == 1:
+            from sqlalchemy.exc import IntegrityError
+
+            raise IntegrityError("INSERT", {}, Exception("unique violation"))
+
+    class FakeSavepoint:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            if exc_type is not None:
+                # Mirror real begin_nested(): rolls back to savepoint,
+                # then re-raises so the outer try/except can handle it.
+                savepoint_rolled_back["n"] += 1
+            return False  # don't suppress
+
+    fake_session = type(
+        "FakeSession",
+        (),
+        {
+            "add": lambda self, _row: None,
+            "flush": fake_flush,
+            "begin_nested": lambda self: FakeSavepoint(),
+        },
+    )()
+
+    with patch.object(record_lock_service, "_find", side_effect=fake_find):
+        info = await record_lock_service.acquire(
+            fake_session,
+            record_id=record_id,
+            record_type="equipment_record",
+            user_id=user_id,
+        )
+
+    assert info.locked_by == user_id
+    assert info.expires_at == existing_expires_at
+    assert savepoint_rolled_back["n"] == 1
+    assert isinstance(info.locked_at, _dt)
