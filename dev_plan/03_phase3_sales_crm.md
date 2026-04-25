@@ -265,14 +265,14 @@ As a Sales Manager, I want to break a stale lock on a record so that work can co
 
 ## Phase 3 Completion Checklist
 
-- [ ] Sales dashboard groups records by customer; cascade assignment updates all child records correctly
-- [ ] Lead routing engine evaluates ad hoc → geographic → round-robin waterfall; assignment written to audit log with rule ID
-- [ ] Geographic routing correctly matches State, ZIP, and Metro Area (radius) conditions
-- [ ] Round-robin uses atomic Redis counter and does not double-assign under concurrent load (test with 2 simultaneous submissions)
-- [ ] Calendar conflict check blocks scheduling when proposed time overlaps existing event + drive time buffer
-- [ ] Google Maps drive time is fetched, cached in Redis, and used in conflict calculation
-- [ ] Drive time fallback fires when Google Maps API is unavailable
-- [ ] Record lock acquired on edit, heartbeat resets TTL, inactivity timeout releases lock
-- [ ] Manager can override lock; broken-lock notification sent to original lock holder
-- [ ] Manual publish button works only when status is `esigned_pending_publish` and signed contract exists
-- [ ] Sales rep receives email when manager approves; receives notification when customer completes eSign
+- [x] Sales dashboard groups records by customer; cascade assignment updates all child records correctly
+- [x] Lead routing engine evaluates ad hoc → geographic → round-robin waterfall; assignment written to audit log with rule ID
+- [x] Geographic routing correctly matches State, ZIP, and Metro Area (radius) conditions
+- [x] Round-robin uses atomic Redis counter and does not double-assign under concurrent load (test with 2 simultaneous submissions)
+- [x] Calendar conflict check blocks scheduling when proposed time overlaps existing event + drive time buffer
+- [x] Google Maps drive time is fetched, cached in Redis, and used in conflict calculation
+- [x] Drive time fallback fires when Google Maps API is unavailable
+- [x] Record lock acquired on edit, heartbeat resets TTL, inactivity timeout releases lock
+- [x] Manager can override lock; broken-lock notification sent to original lock holder
+- [x] Manual publish button works only when status is `esigned_pending_publish` and signed contract exists
+- [x] Sales rep receives email when manager approves; receives notification when customer completes eSign

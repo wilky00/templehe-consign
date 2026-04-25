@@ -78,9 +78,9 @@ These files live in `~/.claude/docs/` on Jim's machine (global config, not check
 
 | Phase | File | Status |
 |---|---|---|
-| 1 | `dev_plan/01_phase1_infrastructure_auth.md` | Not started |
-| 2 | `dev_plan/02_phase2_customer_portal.md` | Not started |
-| 3 | `dev_plan/03_phase3_sales_crm.md` | Not started |
+| 1 | `dev_plan/01_phase1_infrastructure_auth.md` | Complete (2026-04-21) |
+| 2 | `dev_plan/02_phase2_customer_portal.md` | Complete (2026-04-24) |
+| 3 | `dev_plan/03_phase3_sales_crm.md` | Complete (2026-04-25) |
 | 4 | `dev_plan/04_phase4_admin_panel.md` | Not started |
 | 5 | `dev_plan/05_phase5_ios_app.md` | Not started |
 | 6 | `dev_plan/06_phase6_approval_esign.md` | Not started |

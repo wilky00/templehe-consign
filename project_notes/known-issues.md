@@ -153,3 +153,9 @@ fly machine run . --app temple-sweeper \
 **Cost expectation (POC volume):** Distance Matrix is ~$5 per 1,000 element calls, Geocoding is ~$5 per 1,000. Google gives every account a $200/month free credit (~40k calls each). At our volume — ≤20 appraisal scheduling attempts/day + ≤20 intakes/day with metro-area rules — we're 3–4 orders of magnitude under the free credit. Cap the daily quota at 1,000 calls per API in Cloud Console as belt-and-suspenders.
 
 **Service contract preserved across the swap:** `services/google_maps_service.py` is the only call site for both APIs; cache reads (Postgres `drive_time_cache` + `geocode_cache`) gate every API call. GCP migration swaps the cache to Redis SETEX without touching the public surface.
+
+## OPEN — Manager-side lock-override doesn't auto-acquire a new lock (Phase 3 Sprint 6)
+**Status:** Discovered during the Sprint 6 e2e gate (`phase3_record_locking.spec.ts`).
+**Impact:** When a manager overrides a lock, `DELETE /record-locks/:id/override` removes the prior holder's lock but does not insert one for the manager. The hook (`useRecordLock.ts`) calls `refreshLock()` (heartbeat) afterwards instead of `acquireLock`, so the heartbeat 404s and the page renders "Your editing session timed out" rather than "You are editing this record." The override itself works (broken-lock email lands, prior holder's lock is gone, manager can refresh and re-acquire) — only the post-click banner is wrong.
+**Fix sketch:** in `web/src/pages/SalesEquipmentDetail.tsx::onOverride`, after `await overrideLock(id)` call a fresh acquire (or expose `acquire` from `useRecordLock` and call it). Single-file change; integration test in `test_record_locks.py` already covers the backend.
+**Tracked for:** Phase 4 admin lock-picker work, where the lock UI gets a broader pass anyway. The Sprint 6 spec asserts "conflict banner clears" so the UX gap doesn't re-regress further.
