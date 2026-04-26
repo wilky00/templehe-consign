@@ -34,26 +34,38 @@ jobs:
       - name: Build API image
         run: docker build -t temple-api:ci api/
 
-      - name: Run Trivy
-        uses: aquasecurity/trivy-action@master
+      # Two-step pattern: gate scan (table format) actually honors the
+      # plain .trivyignore suppressions and drives the CI exit code; the
+      # SARIF scan exists only to upload findings to the GitHub Security
+      # tab. SARIF + plain .trivyignore historically don't suppress the
+      # exit-code path together — the workflow saw 5 documented CVEs
+      # (already in .trivyignore per ADR-012) re-fail every push to main.
+      # Splitting the runs decouples the two concerns and pins to a
+      # tagged action release for stability.
+      - name: Run Trivy gate (honors .trivyignore)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: temple-api:ci
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: false
+          trivyignores: .trivyignore
+
+      - name: Run Trivy SARIF (for GitHub Security)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: temple-api:ci
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: '1'
-          # ignore-unfixed: false (default) — surface unfixed CRITICAL/HIGH
-          # CVEs. Suppressions must be per-CVE in a .trivyignore file with a
-          # written justification; silencing the whole class hides exploitable
-          # bugs that upstream hasn't patched yet.
+          # exit-code intentionally 0 — the gate above already failed if
+          # any unsuppressed CVE was found. This step uploads the full
+          # picture (including suppressed CVEs) so the Security tab shows
+          # the complete inventory.
+          exit-code: '0'
           ignore-unfixed: false
-          # Explicit path to the suppression file — the action doesn't pass
-          # --ignorefile unless this is set, even if .trivyignore is at repo root.
-          trivyignores: .trivyignore
-          # Without this, the action writes every LOW/MEDIUM/HIGH/CRITICAL to
-          # the SARIF regardless of `severity`, and its exit-code logic trips
-          # on those. With it, SARIF matches the severity filter and the
-          # .trivyignore suppressions actually translate to exit 0.
           limit-severities-for-sarif: 'true'
 
       - name: Upload Trivy results to GitHub Security
@@ -82,7 +94,11 @@ jobs:
         run: cd api && uv sync
 
       - name: Run pip-audit
-        run: cd api && uvx pip-audit
+        # CVE-2026-3219 is against `pip` itself, which we use only as a
+        # build-time tool inside `uv sync` — runtime is `uv`, not pip. No
+        # upstream fix yet. Re-evaluate this suppression every quarter
+        # (tracked alongside .trivyignore reviews per ADR-012).
+        run: cd api && uvx pip-audit --ignore-vuln CVE-2026-3219
 
   npm-audit:
     name: Node Dependency Audit
