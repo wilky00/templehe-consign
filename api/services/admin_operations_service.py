@@ -14,11 +14,13 @@ from sqlalchemy.sql.functions import coalesce
 
 from database.models import Customer, EquipmentRecord, StatusEvent, User
 from schemas.admin import AdminOperationsRow, SortDirection, SortField
-from services import equipment_status_machine
+from services import app_config_registry, equipment_status_machine
 
-# Default overdue threshold (days). Sprint 3 swaps this for an AppConfig
-# key (`equipment_record_overdue_threshold_days`); for now it lives here
-# so Sprint 1 isn't blocked on the registry-UI ship.
+# Pre-Sprint-3 default. Now lives on the AppConfig spec
+# (`equipment_record_overdue_threshold_days`). Kept here only as the
+# fallback value when the AppConfig key is missing or malformed; the
+# runtime always reads through `_resolve_overdue_threshold` so admin
+# can tune the threshold without a deploy.
 DEFAULT_OVERDUE_THRESHOLD_DAYS = 7
 
 _SortField = SortField
@@ -161,6 +163,20 @@ def _row_from_join(
     )
 
 
+async def _resolve_overdue_threshold(db: AsyncSession, *, override: int | None) -> int:
+    """Caller can pin the threshold (tests, ad-hoc one-off queries);
+    otherwise read the AppConfig key. Falls back to the registry's
+    declared default when the key is unset (no DB row)."""
+    if override is not None:
+        return override
+    value = await app_config_registry.get_typed(
+        db, app_config_registry.EQUIPMENT_RECORD_OVERDUE_THRESHOLD_DAYS.name
+    )
+    if isinstance(value, int) and value >= 1:
+        return value
+    return DEFAULT_OVERDUE_THRESHOLD_DAYS
+
+
 async def list_records(
     db: AsyncSession,
     *,
@@ -168,16 +184,20 @@ async def list_records(
     assignee_id: uuid.UUID | None = None,
     customer_id: uuid.UUID | None = None,
     overdue_only: bool = False,
-    overdue_threshold_days: int = DEFAULT_OVERDUE_THRESHOLD_DAYS,
+    overdue_threshold_days: int | None = None,
     sort: _SortField = "updated_at",
     direction: _SortDirection = "desc",
     page: int = 1,
     per_page: int = 50,
 ) -> tuple[list[AdminOperationsRow], int]:
     """Return (rows, total). Total is the unpaginated count for client-side
-    pagination controls. Rows already include days-in-status + overdue flag."""
+    pagination controls. Rows already include days-in-status + overdue flag.
+
+    ``overdue_threshold_days`` defaults to the AppConfig value; tests can
+    pin an explicit number to keep their fixtures deterministic."""
     page = max(1, page)
     per_page = max(1, min(200, per_page))
+    overdue_threshold_days = await _resolve_overdue_threshold(db, override=overdue_threshold_days)
     base = _build_base_query(
         status=status,
         assignee_id=assignee_id,
@@ -253,13 +273,14 @@ async def export_csv(
     assignee_id: uuid.UUID | None = None,
     customer_id: uuid.UUID | None = None,
     overdue_only: bool = False,
-    overdue_threshold_days: int = DEFAULT_OVERDUE_THRESHOLD_DAYS,
+    overdue_threshold_days: int | None = None,
     sort: _SortField = "updated_at",
     direction: _SortDirection = "desc",
 ) -> str:
     """Return CSV text for the full filtered set (no pagination). Caller
     streams it back as text/csv. Capped at 5000 rows so a runaway export
-    doesn't OOM the worker; Sprint 3 turns this into a chunked stream."""
+    doesn't OOM the worker; later phase turns this into a chunked stream.
+    Like list_records, ``overdue_threshold_days`` defaults to AppConfig."""
     rows, _ = await list_records(
         db,
         status=status,

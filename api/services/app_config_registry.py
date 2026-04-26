@@ -284,3 +284,214 @@ NOTIFICATION_PREFERENCES_HIDDEN_ROLES = register(
         validator=_validate_role_list,
     )
 )
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 Sprint 3 keys.
+# ---------------------------------------------------------------------------
+
+# Canonical intake fields. Mirrors the field list rendered on the customer
+# intake form (web/src/pages/IntakeForm.tsx) and the IntakeSubmission Pydantic
+# model. Admin can hide / reorder these without a deploy via the AppConfig
+# keys below; the customer form fetches the config and renders accordingly.
+INTAKE_FIELDS_CANONICAL: tuple[str, ...] = (
+    "category_id",
+    "make",
+    "model",
+    "year",
+    "serial_number",
+    "hours",
+    "running_status",
+    "ownership_type",
+    "location_text",
+    "description",
+)
+
+
+def _validate_int_at_least(min_value: int) -> Callable[[Any], None]:
+    def validator(v: Any) -> None:
+        if not isinstance(v, int) or v < min_value:
+            raise ValueError(f"must be an integer ≥ {min_value}")
+
+    return validator
+
+
+def _validate_int_in_range(min_value: int, max_value: int) -> Callable[[Any], None]:
+    def validator(v: Any) -> None:
+        if not isinstance(v, int) or v < min_value or v > max_value:
+            raise ValueError(f"must be an integer in [{min_value}, {max_value}]")
+
+    return validator
+
+
+def _validate_string_list(v: Any) -> None:
+    if not isinstance(v, list):
+        raise ValueError("must be a list of strings")
+    for s in v:
+        if not isinstance(s, str) or not s.strip():
+            raise ValueError("every entry must be a non-empty string")
+
+
+def _validate_intake_field_subset(v: Any) -> None:
+    """Each entry must name a canonical intake field. Prevents typos that
+    silently render an empty form (or omit a critical field like make)."""
+    _validate_string_list(v)
+    canonical = set(INTAKE_FIELDS_CANONICAL)
+    unknown = [s for s in v if s not in canonical]
+    if unknown:
+        raise ValueError(
+            f"unknown intake field(s): {sorted(unknown)}. Allowed: {sorted(canonical)}"
+        )
+
+
+# Intake — admin can hide individual fields without a code deploy. Reading
+# `intake_fields_visible` returns the list of fields the customer form
+# should render; defaults to ALL canonical fields (no fields hidden).
+INTAKE_FIELDS_VISIBLE = register(
+    KeySpec(
+        name="intake_fields_visible",
+        category="intake",
+        field_type="list[string]",
+        description=(
+            "Intake form field slugs that the customer-facing form should "
+            "render. Defaults to every canonical field. Removing a slug here "
+            "hides the field on the customer intake page without a deploy."
+        ),
+        default=list(INTAKE_FIELDS_CANONICAL),
+        parser=_parse_dict_field("fields"),
+        serializer=_serialize_dict_field("fields"),
+        validator=_validate_intake_field_subset,
+    )
+)
+
+
+# Intake — render order. Default mirrors the canonical tuple.
+INTAKE_FIELDS_ORDER = register(
+    KeySpec(
+        name="intake_fields_order",
+        category="intake",
+        field_type="list[string]",
+        description=(
+            "Intake form field render order, top-to-bottom. Fields not "
+            "listed render in canonical order at the bottom; unknown slugs "
+            "are rejected."
+        ),
+        default=list(INTAKE_FIELDS_CANONICAL),
+        parser=_parse_dict_field("fields"),
+        serializer=_serialize_dict_field("fields"),
+        validator=_validate_intake_field_subset,
+    )
+)
+
+
+# Consignment — manager-approval threshold. Phase 6 (manager approval flow)
+# will consume this; registering it now so the admin UI surface lands ahead.
+CONSIGNMENT_PRICE_CHANGE_THRESHOLD_PCT = register(
+    KeySpec(
+        name="consignment_price_change_threshold_pct",
+        category="consignment",
+        field_type="int",
+        description=(
+            "Percent change between an appraiser's recommended consignment "
+            "price and the customer's counter-offer that triggers a manager "
+            "approval requirement (Phase 6). Stored as a whole number, "
+            "e.g. 10 = 10%."
+        ),
+        default=10,
+        parser=_parse_dict_field("pct"),
+        serializer=_serialize_dict_field("pct"),
+        validator=_validate_int_in_range(0, 100),
+    )
+)
+
+
+# Calendar — default buffer (minutes) between appraisals when no
+# Google-Maps-driven travel time is available. Distinct from
+# DRIVE_TIME_FALLBACK_MINUTES (which is the Maps-API-failed branch);
+# this is the pre-routing default applied by the calendar service when
+# scheduling without an explicit override.
+CALENDAR_BUFFER_MINUTES_DEFAULT = register(
+    KeySpec(
+        name="calendar_buffer_minutes_default",
+        category="calendar",
+        field_type="int",
+        description=(
+            "Minutes of gap inserted between back-to-back calendar events "
+            "when no Google-Maps drive-time is available and no explicit "
+            "buffer was passed at schedule time."
+        ),
+        default=30,
+        parser=_parse_dict_field("minutes"),
+        serializer=_serialize_dict_field("minutes"),
+        validator=_validate_positive_int,
+    )
+)
+
+
+# Security — access-token TTL in minutes. JWT_ACCESS_TTL_MINUTES env var
+# remains the floor (set in config.py) but admin can raise it within
+# operational limits without a redeploy. auth_service reads through this
+# key during token mint when the value is set.
+SECURITY_SESSION_TTL_MINUTES = register(
+    KeySpec(
+        name="security_session_ttl_minutes",
+        category="security",
+        field_type="int",
+        description=(
+            "Access-token TTL in minutes. Range 5–720 (12h max). Bumping "
+            "this affects newly-minted tokens only; existing tokens keep "
+            "their original expiry."
+        ),
+        default=60,
+        parser=_parse_dict_field("minutes"),
+        serializer=_serialize_dict_field("minutes"),
+        validator=_validate_int_in_range(5, 720),
+    )
+)
+
+
+# Notifications — roles for which the /account/notifications page is
+# read-only (the user can SEE their preference but can't EDIT it).
+# Distinct from NOTIFICATION_PREFERENCES_HIDDEN_ROLES (which 404s the
+# page outright). Architectural Debt #2 from the Phase 4 dev plan:
+# previously hard-coded as `_READ_ONLY_ROLES = {"customer"}` in
+# notification_preferences_service; reading through AppConfig means
+# admin can revoke/grant edit access without a deploy.
+NOTIFICATION_PREFERENCES_READ_ONLY_ROLES = register(
+    KeySpec(
+        name="notification_preferences_read_only_roles",
+        category="notifications",
+        field_type="list[string]",
+        description=(
+            "Role slugs that can VIEW their notification preferences but "
+            "cannot edit them. Defaults to [customer] to preserve the "
+            "pre-Phase-4 behavior. Distinct from _hidden_roles which "
+            "404s the page outright."
+        ),
+        default=["customer"],
+        parser=_parse_dict_field("roles"),
+        serializer=_serialize_dict_field("roles"),
+        validator=_validate_role_list,
+    )
+)
+
+
+# Operations — overdue threshold for the admin operations dashboard.
+# Sprint 1 hard-coded 7 days in admin_operations_service; lifting to
+# AppConfig lets admin tune the highlight without a deploy.
+EQUIPMENT_RECORD_OVERDUE_THRESHOLD_DAYS = register(
+    KeySpec(
+        name="equipment_record_overdue_threshold_days",
+        category="operations",
+        field_type="int",
+        description=(
+            "Days a record can sit in its current status before the admin "
+            "operations dashboard flags it overdue. Used for the row "
+            "highlight + the `overdue_only` filter."
+        ),
+        default=7,
+        parser=_parse_dict_field("days"),
+        serializer=_serialize_dict_field("days"),
+        validator=_validate_int_at_least(1),
+    )
+)

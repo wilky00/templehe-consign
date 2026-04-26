@@ -181,3 +181,31 @@ class DeactivateUserResponse(BaseModel):
     reassigned_records: list[uuid.UUID] = Field(default_factory=list)
     reassigned_events: list[uuid.UUID] = Field(default_factory=list)
     new_status: str
+
+
+# --- AppConfig admin (Sprint 3) -------------------------------------------- #
+
+
+class AppConfigItem(BaseModel):
+    """One AppConfig key as the admin form sees it: schema metadata
+    (name, category, type, description, default) + the live value.
+    Frontend renders the right input widget per ``field_type``."""
+
+    name: str
+    category: str
+    field_type: str
+    description: str
+    default: object | None = None
+    value: object | None = None
+
+
+class AppConfigListResponse(BaseModel):
+    items: list[AppConfigItem]
+
+
+class AppConfigUpdateRequest(BaseModel):
+    """PATCH body for /admin/config/{key}. ``value`` is the typed value
+    the admin chose; the registry's per-key serializer wraps it into the
+    JSONB shape the consumer expects."""
+
+    value: object | None = None

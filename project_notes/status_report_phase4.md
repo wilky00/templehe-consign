@@ -84,3 +84,42 @@ COMPLETE 2026-04-26
 - **UserDeactivationModal UI** — backend ready; UI lands when there's an admin-users page (likely Sprint 4 or 7).
 - Customer profile auto-creation on first /me/equipment intake remains; the new walk-in path is alternative, not replacement.
 - Sprint 4 should consider exposing the AppConfig "default sales rep" key visibility on the customer record so admin can override per-customer routing without going to /admin/config.
+
+---
+
+## Sprint 3 — AppConfig admin UI + iOS config endpoint + RO roles key
+COMPLETE 2026-04-26
+
+### What was built
+- **7 new AppConfig KeySpecs** in `api/services/app_config_registry.py`: `intake_fields_visible`, `intake_fields_order`, `consignment_price_change_threshold_pct`, `calendar_buffer_minutes_default`, `security_session_ttl_minutes`, `notification_preferences_read_only_roles`, `equipment_record_overdue_threshold_days`. Each has a per-key validator (range checks for ints; canonical-field membership for intake fields) so bad payloads surface as 422 inline.
+- **Constants → AppConfig**: `notification_preferences_service.is_read_only_for_role()` is now async + reads from `notification_preferences_read_only_roles` (resolves Architectural Debt #2). `admin_operations_service` has a new `_resolve_overdue_threshold(db, override)` so production reads from `equipment_record_overdue_threshold_days` while tests can still pin.
+- **`api/services/intake_visibility_service.py`** (NEW) — `visible_fields(db)` + `field_order(db)` reading the AppConfig keys; admin-ordered fields render first, then canonical tail.
+- **`GET /me/equipment/form-config`** — extends the existing customer equipment router. Returns `{visible_fields, field_order}` for the customer intake page.
+- **`api/routers/admin_config.py`** (NEW) — `GET /admin/config` returns every KeySpec + live value sorted by `(category, name)`; `PATCH /admin/config/{key}` runs validator → 422 on ValueError, 404 on unknown key. Admin-only RBAC.
+- **`api/routers/ios_config.py`** (NEW) — `GET /api/v1/ios/config` returns `{config_version, categories, components, inspection_prompts (current/active), red_flag_rules (current/active), app_config[]}`. SHA-256 over the body with deterministic JSON encoding (`sort_keys=True`, `separators=(",",":")`); same input always hashes to the same hex string. Locked to appraiser/admin/sales/sales_manager.
+- **Frontend:** `AdminConfig.tsx` (per-category cards, per-key Save with optimistic refresh + inline ApiError); `ConfigField.tsx` type-driven renderer (string/int/uuid/list[string]); `/admin/config` route; Config tab in admin nav.
+- **Tests:** 8 in `test_admin_config.py`, 6 in `test_ios_config.py`, 3 in `test_intake_visibility.py`. 399/399 backend.
+
+### Key design decisions
+1. **AppConfig read at request time** — no in-process cache. Org's scale makes the SELECT cost trivial; cache adds invalidation complexity. Revisit if a perf budget surfaces.
+2. **Hash-based iOS cache** — deterministic SHA-256 over the body avoids both timestamps and ETags. Phase 5 iOS code: cache the body + hash, on launch fetch the hash, refetch full body iff hash differs.
+3. **Intake field visibility = denylist by absence** — `intake_fields_visible` defaults to all canonical fields; admin removes a field by editing the list. The canonical tuple lives next to the spec so a code reader can see the universe.
+4. **Reorder semantics** — admin's order applies to fields in the list; unmentioned canonical fields render at the bottom in canonical order. Drops unknown slugs (typo guard).
+5. **Per-key 422 with validator's message** — surface goes straight to the admin form's Alert, no schema-level validation guesswork.
+6. **`security_session_ttl_minutes` registered but not consumed yet** — Phase 5+ wires it into `auth_service.create_access_token`. Registering early lets admin see the knob.
+7. **iOS endpoint NOT customer-accessible** — bundle leaks all categories + AppConfig values; cheap RBAC scoping prevents accidental leakage if a customer-facing component starts calling `/ios/config`.
+8. **`is_read_only_for_role` made async** — both call sites in `me_notifications.py` updated; no downstream sync paths broken.
+
+### Test results
+- 399 / 399 backend tests pass (was 382; +8 admin_config + 6 ios_config + 3 intake_visibility).
+- `make lint`: ruff + format + eslint all green.
+- `npx tsc --noEmit`: clean.
+
+### Bugs found and fixed during sprint
+- iOS-config draft assumed `CategoryComponent.weight` — the actual field is `weight_pct` (Numeric). Switched to `weight_pct` and stringified for stable JSON encoding (Decimal isn't JSON-serializable; the body is hashed so encoding has to be deterministic).
+- `is_read_only_for_role` sync→async required updating both call sites in `me_notifications.py` (now `await ... is_read_only_for_role(db, role_slug=role)`).
+
+### Open issues / follow-ups
+- **Customer intake page** (`web/src/pages/IntakeForm.tsx`) doesn't yet consume `/me/equipment/form-config` — fields are still hard-coded. Backend is ready; React refactor lands in Sprint 8 or as a follow-up before phase close.
+- **`security_session_ttl_minutes` consumer wiring** — one-line addition to `auth_service.create_access_token`; deferred to keep Sprint 3 scoped to registry + UI.
+- **AppConfig in-process cache** — not built; revisit if dashboards show latency budget pressure.
