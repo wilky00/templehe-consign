@@ -67,6 +67,7 @@ async def record_transition(
     changed_by: User | None,
     note: str | None = None,
     customer: User | None = None,
+    notify_override: bool | None = None,
 ) -> StatusEvent:
     """Apply a status transition.
 
@@ -74,6 +75,12 @@ async def record_transition(
     Typically resolved via ``record.customer.user`` in the caller; kept
     as an explicit arg so callers that already have the User object
     don't have to re-fetch it.
+
+    ``notify_override`` lets the caller force notification dispatch
+    on/off regardless of the registry default. ``None`` (the default)
+    follows ``notifies_customer``/``notifies_sales_rep``. Used by the
+    Phase 4 admin manual-transition endpoint where the admin chooses
+    whether to fan out emails for back-fill / data correction work.
     """
     from_status = record.status
     if from_status == to_status:
@@ -99,7 +106,18 @@ async def record_transition(
     db.add(record)
     await db.flush()
 
-    if customer is not None and equipment_status_machine.notifies_customer(to_status):
+    customer_should_notify = (
+        notify_override
+        if notify_override is not None
+        else equipment_status_machine.notifies_customer(to_status)
+    )
+    sales_rep_should_notify = (
+        notify_override
+        if notify_override is not None
+        else equipment_status_machine.notifies_sales_rep(to_status)
+    )
+
+    if customer is not None and customer_should_notify:
         subject, body = _compose_email(user=customer, record=record, to_status=to_status, note=note)
         await notification_service.enqueue(
             db,
@@ -116,10 +134,7 @@ async def record_transition(
             },
         )
 
-    if (
-        equipment_status_machine.notifies_sales_rep(to_status)
-        and record.assigned_sales_rep_id is not None
-    ):
+    if sales_rep_should_notify and record.assigned_sales_rep_id is not None:
         await _notify_sales_rep(db, record=record, to_status=to_status)
     return event
 

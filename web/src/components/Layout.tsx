@@ -13,18 +13,33 @@ const navLinkClasses = (isActive: boolean) =>
     ? "rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
     : "rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900";
 
-const SALES_ROLES = new Set(["sales", "sales_manager", "admin"]);
+const SALES_ROLES = new Set(["sales", "sales_manager"]);
+const ADMIN_ROLES = new Set(["admin"]);
+const REPORTING_ROLES = new Set(["reporting"]);
 
 export function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: user } = useMe();
-  // Phase 4 pre-work: a user can hold multiple roles. Show the sales-side
-  // shell when ANY of their roles puts them on that side. Older payloads
-  // without `roles` fall back to the primary `role` string.
-  const isSalesSide =
-    !!user &&
-    ((user.roles ?? [user.role]).some((r) => SALES_ROLES.has(r)));
+  // Phase 4: a user can hold multiple roles. The admin shell takes
+  // precedence over sales (since admin can do everything sales can do
+  // plus the admin surface). The reporting role gets a stripped-down
+  // shell with only the /admin/reports tab. Older payloads without
+  // `roles` fall back to the primary `role` string.
+  const heldRoles = user ? user.roles ?? [user.role] : [];
+  const isAdminSide = heldRoles.some((r) => ADMIN_ROLES.has(r));
+  const isSalesSide = !isAdminSide && heldRoles.some((r) => SALES_ROLES.has(r));
+  const isReportingOnly =
+    !isAdminSide &&
+    !isSalesSide &&
+    heldRoles.some((r) => REPORTING_ROLES.has(r));
+  const homePath = isAdminSide
+    ? "/admin/operations"
+    : isReportingOnly
+      ? "/admin/reports"
+      : isSalesSide
+        ? "/sales"
+        : "/portal";
 
   const onLogout = async () => {
     try {
@@ -41,11 +56,53 @@ export function Layout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
-          <Link to={isSalesSide ? "/sales" : "/portal"} className="flex items-center gap-2">
+          <Link to={homePath} className="flex items-center gap-2">
             <span className="font-semibold text-gray-900">Temple Heavy Equipment</span>
           </Link>
           <nav className="flex items-center gap-1" aria-label="Main">
-            {isSalesSide ? (
+            {isAdminSide ? (
+              <>
+                <NavLink
+                  to="/admin/operations"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Operations
+                </NavLink>
+                <NavLink
+                  to="/admin/reports"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Reports
+                </NavLink>
+                <NavLink
+                  to="/account/notifications"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Notifications
+                </NavLink>
+                <NavLink
+                  to="/portal/account"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Account
+                </NavLink>
+              </>
+            ) : isReportingOnly ? (
+              <>
+                <NavLink
+                  to="/admin/reports"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Reports
+                </NavLink>
+                <NavLink
+                  to="/portal/account"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Account
+                </NavLink>
+              </>
+            ) : isSalesSide ? (
               <>
                 <NavLink
                   to="/sales"

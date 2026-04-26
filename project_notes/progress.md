@@ -829,4 +829,36 @@ ADRs: 018 (overall pre-work decisions + the three immediate fixes) + 019 (multi-
 
 ---
 
-## Phase 4–8 — Not started
+## Phase 4 — Admin Panel — IN PROGRESS
+
+Branch: `phase4-admin` (cut off main 2026-04-26).
+Plan: `~/.claude/plans/concurrent-humming-rabbit.md` — 8 sprints, ~80 files, three large sprints (5/6/7) with cross-cutting refactors bundled in.
+
+### Sprint 1 — Admin shell + global operations + reports stub + manual transition — COMPLETE (2026-04-26)
+
+Built the entry-point admin surface so the rest of Phase 4 has somewhere to land:
+
+- [x] `api/routers/admin.py` (NEW) — `prefix="/admin"`, admin-only router. Three endpoints: `GET /operations` (paginated + filtered list), `GET /operations/export.csv` (filtered CSV download), `POST /equipment/{id}/transition` (manual override).
+- [x] `api/services/admin_operations_service.py` (NEW) — read model joining `EquipmentRecord` + `Customer` + sales/appraiser users; days-in-current-status from latest `StatusEvent`; overdue threshold defaults to 7d (Sprint 3 will swap to AppConfig key). Found and worked around the `equipment_records.updated_at` DB trigger that auto-resets on every UPDATE — overdue predicate uses a correlated `MAX(StatusEvent.created_at)` subquery instead of `updated_at`.
+- [x] `api/services/equipment_status_service.py` (modify) — `record_transition()` gains `notify_override: bool | None = None`. None falls back to registry defaults (`notifies_customer` / `notifies_sales_rep`); explicit True/False overrides both dispatches. Required for the per-action toggle on the admin manual-transition modal.
+- [x] `api/schemas/admin.py` (NEW) — `AdminOperationsRow`, `AdminOperationsResponse`, `ManualTransitionRequest/Response`, `SortField`/`SortDirection` literals.
+- [x] `api/main.py` — register the new admin router.
+- [x] Reporting role: `GET /admin/reports` returns the four-tab placeholder (Sales by Period, Sales by Type/Location, User Traffic, Export Center) gated by `require_roles("admin", "reporting")` — wires the role end-to-end before Phase 8 builds the real charts.
+- [x] `web/src/pages/AdminOperations.tsx` (NEW) — table view with status/sort/direction/overdue filters, CSV export button, per-row "Transition" action, 2-minute auto-refresh.
+- [x] `web/src/components/admin/ManualTransitionModal.tsx` (NEW) — destination dropdown over the 11 Status enum values, required reason textarea, "Send notifications" toggle (defaults on), inline error rendering.
+- [x] `web/src/pages/AdminReports.tsx` (NEW) — placeholder with the 4 sub-tabs.
+- [x] `web/src/components/Layout.tsx` (modify) — split nav into `isAdminSide` / `isReportingOnly` / `isSalesSide` / customer-portal branches. Admin no longer falls through to sales nav. Reporting-only users see exactly one tab plus Account.
+- [x] `web/src/App.tsx` (modify) — register `/admin/operations` + `/admin/reports`; redirect bare `/admin` to operations; `PhasePlaceholder` removed.
+- [x] `web/src/api/admin.ts` (NEW) + `web/src/api/types.ts` (extend) — typed client for the three admin endpoints + reports index. CSV download uses an authed fetch + blob to attach the Bearer header (plain anchors don't carry it).
+- [x] `api/tests/integration/test_admin_operations.py` (NEW, 9 tests) — list shape, status filter, overdue filter using StatusEvent backdating, CSV content type + header row, RBAC (sales 403, reporting 403 on operations, reporting 200 on reports, customer 403 on reports).
+- [x] `api/tests/integration/test_admin_manual_transition.py` (NEW, 7 tests) — notify-on/off/force-on, audit_log actor_role + reason, forbidden edge → 409, unknown status → 422, missing record → 404, sales-role → 403.
+
+**Test gate:** 360/360 backend pass (was 344 + 16 new). Lint clean (Python ruff + Web eslint). TypeScript typecheck clean.
+
+**Decisions confirmed:** per-action notification toggle on manual transitions (default on); admin-only RBAC on operations; reporting role gated to /admin/reports only.
+
+**Carry-forward:** `equipment_record_overdue_threshold_days` AppConfig key tracked for Sprint 3 (currently hard-coded 7d in `admin_operations_service`).
+
+---
+
+## Phase 5–8 — Not started
