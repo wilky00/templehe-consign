@@ -43,6 +43,7 @@ from datetime import UTC, datetime
 
 import structlog
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +54,7 @@ from database.models import (
     Role,
     User,
 )
+from schemas.routing import parse_conditions
 from services import app_config_registry, google_maps_service
 
 logger = structlog.get_logger(__name__)
@@ -439,6 +441,12 @@ async def create_rule(
     _validate_conditions(rule_type, conditions)
     if assigned_user_id is not None:
         await _require_sales_role(db, assigned_user_id)
+    # Sprint 4: pre-check the unique (rule_type, priority) slot so we
+    # return a clean 409 instead of bubbling the IntegrityError. The
+    # partial UNIQUE INDEX is the source of truth; this just gives the
+    # admin a useful error message + avoids leaving the session in a
+    # broken state mid-request.
+    await _check_priority_slot_free(db, rule_type=rule_type, priority=priority)
 
     rule = LeadRoutingRule(
         rule_type=rule_type,
@@ -452,6 +460,32 @@ async def create_rule(
     db.add(rule)
     await db.flush()
     return rule
+
+
+async def _check_priority_slot_free(
+    db: AsyncSession,
+    *,
+    rule_type: str,
+    priority: int,
+    excluding_rule_id: uuid.UUID | None = None,
+) -> None:
+    stmt = select(LeadRoutingRule.id).where(
+        and_(
+            LeadRoutingRule.rule_type == rule_type,
+            LeadRoutingRule.priority == priority,
+            LeadRoutingRule.deleted_at.is_(None),
+        )
+    )
+    if excluding_rule_id is not None:
+        stmt = stmt.where(LeadRoutingRule.id != excluding_rule_id)
+    if (await db.execute(stmt)).scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"priority {priority} is already taken in the {rule_type} bucket; "
+                "use the reorder endpoint to renumber"
+            ),
+        )
 
 
 async def update_rule(
@@ -469,6 +503,13 @@ async def update_rule(
 ) -> LeadRoutingRule:
     rule = await get_rule(db, rule_id)
     if set_priority and priority is not None:
+        if priority != rule.priority:
+            await _check_priority_slot_free(
+                db,
+                rule_type=rule.rule_type,
+                priority=priority,
+                excluding_rule_id=rule.id,
+            )
         rule.priority = priority
     if set_conditions:
         _validate_conditions(rule.rule_type, conditions)
@@ -494,63 +535,15 @@ async def soft_delete_rule(db: AsyncSession, rule_id: uuid.UUID) -> LeadRoutingR
 
 
 def _validate_conditions(rule_type: str, conditions: dict | None) -> None:
-    """Light-touch shape validation. Service-level guardrails so a malformed
-    rule body returns 422 instead of silently never matching.
-    """
-    if rule_type == "ad_hoc":
-        if not isinstance(conditions, dict):
-            raise HTTPException(
-                status_code=422,
-                detail="ad_hoc rules require conditions with condition_type + value",
-            )
-        ctype = conditions.get("condition_type")
-        value = conditions.get("value")
-        if ctype not in ("customer_id", "email_domain") or not value:
-            raise HTTPException(
-                status_code=422,
-                detail="ad_hoc condition_type must be 'customer_id' or 'email_domain' "
-                "with a non-empty value",
-            )
-    elif rule_type == "geographic":
-        if not isinstance(conditions, dict):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "geographic rules require conditions with state_list, zip_list, or metro_area"
-                ),
-            )
-        if (
-            not conditions.get("state_list")
-            and not conditions.get("zip_list")
-            and not conditions.get("metro_area")
-        ):
-            raise HTTPException(
-                status_code=422,
-                detail="geographic rules need at least one of state_list, zip_list, or metro_area",
-            )
-        metro = conditions.get("metro_area")
-        if metro is not None:
-            if not isinstance(metro, dict):
-                raise HTTPException(status_code=422, detail="metro_area must be an object")
-            for key in ("center_lat", "center_lon", "radius_miles"):
-                if not isinstance(metro.get(key), (int, float)):
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"metro_area.{key} must be a number",
-                    )
-            if metro["radius_miles"] <= 0:
-                raise HTTPException(status_code=422, detail="metro_area.radius_miles must be > 0")
-    elif rule_type == "round_robin":
-        if not isinstance(conditions, dict) or not isinstance(conditions.get("rep_ids"), list):
-            raise HTTPException(
-                status_code=422,
-                detail="round_robin rules require conditions.rep_ids as a list of user UUIDs",
-            )
-        if not conditions["rep_ids"]:
-            raise HTTPException(
-                status_code=422,
-                detail="round_robin rep_ids cannot be empty",
-            )
+    """Phase 4 Sprint 4 — delegates to the Pydantic variant models in
+    ``schemas.routing.parse_conditions`` so the service layer + the
+    OpenAPI surface enforce identical shape checks. Pydantic
+    ``ValidationError`` (with field names like ``rep_ids``,
+    ``metro_area.radius_miles``, etc) maps straight to a 422 detail."""
+    try:
+        parse_conditions(rule_type, conditions)
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 async def _require_sales_role(db: AsyncSession, user_id: uuid.UUID) -> None:
@@ -566,3 +559,188 @@ async def _require_sales_role(db: AsyncSession, user_id: uuid.UUID) -> None:
             status_code=422,
             detail=f"user {user_id} has role '{slug}', expected sales/sales_manager/admin",
         )
+
+
+# --------------------------------------------------------------------------- #
+# Phase 4 Sprint 4 — atomic priority reorder + test-rule.
+# --------------------------------------------------------------------------- #
+
+
+async def reorder_priorities(
+    db: AsyncSession,
+    *,
+    rule_type: str,
+    ordered_ids: list[uuid.UUID],
+) -> list[LeadRoutingRule]:
+    """Atomically renumber all active rules in a ``rule_type`` bucket so
+    priorities match ``ordered_ids`` (index 0 → priority 0, index 1 → 1,
+    ...). Two-phase under one transaction:
+
+    1. Lock every affected row with ``SELECT ... FOR UPDATE``.
+    2. Shift each to a negative scratch priority (``-1 - target_index``)
+       so we never violate the partial UNIQUE index mid-renumber.
+    3. Shift each scratch row to its final positive target.
+
+    Caller must pass *every* active rule in the bucket; missing ids are
+    rejected as 422 (otherwise an unmentioned rule could end up with a
+    duplicate priority once everyone else moves).
+    """
+    if rule_type not in _ALLOWED_RULE_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"rule_type must be one of: {sorted(_ALLOWED_RULE_TYPES)}",
+        )
+    if not ordered_ids:
+        return []
+    if len(set(ordered_ids)) != len(ordered_ids):
+        raise HTTPException(status_code=422, detail="ordered_ids contains duplicates")
+
+    # Lock every active rule in this bucket so concurrent admin edits
+    # block, and we have the full set to validate against.
+    locked_stmt = (
+        select(LeadRoutingRule)
+        .where(
+            and_(
+                LeadRoutingRule.rule_type == rule_type,
+                LeadRoutingRule.deleted_at.is_(None),
+            )
+        )
+        .with_for_update()
+    )
+    locked = list((await db.execute(locked_stmt)).scalars().all())
+    locked_ids = {r.id for r in locked}
+    requested_ids = set(ordered_ids)
+    if locked_ids != requested_ids:
+        missing = locked_ids - requested_ids
+        unknown = requested_ids - locked_ids
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "ordered_ids does not match the set of active rules in this bucket "
+                f"(missing: {sorted(str(i) for i in missing)}, "
+                f"unknown: {sorted(str(i) for i in unknown)})"
+            ),
+        )
+    rules_by_id = {r.id: r for r in locked}
+
+    # Phase 1: scratch-space negatives. Each row's scratch priority is
+    # unique (-1, -2, -3, ...) so the partial UNIQUE index is honored.
+    for idx, rule_id in enumerate(ordered_ids):
+        rule = rules_by_id[rule_id]
+        rule.priority = -1 - idx
+        db.add(rule)
+    await db.flush()
+
+    # Phase 2: final positive priorities matching the requested order.
+    for idx, rule_id in enumerate(ordered_ids):
+        rule = rules_by_id[rule_id]
+        rule.priority = idx
+        db.add(rule)
+    await db.flush()
+
+    return [rules_by_id[rid] for rid in ordered_ids]
+
+
+@dataclass(frozen=True)
+class TestRuleResult:
+    """Outcome of a synthetic test against one routing rule. ``matched``
+    is True when the rule's conditions evaluate True for the synthetic
+    input; ``would_assign_to`` mirrors the runtime behavior — the
+    rule's static ``assigned_user_id`` for ad_hoc/geographic, or the
+    *next* round-robin rep without actually claiming it."""
+
+    rule_id: uuid.UUID
+    rule_type: str
+    matched: bool
+    would_assign_to: uuid.UUID | None
+    reason: str
+
+
+async def test_rule(
+    db: AsyncSession,
+    *,
+    rule_id: uuid.UUID,
+    customer_id: uuid.UUID | None = None,
+    customer_email: str | None = None,
+    customer_state: str | None = None,
+    customer_zip: str | None = None,
+    customer_lat: float | None = None,
+    customer_lng: float | None = None,
+) -> TestRuleResult:
+    """Read-only "would this rule match this customer?" check. Mirrors
+    the runtime match logic from ``route_for_record`` but never writes
+    (no round_robin_index increment, no audit log, no assignment).
+    Phase 4 admin uses this to debug routing rules before activating."""
+    rule = await get_rule(db, rule_id)
+
+    if rule.rule_type == "ad_hoc":
+        matched = _ad_hoc_matches(rule, customer_id=customer_id, customer_email=customer_email)
+        return TestRuleResult(
+            rule_id=rule.id,
+            rule_type=rule.rule_type,
+            matched=matched,
+            would_assign_to=rule.assigned_user_id if matched else None,
+            reason=(
+                "ad_hoc matched on the supplied customer_id/email_domain"
+                if matched
+                else "ad_hoc conditions did not match the supplied input"
+            ),
+        )
+
+    if rule.rule_type == "geographic":
+        matched_state_zip = _geo_matches(rule, state=customer_state, zip_code=customer_zip)
+        matched_metro = False
+        if not matched_state_zip and customer_lat is not None and customer_lng is not None:
+            matched_metro = _metro_matches_synthetic(rule, lat=customer_lat, lng=customer_lng)
+        matched = matched_state_zip or matched_metro
+        reason_parts = []
+        if matched_state_zip:
+            reason_parts.append("state/zip matched")
+        if matched_metro:
+            reason_parts.append("metro radius matched")
+        if not matched:
+            reason_parts.append("no condition matched the supplied input")
+        return TestRuleResult(
+            rule_id=rule.id,
+            rule_type=rule.rule_type,
+            matched=matched,
+            would_assign_to=rule.assigned_user_id if matched else None,
+            reason="; ".join(reason_parts),
+        )
+
+    # round_robin: the rule "matches" any input — its real selection is
+    # which rep is next. Report the next rep without claiming.
+    rep_ids = _round_robin_rep_ids(rule)
+    if not rep_ids:
+        return TestRuleResult(
+            rule_id=rule.id,
+            rule_type=rule.rule_type,
+            matched=False,
+            would_assign_to=None,
+            reason="round_robin rule has no eligible reps",
+        )
+    next_idx = rule.round_robin_index % len(rep_ids)
+    return TestRuleResult(
+        rule_id=rule.id,
+        rule_type=rule.rule_type,
+        matched=True,
+        would_assign_to=rep_ids[next_idx],
+        reason=f"round_robin would pick rep at index {next_idx} (no claim)",
+    )
+
+
+def _metro_matches_synthetic(rule: LeadRoutingRule, *, lat: float, lng: float) -> bool:
+    """Synchronous metro-area check for the test-rule path. The runtime
+    ``_metro_matches`` geocodes the customer's address; here the caller
+    has already supplied lat/lng so we skip the geocode step + the cache
+    write."""
+    metro = (rule.conditions or {}).get("metro_area")
+    if not isinstance(metro, dict):
+        return False
+    try:
+        center_lat = float(metro["center_lat"])
+        center_lng = float(metro["center_lon"])
+        radius = float(metro["radius_miles"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return _haversine_miles(lat, lng, center_lat, center_lng) <= radius

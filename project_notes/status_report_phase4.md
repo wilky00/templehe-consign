@@ -123,3 +123,39 @@ COMPLETE 2026-04-26
 - **Customer intake page** (`web/src/pages/IntakeForm.tsx`) doesn't yet consume `/me/equipment/form-config` — fields are still hard-coded. Backend is ready; React refactor lands in Sprint 8 or as a follow-up before phase close.
 - **`security_session_ttl_minutes` consumer wiring** — one-line addition to `auth_service.create_access_token`; deferred to keep Sprint 3 scoped to registry + UI.
 - **AppConfig in-process cache** — not built; revisit if dashboards show latency budget pressure.
+
+---
+
+## Sprint 4 — Lead routing admin UI + priority uniqueness + JSON Schema
+COMPLETE 2026-04-26
+
+### What was built
+- **Migration 017** — deterministic backfill of duplicate priorities (ROW_NUMBER offset by created_at within each (rule_type, priority) bucket); partial UNIQUE INDEX `uq_lead_routing_rules_type_priority ON lead_routing_rules (rule_type, priority) WHERE deleted_at IS NULL`. Reversible.
+- **`lead_routing_service.reorder_priorities`** — atomic two-phase renumber under SELECT FOR UPDATE: scratch-space negatives → final positives. Rejects partial id lists with 422 so unmentioned rules can't end up duplicating a slot.
+- **`lead_routing_service.test_rule`** — read-only synthetic match. Reuses `_ad_hoc_matches` / `_geo_matches`; new `_metro_matches_synthetic` skips geocode when caller supplies lat/lng. round_robin reports next rep without claiming.
+- **`lead_routing_service._check_priority_slot_free`** — pre-flight on create_rule + update_rule so the partial UNIQUE INDEX surfaces as 409 not 500.
+- **`schemas/routing.py`** — discriminated-union per rule_type (`AdHocConditions`, `GeographicConditions`+`MetroArea`, `RoundRobinConditions`); `parse_conditions` dispatches by rule_type. Service `_validate_conditions` now delegates to it. Resolves Architectural Debt #4.
+- **`routers/admin_routing.py`** — `POST /reorder` and `POST /{id}/test` endpoints. Admin-only.
+- **Frontend:** `AdminRouting.tsx` (tabs per rule_type, `@dnd-kit`-driven sortable list, per-row Edit/Test/Delete), `RoutingRuleForm.tsx` (form switches per rule_type), `RoutingRuleTester.tsx` (synthetic input + result panel). `/admin/routing` route + Routing tab in admin nav. Installed `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`.
+
+### Key design decisions
+1. **Two-phase renumber, not deferrable constraint** — Postgres can't make a *partial* UNIQUE INDEX deferrable (deferrability requires a constraint, which doesn't support partial). Scratch negatives + SELECT FOR UPDATE is the canonical workaround.
+2. **Partial UNIQUE INDEX (`WHERE deleted_at IS NULL`)** — soft-deleted rules don't block re-use of their priority slot; admin can deactivate then re-create at the same number.
+3. **Pydantic dispatch over inline if/else** — `parse_conditions(rule_type, raw)` lives in `schemas/routing.py`, the variant models become OpenAPI types, and `service._validate_conditions` is a thin wrapper that maps `ValidationError`/`ValueError` → 422.
+4. **Reorder endpoint requires complete bucket** — passing only the moved IDs would let other rules silently inherit a conflicting slot. 422 with the missing/unknown sets in the detail message.
+5. **`test_rule` round_robin doesn't claim** — admin can debug rotation without polluting the `round_robin_index` counter. Different from `route_for_record` which claims atomically.
+6. **@dnd-kit over alternatives** — smaller bundle, active maintenance, accessible-by-default keyboard sensors.
+
+### Test results
+- 425 / 425 backend tests pass (was 399; +15 unit routing schema + 6 test_rule + 5 reorder/uniqueness).
+- `make lint`: ruff + format + eslint + tsc all green.
+- Migration 017 applied + downgraded + re-upgraded cleanly against local dev DB.
+
+### Bugs found and fixed during sprint
+- IntegrityError on duplicate priority bubbled to 500. Fixed with `_check_priority_slot_free` pre-flight + clean 409.
+- Naive single-pass renumber would violate the UNIQUE INDEX when row A wants row B's slot. Fixed with the negative-scratch two-phase pattern.
+
+### Open issues / follow-ups
+- Drag-reorder uses optimistic re-fetch on success; full optimistic UI with rollback-on-error is a future polish.
+- Ad-hoc form's `assigned_user_id` is a free UUID input — swap to autocomplete when a user-picker exists.
+- Geographic metro lat/lng entry is manual; integrate with Google Maps geocoding (Sprint 7 territory) for "type a city name".

@@ -606,3 +606,68 @@ export interface AppConfigListResponse {
 export interface AppConfigUpdateRequest {
   value: unknown;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 Sprint 4 — lead routing admin
+// ---------------------------------------------------------------------------
+
+export type RoutingRuleType = "ad_hoc" | "geographic" | "round_robin";
+
+export interface RoutingRule {
+  id: UUID;
+  rule_type: RoutingRuleType;
+  priority: number;
+  conditions: Record<string, unknown> | null;
+  assigned_user_id: UUID | null;
+  round_robin_index: number;
+  is_active: boolean;
+  created_by: UUID | null;
+  created_at: ISODateTime;
+  deleted_at: ISODateTime | null;
+}
+
+export interface RoutingRuleListResponse {
+  rules: RoutingRule[];
+  total: number;
+}
+
+export interface RoutingRuleCreate {
+  rule_type: RoutingRuleType;
+  priority?: number;
+  conditions?: Record<string, unknown> | null;
+  assigned_user_id?: UUID | null;
+  is_active?: boolean;
+}
+
+export interface RoutingRulePatch {
+  priority?: number;
+  conditions?: Record<string, unknown> | null;
+  assigned_user_id?: UUID | null;
+  is_active?: boolean;
+}
+
+export interface RoutingRuleReorderRequest {
+  rule_type: RoutingRuleType;
+  ordered_ids: UUID[];
+}
+
+export interface RoutingRuleReorderResponse {
+  rules: RoutingRule[];
+}
+
+export interface RoutingRuleTestRequest {
+  customer_id?: UUID | null;
+  customer_email?: string | null;
+  customer_state?: string | null;
+  customer_zip?: string | null;
+  customer_lat?: number | null;
+  customer_lng?: number | null;
+}
+
+export interface RoutingRuleTestResponse {
+  rule_id: UUID;
+  rule_type: RoutingRuleType;
+  matched: boolean;
+  would_assign_to: UUID | null;
+  reason: string;
+}

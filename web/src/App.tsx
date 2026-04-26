@@ -10,6 +10,7 @@ import { AdminCustomerEditPage } from "./pages/AdminCustomerEdit";
 import { AdminCustomersPage } from "./pages/AdminCustomers";
 import { AdminOperationsPage } from "./pages/AdminOperations";
 import { AdminReportsPage } from "./pages/AdminReports";
+import { AdminRoutingPage } from "./pages/AdminRouting";
 import { DashboardPage } from "./pages/Dashboard";
 import { EquipmentDetailPage } from "./pages/EquipmentDetail";
 import { IntakeFormPage } from "./pages/IntakeForm";
@@ -146,6 +147,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <AdminConfigPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/routing"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminRoutingPage />
             </Layout>
           </ProtectedRoute>
         }
