@@ -349,21 +349,23 @@ async def _check_conflict(
 ) -> CalendarConflict | None:
     """Return a ``CalendarConflict`` if the slot is taken, else ``None``.
 
-    The lock is taken over the appraiser's events on the same calendar day
-    (UTC). That window is small and bounded — a row-level lock here is
-    cheaper than locking the whole table and serializes only the threads
-    competing for the same day.
+    The window is centered on the proposed slot ± 24 h so events that
+    straddle UTC midnight (e.g. an evening event at 23:40 UTC vs a
+    proposed event at 00:10 UTC the next day) are still considered.
+    The earlier `proposed_start.replace(hour=0)` day-bucket filter
+    silently dropped any prior-day event that ran into the proposed
+    day's morning — exposed when the e2e test fired near UTC midnight.
     """
-    day_start = proposed_start.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = day_start + timedelta(days=1)
+    window_start = proposed_start - timedelta(days=1)
+    window_end = proposed_start + timedelta(days=1)
 
     overlap_stmt = (
         select(CalendarEvent)
         .where(
             CalendarEvent.appraiser_id == appraiser_id,
             CalendarEvent.cancelled_at.is_(None),
-            CalendarEvent.scheduled_at >= day_start,
-            CalendarEvent.scheduled_at < day_end,
+            CalendarEvent.scheduled_at >= window_start,
+            CalendarEvent.scheduled_at < window_end,
         )
         .with_for_update()
         .order_by(CalendarEvent.scheduled_at.asc())
