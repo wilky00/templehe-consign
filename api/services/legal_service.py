@@ -2,16 +2,15 @@
 # ABOUTME: Current versions live in app_config; text bodies under api/content/<type>/v<N>.md.
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import AppConfig, User, UserConsentVersion
+from database.models import User, UserConsentVersion
+from services import app_config_registry
 
 logger = structlog.get_logger(__name__)
 
@@ -39,30 +38,22 @@ def load_document(doc_type: str, version: str) -> str:
 
 
 async def _read_app_config_version(db: AsyncSession, key: str) -> str:
-    result = await db.execute(select(AppConfig).where(AppConfig.key == key))
-    row = result.scalar_one_or_none()
-    if row is None:
-        # Missing seed — surface loudly rather than silently defaulting.
-        raise HTTPException(
-            status_code=500,
-            detail=f"Legal configuration missing ({key}). Contact support.",
-        )
-    value = row.value
-    # app_config.value is JSONB; asyncpg sometimes returns str, sometimes dict.
-    if isinstance(value, str):
-        value = json.loads(value)
-    version = value.get("version") if isinstance(value, dict) else None
+    """Read a non-empty version string for ``key`` via the AppConfig
+    registry. Missing or malformed seeds surface as 500 — legal versions
+    are load-bearing for ToS gating and silent defaults would be worse
+    than a loud failure."""
+    version = await app_config_registry.get_typed(db, key)
     if not version:
         raise HTTPException(
             status_code=500,
-            detail=f"Legal configuration malformed ({key}). Contact support.",
+            detail=f"Legal configuration missing or malformed ({key}). Contact support.",
         )
     return str(version)
 
 
 async def get_current_versions(db: AsyncSession) -> tuple[str, str]:
-    tos = await _read_app_config_version(db, "tos_current_version")
-    privacy = await _read_app_config_version(db, "privacy_current_version")
+    tos = await _read_app_config_version(db, app_config_registry.TOS_CURRENT_VERSION.name)
+    privacy = await _read_app_config_version(db, app_config_registry.PRIVACY_CURRENT_VERSION.name)
     return tos, privacy
 
 

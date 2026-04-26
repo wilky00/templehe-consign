@@ -34,12 +34,12 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import AppConfig, NotificationPreference, User
+from database.models import NotificationPreference, User
+from services import app_config_registry
 
 ALLOWED_CHANNELS: frozenset[str] = frozenset({"email", "sms", "slack"})
 DEFAULT_CHANNEL = "email"
 
-_HIDDEN_ROLES_KEY = "notification_preferences_hidden_roles"
 _READ_ONLY_ROLES: frozenset[str] = frozenset({"customer"})
 
 
@@ -130,15 +130,13 @@ async def resolve_channel(db: AsyncSession, *, user: User) -> ResolvedChannel:
 
 
 async def is_hidden_for_role(db: AsyncSession, *, role_slug: str) -> bool:
-    raw = (
-        await db.execute(select(AppConfig.value).where(AppConfig.key == _HIDDEN_ROLES_KEY))
-    ).scalar_one_or_none()
-    if not isinstance(raw, dict):
-        return False
-    roles = raw.get("roles")
-    if not isinstance(roles, list):
-        return False
-    return role_slug in roles
+    """Phase 4 admin can flip the AppConfig key to hide the page from
+    a role outright. Read through the registry so the parsed shape +
+    default handling stay in one place."""
+    roles = await app_config_registry.get_typed(
+        db, app_config_registry.NOTIFICATION_PREFERENCES_HIDDEN_ROLES.name
+    )
+    return role_slug in (roles or [])
 
 
 def is_read_only_for_role(role_slug: str) -> bool:

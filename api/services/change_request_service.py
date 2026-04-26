@@ -31,6 +31,7 @@ from sqlalchemy.orm import selectinload
 from config import settings
 from database.models import AuditLog, ChangeRequest, Customer, EquipmentRecord, User
 from services import equipment_status_service, notification_service, sanitization
+from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)
 
@@ -218,7 +219,7 @@ async def resolve_change_request(
         await equipment_status_service.record_transition(
             db,
             record=record,
-            to_status="withdrawn",
+            to_status=Status.WITHDRAWN.value,
             changed_by=resolver,
             note=(clean_notes or "Withdrawn via customer change request.")[:500],
             customer=customer_user,

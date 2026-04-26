@@ -5,16 +5,21 @@
 ``record_transition`` is the one entry point for any code that changes
 ``equipment_records.status``. It:
 
-1. Validates the ``(from, to)`` edge (stops typo-grade mistakes, not a
-   full state machine — Phase 3 will tighten).
+1. Validates the ``(from, to)`` edge against the canonical state machine
+   in ``equipment_status_machine``. Phase 4-prework extracted the rules
+   into that module so admin UI + the runtime read the same registry.
 2. Writes an immutable ``status_events`` row.
 3. Updates ``record.status`` and ``updated_at``.
 4. Enqueues a customer-facing status-update email through
-   ``NotificationService`` when the destination status warrants it.
+   ``NotificationService`` when the destination status warrants it
+   (``equipment_status_machine.notifies_customer``).
+5. Enqueues a sales-rep notification when the destination status
+   warrants it (``equipment_status_machine.notifies_sales_rep``).
 
-Templates for status emails live inline here so the mapping of
-``to_status → (subject, body)`` is reviewable in one place. Richer
-templating can migrate to Jinja later without changing the contract.
+Email + SMS templates for the customer-facing and sales-rep
+notifications live inline here. The plan to extract these into a
+template registry is tracked in the Phase 4 dev plan; until then,
+keeping them in one file keeps the mapping reviewable.
 """
 
 from __future__ import annotations
@@ -27,64 +32,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import EquipmentRecord, StatusEvent, User
-from services import notification_preferences_service, notification_service
+from services import (
+    equipment_status_machine,
+    notification_preferences_service,
+    notification_service,
+)
 
 logger = structlog.get_logger(__name__)
-
-
-# Destination statuses that should trigger a customer-facing email. The set
-# is deliberately narrow — we don't want to spam users on every internal
-# tick (e.g. appraiser_assigned). Phase 3 and the Admin Panel let this
-# evolve via app_config, but day-one we hardcode the important ones.
-_CUSTOMER_EMAIL_STATUSES = frozenset(
-    {
-        "appraisal_scheduled",
-        "appraisal_complete",
-        "offer_ready",
-        "listed",
-        "sold",
-        "declined",
-    }
-)
-
-# Destination statuses that notify the assigned sales rep on the rep's
-# preferred channel. Spec features 3.2.1 (manager approval → ready for
-# eSign) and 3.2.2 (eSign complete → ready to publish). Phase 6 plugs
-# the actual triggers in by calling ``record_transition(...)`` for these
-# statuses; today the wiring fires the moment those transitions happen.
-_SALES_REP_NOTIFY_STATUSES = frozenset(
-    {
-        "approved_pending_esign",
-        "esigned_pending_publish",
-    }
-)
-
-# Minimal state machine. True = allowed. All other (from, to) pairs are
-# accepted by default — Phase 3 hardens this. The explicit rejects here
-# catch obvious bugs (e.g. moving from sold back to new_request).
-_FORBIDDEN_TRANSITIONS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("sold", "new_request"),
-        ("declined", "new_request"),
-        ("sold", "listed"),
-        ("sold", "appraisal_scheduled"),
-    }
-)
 
 
 def _compose_email(
     *, user: User, record: EquipmentRecord, to_status: str, note: str | None
 ) -> tuple[str, str]:
     ref = record.reference_number or "(no reference yet)"
-    display = {
-        "appraisal_scheduled": "An appraisal has been scheduled",
-        "appraisal_complete": "Your appraisal is complete",
-        "offer_ready": "Your offer is ready to review",
-        "listed": "Your equipment is now listed",
-        "sold": "Your equipment has sold",
-        "declined": "Your submission has been declined",
-    }.get(to_status, f"Status update: {to_status}")
-    subject = f"{display} — {ref}"
+    subject = f"{equipment_status_machine.display_name(to_status)} — {ref}"
 
     note_html = f"<p>{note}</p>" if note else ""
     body = (
@@ -120,7 +81,7 @@ async def record_transition(
             status_code=409,
             detail=f"Record is already in status '{to_status}'.",
         )
-    if (from_status, to_status) in _FORBIDDEN_TRANSITIONS:
+    if equipment_status_machine.is_forbidden_transition(from_status, to_status):
         raise HTTPException(
             status_code=409,
             detail=f"Cannot transition from '{from_status}' to '{to_status}'.",
@@ -138,7 +99,7 @@ async def record_transition(
     db.add(record)
     await db.flush()
 
-    if customer is not None and to_status in _CUSTOMER_EMAIL_STATUSES:
+    if customer is not None and equipment_status_machine.notifies_customer(to_status):
         subject, body = _compose_email(user=customer, record=record, to_status=to_status, note=note)
         await notification_service.enqueue(
             db,
@@ -155,7 +116,10 @@ async def record_transition(
             },
         )
 
-    if to_status in _SALES_REP_NOTIFY_STATUSES and record.assigned_sales_rep_id is not None:
+    if (
+        equipment_status_machine.notifies_sales_rep(to_status)
+        and record.assigned_sales_rep_id is not None
+    ):
         await _notify_sales_rep(db, record=record, to_status=to_status)
     return event
 

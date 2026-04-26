@@ -17,14 +17,23 @@ function randomFakeIp(): string {
 }
 
 function todayPlusMinutes(minutesAhead: number): { date: string; time: string } {
-  // Schedule into the same calendar day as today so the default week view
-  // on /sales/calendar is guaranteed to render the event.
   const d = new Date();
   d.setMinutes(d.getMinutes() + minutesAhead);
   d.setSeconds(0, 0);
   const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   return { date, time };
+}
+
+function isInThisWeek(dateStr: string): boolean {
+  const target = new Date(`${dateStr}T00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay());
+  const startOfNextWeek = new Date(startOfWeek);
+  startOfNextWeek.setDate(startOfWeek.getDate() + 7);
+  return target >= startOfWeek && target < startOfNextWeek;
 }
 
 async function fillSchedule(
@@ -80,6 +89,14 @@ test("calendar smoke: nav + schedule + conflict + click-through", async ({ page 
   // The event lands on the calendar.
   await page.getByRole("link", { name: /^Calendar$/ }).click();
   await expect(page).toHaveURL(/\/sales\/calendar$/);
+  // The default WEEK view shows today's week (Sun–Sat in the browser's
+  // TZ). When the test runs near UTC midnight, ``todayPlusMinutes(30)``
+  // can land on the following Sunday, putting the event one week out.
+  // Advance the calendar with the toolbar's "Next" button when that
+  // happens — the assertion stays meaningful either way.
+  if (!isInThisWeek(happyPath.date)) {
+    await page.getByRole("button", { name: /^next$/i }).click();
+  }
   const eventCell = page
     .locator(".rbc-event")
     .filter({ hasText: first.reference_number })

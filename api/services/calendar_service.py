@@ -58,10 +58,11 @@ from database.models import (
     User,
 )
 from services import equipment_status_service, google_maps_service, notification_service
+from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)
 
-_SCHEDULABLE_FROM_STATUSES = frozenset({"new_request"})
+_SCHEDULABLE_FROM_STATUSES = frozenset({Status.NEW_REQUEST.value})
 _DEFAULT_DURATION_MINUTES = 60
 
 
@@ -182,7 +183,7 @@ async def create_event(
     await equipment_status_service.record_transition(
         db,
         record=record,
-        to_status="appraisal_scheduled",
+        to_status=Status.APPRAISAL_SCHEDULED.value,
         changed_by=actor,
         customer=record.customer.user if record.customer is not None else None,
     )
@@ -303,11 +304,11 @@ async def cancel_event(
     )
 
     record = await _load_record_or_404(db, event.equipment_record_id)
-    if record.status == "appraisal_scheduled":
+    if record.status == Status.APPRAISAL_SCHEDULED.value:
         # Spec Feature 3.4.4: revert to new_request on cancel. No customer
         # status email — the customer notification is the cancellation
         # email below, not a status flip notification.
-        record.status = "new_request"
+        record.status = Status.NEW_REQUEST.value
         db.add(record)
         await db.flush()
 
