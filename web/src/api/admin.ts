@@ -15,6 +15,14 @@ import {
   type DeactivateUserResponse,
   type ManualTransitionRequest,
   type ManualTransitionResponse,
+  type RoutingRule,
+  type RoutingRuleCreate,
+  type RoutingRuleListResponse,
+  type RoutingRulePatch,
+  type RoutingRuleReorderRequest,
+  type RoutingRuleReorderResponse,
+  type RoutingRuleTestRequest,
+  type RoutingRuleTestResponse,
   type SendInviteResponse,
   type UUID,
 } from "./types";
@@ -168,5 +176,53 @@ export async function updateAppConfig(
   return request<AppConfigItem>(`/admin/config/${key}`, {
     method: "PATCH",
     body: { value },
+  });
+}
+
+// --- Lead routing admin (Sprint 4) ------------------------------------- //
+
+export async function listRoutingRules(
+  includeDeleted = false,
+): Promise<RoutingRuleListResponse> {
+  const path = includeDeleted
+    ? "/admin/routing-rules?include_deleted=true"
+    : "/admin/routing-rules";
+  return request<RoutingRuleListResponse>(path);
+}
+
+export async function createRoutingRule(body: RoutingRuleCreate): Promise<RoutingRule> {
+  return request<RoutingRule>("/admin/routing-rules", { method: "POST", body });
+}
+
+export async function updateRoutingRule(
+  ruleId: UUID,
+  body: RoutingRulePatch,
+): Promise<RoutingRule> {
+  return request<RoutingRule>(`/admin/routing-rules/${ruleId}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function softDeleteRoutingRule(ruleId: UUID): Promise<RoutingRule> {
+  return request<RoutingRule>(`/admin/routing-rules/${ruleId}`, { method: "DELETE" });
+}
+
+export async function reorderRoutingRules(
+  body: RoutingRuleReorderRequest,
+): Promise<RoutingRuleReorderResponse> {
+  return request<RoutingRuleReorderResponse>("/admin/routing-rules/reorder", {
+    method: "POST",
+    body,
+  });
+}
+
+export async function testRoutingRule(
+  ruleId: UUID,
+  body: RoutingRuleTestRequest,
+): Promise<RoutingRuleTestResponse> {
+  return request<RoutingRuleTestResponse>(`/admin/routing-rules/${ruleId}/test`, {
+    method: "POST",
+    body,
   });
 }

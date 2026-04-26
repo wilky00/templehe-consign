@@ -178,3 +178,10 @@ fly machine run . --app temple-sweeper \
 **libgcrypt follow-up (PR #37):** After PR #36 made the gate honor suppressions, `CVE-2026-41989` (libgcrypt20 ECDH DoS) surfaced as a new HIGH. Suppressed in `.trivyignore` with the same justification pattern: libgcrypt is transitive via systemd / GnuPG tooling in the python:3.12-slim base; the application's crypto path is `pyca/cryptography` → OpenSSL, not libgcrypt; vulnerable ECDH ciphertext code path never reached. Verified `grep -rE "gnupg|libgcrypt|import gpg" api/` = 0 hits.
 **pip-audit fix:** `--ignore-vuln CVE-2026-3219` against `pip` itself (build-time tool, runtime is `uv`). No upstream fix yet; quarterly review per ADR-012.
 **Verified:** Post-merge Security workflow on main passed all 4 jobs (Trivy, pip-audit, gitleaks, npm-audit) on 2026-04-26 after PR #37 landed.
+
+## FIXED — Calendar conflict-detection silently misses events that straddle UTC midnight (Phase 4 Sprint 4)
+**Fixed:** 2026-04-26 in the Sprint 4 PR (#39).
+**Was:** `calendar_service._check_conflict` filtered candidate events with `scheduled_at >= proposed_start.replace(hour=0)` and `< day_end` (calendar-day bucket). When the proposed event crossed UTC midnight from a prior event (e.g. existing 23:40 UTC for 60 min vs proposed 00:10 UTC next day), the prior event lived on the previous calendar day and was excluded from the lookup → no conflict reported → 201 instead of 409.
+**Impact:** Same class of TZ-fragility as the calendar e2e `isInThisWeek` workaround from Phase 4 pre-work. Test passed locally + on most CI runs but failed when CI fired near UTC midnight (PR #39 CI ran at 23:04 UTC, hit the boundary).
+**Fix:** Widen the lookup window to ±24 h around `proposed_start` instead of bucketing to a calendar day. Same lock cost (still bounded by appraiser + small time range), correct under midnight crossings.
+**Pattern to watch for:** any time-window query that buckets to a calendar day will miss events that straddle the boundary. Always compose time windows around the proposed event, not the proposed event's day.

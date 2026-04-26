@@ -235,3 +235,164 @@ async def test_delete_soft_deletes_and_list_excludes_by_default(
         )
     ).scalar_one()
     assert db_row.deleted_at is not None
+
+
+# --- Sprint 4: priority uniqueness + reorder ---------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_create_blocks_duplicate_priority_in_same_rule_type(
+    client: AsyncClient, db_session: AsyncSession
+):
+    admin = await _user_with_role(client, db_session, "ar_dup_admin@example.com", "admin")
+    rep = await _user_with_role(client, db_session, "ar_dup_rep@example.com", "sales")
+
+    first = await client.post(
+        "/api/v1/admin/routing-rules",
+        json={
+            "rule_type": "ad_hoc",
+            "priority": 50,
+            "conditions": {"condition_type": "email_domain", "value": "a.com"},
+            "assigned_user_id": rep["user_id"],
+        },
+        headers=_auth(admin["access_token"]),
+    )
+    assert first.status_code == 201, first.json()
+
+    second = await client.post(
+        "/api/v1/admin/routing-rules",
+        json={
+            "rule_type": "ad_hoc",
+            "priority": 50,
+            "conditions": {"condition_type": "email_domain", "value": "b.com"},
+            "assigned_user_id": rep["user_id"],
+        },
+        headers=_auth(admin["access_token"]),
+    )
+    assert second.status_code == 409, second.json()
+    assert "priority 50" in second.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_reorder_renumbers_atomically_and_persists(
+    client: AsyncClient, db_session: AsyncSession
+):
+    admin = await _user_with_role(client, db_session, "ar_reorder_admin@example.com", "admin")
+    rep = await _user_with_role(client, db_session, "ar_reorder_rep@example.com", "sales")
+
+    ids = []
+    for prio in (10, 20, 30):
+        resp = await client.post(
+            "/api/v1/admin/routing-rules",
+            json={
+                "rule_type": "geographic",
+                "priority": prio,
+                "conditions": {"state_list": ["TX"]},
+                "assigned_user_id": rep["user_id"],
+            },
+            headers=_auth(admin["access_token"]),
+        )
+        ids.append(resp.json()["id"])
+
+    # Reverse the order.
+    new_order = list(reversed(ids))
+    reorder = await client.post(
+        "/api/v1/admin/routing-rules/reorder",
+        json={"rule_type": "geographic", "ordered_ids": new_order},
+        headers=_auth(admin["access_token"]),
+    )
+    assert reorder.status_code == 200, reorder.json()
+    body = reorder.json()
+    # New priorities are dense 0..N-1 in the requested order.
+    by_id = {r["id"]: r for r in body["rules"]}
+    assert by_id[new_order[0]]["priority"] == 0
+    assert by_id[new_order[1]]["priority"] == 1
+    assert by_id[new_order[2]]["priority"] == 2
+
+    # Re-listing reflects the persisted order.
+    listed = await client.get(
+        "/api/v1/admin/routing-rules",
+        headers=_auth(admin["access_token"]),
+    )
+    geo_rules = [r for r in listed.json()["rules"] if r["rule_type"] == "geographic"]
+    geo_rules.sort(key=lambda r: r["priority"])
+    assert [r["id"] for r in geo_rules] == new_order
+
+
+@pytest.mark.asyncio
+async def test_reorder_rejects_partial_id_list(client: AsyncClient, db_session: AsyncSession):
+    admin = await _user_with_role(client, db_session, "ar_partial_admin@example.com", "admin")
+    rep = await _user_with_role(client, db_session, "ar_partial_rep@example.com", "sales")
+
+    ids = []
+    for prio in (1, 2):
+        resp = await client.post(
+            "/api/v1/admin/routing-rules",
+            json={
+                "rule_type": "ad_hoc",
+                "priority": prio,
+                "conditions": {"condition_type": "email_domain", "value": f"d{prio}.com"},
+                "assigned_user_id": rep["user_id"],
+            },
+            headers=_auth(admin["access_token"]),
+        )
+        ids.append(resp.json()["id"])
+
+    # Pass only one of the two ids — service must reject.
+    resp = await client.post(
+        "/api/v1/admin/routing-rules/reorder",
+        json={"rule_type": "ad_hoc", "ordered_ids": [ids[0]]},
+        headers=_auth(admin["access_token"]),
+    )
+    assert resp.status_code == 422
+    assert "ordered_ids" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reorder_rejects_duplicate_ids(client: AsyncClient, db_session: AsyncSession):
+    admin = await _user_with_role(client, db_session, "ar_dup2_admin@example.com", "admin")
+    rep = await _user_with_role(client, db_session, "ar_dup2_rep@example.com", "sales")
+
+    create = await client.post(
+        "/api/v1/admin/routing-rules",
+        json={
+            "rule_type": "ad_hoc",
+            "priority": 5,
+            "conditions": {"condition_type": "email_domain", "value": "x.com"},
+            "assigned_user_id": rep["user_id"],
+        },
+        headers=_auth(admin["access_token"]),
+    )
+    rule_id = create.json()["id"]
+
+    resp = await client.post(
+        "/api/v1/admin/routing-rules/reorder",
+        json={"rule_type": "ad_hoc", "ordered_ids": [rule_id, rule_id]},
+        headers=_auth(admin["access_token"]),
+    )
+    assert resp.status_code == 422
+    assert "duplicate" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reorder_blocked_for_non_admin(client: AsyncClient, db_session: AsyncSession):
+    admin = await _user_with_role(client, db_session, "ar_rb_admin@example.com", "admin")
+    rep = await _user_with_role(client, db_session, "ar_rb_rep@example.com", "sales")
+    create = await client.post(
+        "/api/v1/admin/routing-rules",
+        json={
+            "rule_type": "ad_hoc",
+            "priority": 100,
+            "conditions": {"condition_type": "email_domain", "value": "z.com"},
+            "assigned_user_id": rep["user_id"],
+        },
+        headers=_auth(admin["access_token"]),
+    )
+    rule_id = create.json()["id"]
+
+    resp = await client.post(
+        "/api/v1/admin/routing-rules/reorder",
+        json={"rule_type": "ad_hoc", "ordered_ids": [rule_id]},
+        headers=_auth(rep["access_token"]),
+    )
+    assert resp.status_code == 403

@@ -16,6 +16,10 @@ from schemas.routing import (
     RoutingRuleListResponse,
     RoutingRuleOut,
     RoutingRulePatch,
+    RoutingRuleReorderRequest,
+    RoutingRuleReorderResponse,
+    RoutingRuleTestRequest,
+    RoutingRuleTestResponse,
 )
 from services import lead_routing_service
 
@@ -102,3 +106,50 @@ async def delete_rule(
 ) -> RoutingRuleOut:
     rule = await lead_routing_service.soft_delete_rule(db, rule_id=rule_id)
     return _to_out(rule)
+
+
+# --- Sprint 4: drag-reorder + test rule -------------------------------- #
+
+
+@router.post("/reorder", response_model=RoutingRuleReorderResponse)
+async def reorder_rules(
+    body: RoutingRuleReorderRequest,
+    _admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> RoutingRuleReorderResponse:
+    """Atomically renumber priorities so they match ``ordered_ids``
+    (index 0 → priority 0, ...). Service rejects partial lists with 422
+    so an unmentioned rule can't end up duplicating a slot."""
+    rules = await lead_routing_service.reorder_priorities(
+        db, rule_type=body.rule_type, ordered_ids=body.ordered_ids
+    )
+    return RoutingRuleReorderResponse(rules=[_to_out(r) for r in rules])
+
+
+@router.post("/{rule_id}/test", response_model=RoutingRuleTestResponse)
+async def test_rule(
+    rule_id: uuid.UUID,
+    body: RoutingRuleTestRequest,
+    _admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> RoutingRuleTestResponse:
+    """Read-only "would this rule match this customer?" probe. Mirrors
+    the runtime match logic from route_for_record but never writes
+    (no round_robin_index increment, no audit log, no assignment)."""
+    result = await lead_routing_service.test_rule(
+        db,
+        rule_id=rule_id,
+        customer_id=body.customer_id,
+        customer_email=body.customer_email,
+        customer_state=body.customer_state,
+        customer_zip=body.customer_zip,
+        customer_lat=body.customer_lat,
+        customer_lng=body.customer_lng,
+    )
+    return RoutingRuleTestResponse(
+        rule_id=result.rule_id,
+        rule_type=result.rule_type,  # type: ignore[arg-type]
+        matched=result.matched,
+        would_assign_to=result.would_assign_to,
+        reason=result.reason,
+    )

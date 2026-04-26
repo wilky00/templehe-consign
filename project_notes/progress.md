@@ -931,6 +931,40 @@ The whole platform's runtime knobs are now reachable from the SPA: admin sees ev
 - Customer intake page (`web/src/pages/IntakeForm.tsx`) doesn't yet consume `/me/equipment/form-config` — fields are still hard-coded. Backend is ready; the React refactor to dynamically render from `visible_fields` + `field_order` is straightforward but a UX-impacting change. Lands in Sprint 8 (the gate sprint) or as a follow-up before the Phase 4 close-out.
 - `security_session_ttl_minutes` AppConfig key is registered but `auth_service` token mint still uses the env-var TTL only. Wiring the AppConfig read into `auth_service.create_access_token` is a one-liner; deferred to keep this sprint scoped to the registry + UI.
 
+### Sprint 4 — Lead routing admin UI + priority uniqueness + JSON Schema — COMPLETE (2026-04-26)
+
+Resolves Architectural Debt #3 + #4. Admin can now build/edit/test/reorder lead routing rules from the SPA, and priorities are guaranteed unique within each rule_type bucket.
+
+- [x] **Migration 017** — deterministic backfill of duplicate priorities (`ROW_NUMBER() OVER (PARTITION BY rule_type, priority ORDER BY created_at, id)` − 1 offset) + `CREATE UNIQUE INDEX uq_lead_routing_rules_type_priority ON lead_routing_rules (rule_type, priority) WHERE deleted_at IS NULL`. Partial so soft-deleted rules don't block re-use of their slot. Reversible (downgrade drops the index; renumber is permanent — there's no semantic reason to want it back).
+- [x] **`api/services/lead_routing_service.reorder_priorities`** — atomic two-phase renumber under `SELECT FOR UPDATE`: shift to negative scratch values, then to final positives, all in one transaction. Caller MUST pass every active rule in the bucket (rejected with 422 otherwise so an unmentioned rule can't end up duplicating a slot).
+- [x] **`api/services/lead_routing_service.test_rule`** — read-only synthetic match. Reuses `_ad_hoc_matches` / `_geo_matches`; adds `_metro_matches_synthetic` (skips geocode when caller already supplied lat/lng); for round_robin, returns `round_robin_index % len(rep_ids)` rep without claiming.
+- [x] **`api/services/lead_routing_service._check_priority_slot_free`** — pre-flight on create_rule + update_rule so the partial UNIQUE INDEX surfaces as a clean 409 with a useful detail message instead of bubbling SQLAlchemy IntegrityError to a 500.
+- [x] **`api/schemas/routing.py`** — discriminated-union per rule_type via `AdHocConditions`, `GeographicConditions` (with nested `MetroArea`), `RoundRobinConditions`. `parse_conditions(rule_type, raw)` dispatches by rule_type and raises `ValueError` on bad shape. `RoutingRuleConditions` annotated union exposes the variants in OpenAPI. `_validate_conditions` (service) now delegates to `parse_conditions` so service + admin form + OpenAPI all enforce identical shape checks. **Resolves Architectural Debt #4.**
+- [x] **`api/routers/admin_routing.py`** extended with `POST /admin/routing-rules/reorder` and `POST /admin/routing-rules/{id}/test` plus shapes `RoutingRuleReorderRequest/Response`, `RoutingRuleTestRequest/Response`. Admin-only RBAC.
+- [x] **Frontend:**
+  - `web/src/pages/AdminRouting.tsx` (NEW) — tabs per rule_type, drag-to-reorder via `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`, per-row Edit/Test/Delete, summary line per rule type.
+  - `web/src/components/admin/RoutingRuleForm.tsx` (NEW) — create/edit form switches conditions UI based on rule_type (ad_hoc dropdown + value, geographic states/zips/metro fieldset, round_robin rep_ids textarea).
+  - `web/src/components/admin/RoutingRuleTester.tsx` (NEW) — synthetic input form + result panel (matched / no-match + would_assign_to UUID).
+  - `App.tsx` `/admin/routing` route + Layout nav adds Routing tab.
+  - `api/admin.ts` + `api/types.ts` — typed routing surface (RoutingRule, list/create/patch/reorder/test).
+- [x] **Tests:** 26 new — 15 unit in `test_routing_schemas.py` (per-variant validators) + 6 integration in `test_routing_rule_test_function.py` (ad_hoc match/no-match, geographic state, geographic metro radius in/out, round_robin no-claim, 404, RBAC) + 5 integration in `test_admin_routing_rules.py` (uniqueness 409, reorder atomic, partial-list 422, duplicate-id 422, RBAC). 425/425 backend pass.
+
+**Bugs found and fixed during sprint:**
+- Initial uniqueness test asserted "409 or 500" because the IntegrityError bubbled through SQLAlchemy as a 500. Fixed by adding `_check_priority_slot_free` pre-flight to create_rule + update_rule so the slot collision surfaces as a clean 409 with the detail "priority N is already taken in the X bucket".
+- The two-phase reorder needed scratch-space negative priorities (`-1 - idx`) so the partial UNIQUE INDEX wasn't violated mid-renumber. Naive single-pass UPDATE would fail when row A wanted row B's slot and vice versa.
+
+**Decisions confirmed:**
+- Atomic reorder uses scratch negatives instead of a deferrable constraint (Postgres can't make a partial unique INDEX deferrable; you'd need a CONSTRAINT, which doesn't support partial). Two-phase under SELECT FOR UPDATE is the canonical workaround.
+- Pydantic `parse_conditions` is the single source of truth for routing-rule shape validation; service `_validate_conditions` is now a thin wrapper that converts ValidationError → 422.
+- @dnd-kit chosen over react-dnd or react-sortable-hoc for the smaller bundle + active maintenance + accessible-by-default keyboard sensors.
+- `test_rule` for round_robin reports the *next* rep without claiming so admin can debug rotation without polluting the index. Real `route_for_record` claims atomically.
+- `_metro_matches_synthetic` keeps the synchronous match path for testing — bypasses the geocode + cache-write that the runtime `_metro_matches` does.
+
+**Carry-forward:**
+- Drag-reorder UI submits the full ordered list every drop. Admin-side optimistic UI with rollback-on-error is a possible future polish (currently re-fetches on success).
+- "Add ad_hoc rule" form's `assigned_user_id` is a free UUID input — Sprint 7 (or whenever a user-picker exists) can swap to an autocomplete.
+- Geographic metro lat/lng entry is manual; integrating with the Google Maps geocoding flow (already used at runtime) for "type a city name" would land naturally with Sprint 7's integrations work.
+
 ---
 
 ## Phase 5–8 — Not started
