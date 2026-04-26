@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,14 +13,23 @@ from database.base import get_db
 from database.models import AuditLog, Customer, EquipmentRecord, User
 from middleware.rbac import require_roles
 from schemas.admin import (
+    AdminCustomerCreate,
+    AdminCustomerListResponse,
+    AdminCustomerOut,
+    AdminCustomerPatch,
     AdminOperationsResponse,
+    DeactivateUserRequest,
+    DeactivateUserResponse,
     ManualTransitionRequest,
     ManualTransitionResponse,
+    SendInviteResponse,
     SortDirection,
     SortField,
 )
 from services import (
+    admin_customer_service,
     admin_operations_service,
+    admin_user_service,
     equipment_status_machine,
     equipment_status_service,
 )
@@ -178,6 +187,112 @@ async def _resolve_customer_user(db: AsyncSession, *, record: EquipmentRecord) -
         )
     ).scalar_one_or_none()
     return user
+
+
+# --- Customer admin (Sprint 2) --------------------------------------------- #
+
+
+@router.get("/customers", response_model=AdminCustomerListResponse)
+async def list_customers(
+    search: str | None = Query(default=None),
+    include_deleted: bool = Query(default=False),
+    walkins_only: bool = Query(default=False),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=1, le=200),
+    _admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminCustomerListResponse:
+    customers, total = await admin_customer_service.list_customers(
+        db,
+        search=search,
+        include_deleted=include_deleted,
+        walkins_only=walkins_only,
+        page=page,
+        per_page=per_page,
+    )
+    return AdminCustomerListResponse(customers=customers, total=total, page=page, per_page=per_page)
+
+
+@router.get("/customers/{customer_id}", response_model=AdminCustomerOut)
+async def get_customer(
+    customer_id: uuid.UUID,
+    _admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminCustomerOut:
+    return await admin_customer_service.get_customer(db, customer_id=customer_id)
+
+
+@router.post("/customers", response_model=AdminCustomerOut, status_code=201)
+async def create_walkin_customer(
+    body: AdminCustomerCreate,
+    admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminCustomerOut:
+    return await admin_customer_service.create_walkin(db, payload=body, actor=admin)
+
+
+@router.patch("/customers/{customer_id}", response_model=AdminCustomerOut)
+async def update_customer(
+    customer_id: uuid.UUID,
+    body: AdminCustomerPatch,
+    admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminCustomerOut:
+    return await admin_customer_service.update_customer(
+        db, customer_id=customer_id, patch=body, actor=admin
+    )
+
+
+@router.delete("/customers/{customer_id}", response_model=AdminCustomerOut)
+async def soft_delete_customer(
+    customer_id: uuid.UUID,
+    admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminCustomerOut:
+    return await admin_customer_service.soft_delete_customer(
+        db, customer_id=customer_id, actor=admin
+    )
+
+
+@router.post(
+    "/customers/{customer_id}/send-invite",
+    response_model=SendInviteResponse,
+)
+async def send_walkin_invite(
+    customer_id: uuid.UUID,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> SendInviteResponse:
+    return await admin_customer_service.send_walkin_invite(
+        db,
+        customer_id=customer_id,
+        actor=admin,
+        base_url=str(request.base_url).rstrip("/"),
+        background_tasks=background_tasks,
+    )
+
+
+# --- User deactivation (Sprint 2) ------------------------------------------ #
+
+
+@router.post(
+    "/users/{user_id}/deactivate",
+    response_model=DeactivateUserResponse,
+)
+async def deactivate_user(
+    user_id: uuid.UUID,
+    body: DeactivateUserRequest,
+    admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> DeactivateUserResponse:
+    return await admin_user_service.deactivate_user(
+        db,
+        user_id=user_id,
+        reassign_to_id=body.reassign_to_id,
+        actor=admin,
+    )
 
 
 # --- Reporting role passthrough --------------------------------------------- #
