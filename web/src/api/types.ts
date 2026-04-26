@@ -404,3 +404,79 @@ export interface NotificationPreferenceUpdateRequest {
   phone_number?: string | null;
   slack_user_id?: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 Sprint 1 — Admin operations dashboard + manual transitions
+// ---------------------------------------------------------------------------
+
+export type AdminOperationsSortField =
+  | "updated_at"
+  | "submitted_at"
+  | "days_in_status"
+  | "customer_name"
+  | "status";
+export type AdminOperationsSortDirection = "asc" | "desc";
+
+export interface AdminOperationsRow {
+  id: UUID;
+  reference_number: string | null;
+  status: string;
+  status_display: string;
+  days_in_status: number;
+  customer_id: UUID;
+  customer_name: string;
+  business_name: string | null;
+  state: string | null;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  assigned_sales_rep_id: UUID | null;
+  assigned_sales_rep_name: string | null;
+  assigned_appraiser_id: UUID | null;
+  assigned_appraiser_name: string | null;
+  is_overdue: boolean;
+  submitted_at: ISODateTime | null;
+  updated_at: ISODateTime;
+}
+
+export interface AdminOperationsResponse {
+  rows: AdminOperationsRow[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface AdminOperationsFilters {
+  status?: string | null;
+  assignee_id?: UUID | null;
+  customer_id?: UUID | null;
+  overdue_only?: boolean;
+  sort?: AdminOperationsSortField;
+  direction?: AdminOperationsSortDirection;
+  page?: number;
+  per_page?: number;
+}
+
+export interface ManualTransitionRequest {
+  to_status: string;
+  reason: string;
+  send_notifications: boolean | null;
+}
+
+export interface ManualTransitionResponse {
+  record_id: UUID;
+  from_status: string;
+  to_status: string;
+  notifications_dispatched: boolean;
+  audit_log_id: UUID;
+}
+
+export interface AdminReportTab {
+  slug: string;
+  label: string;
+  status: string;
+}
+
+export interface AdminReportsIndexResponse {
+  tabs: AdminReportTab[];
+}
