@@ -22,6 +22,7 @@ from schemas.photo import FinalizePhotoRequest, UploadUrlRequest, UploadUrlRespo
 from services import (
     change_request_service,
     equipment_service,
+    intake_visibility_service,
     photo_upload_service,
 )
 
@@ -93,6 +94,27 @@ async def list_categories(
     )
     cats = result.scalars().all()
     return [{"id": str(c.id), "name": c.name, "slug": c.slug} for c in cats]
+
+
+@router.get("/form-config")
+async def get_form_config(
+    _current_user: User = Depends(_require_customer),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Phase 4 Sprint 3 — admin-controlled intake field visibility +
+    order. The customer intake page fetches this on mount and renders
+    accordingly so admin can hide/reorder fields without a deploy.
+
+    Response shape:
+      {
+        "visible_fields": ["category_id", "make", "model", ...],
+        "field_order":    ["category_id", "make", "model", ...],
+      }
+    """
+    return {
+        "visible_fields": await intake_visibility_service.visible_fields(db),
+        "field_order": await intake_visibility_service.field_order(db),
+    }
 
 
 # ---------------------------------------------------------------------------

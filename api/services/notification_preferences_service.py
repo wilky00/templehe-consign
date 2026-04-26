@@ -40,7 +40,10 @@ from services import app_config_registry
 ALLOWED_CHANNELS: frozenset[str] = frozenset({"email", "sms", "slack"})
 DEFAULT_CHANNEL = "email"
 
-_READ_ONLY_ROLES: frozenset[str] = frozenset({"customer"})
+# Pre-Phase-4-Sprint-3 default — preserved as a fallback inside the
+# AppConfig spec (see app_config_registry.NOTIFICATION_PREFERENCES_READ_ONLY_ROLES).
+# The runtime now always reads through AppConfig so admin can flip this
+# without a deploy.
 
 
 @dataclass(frozen=True)
@@ -139,5 +142,12 @@ async def is_hidden_for_role(db: AsyncSession, *, role_slug: str) -> bool:
     return role_slug in (roles or [])
 
 
-def is_read_only_for_role(role_slug: str) -> bool:
-    return role_slug in _READ_ONLY_ROLES
+async def is_read_only_for_role(db: AsyncSession, *, role_slug: str) -> bool:
+    """Phase 4 Sprint 3: now reads through AppConfig
+    (`notification_preferences_read_only_roles`) instead of the previously
+    hard-coded `{"customer"}` constant. Defaults to `["customer"]` to
+    preserve existing behavior when the key is unset."""
+    roles = await app_config_registry.get_typed(
+        db, app_config_registry.NOTIFICATION_PREFERENCES_READ_ONLY_ROLES.name
+    )
+    return role_slug in (roles or [])

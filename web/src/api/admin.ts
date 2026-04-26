@@ -9,6 +9,8 @@ import {
   type AdminOperationsFilters,
   type AdminOperationsResponse,
   type AdminReportsIndexResponse,
+  type AppConfigItem,
+  type AppConfigListResponse,
   type DeactivateUserRequest,
   type DeactivateUserResponse,
   type ManualTransitionRequest,
@@ -150,5 +152,21 @@ export async function deactivateUser(
   return request<DeactivateUserResponse>(`/admin/users/${userId}/deactivate`, {
     method: "POST",
     body,
+  });
+}
+
+// --- AppConfig admin (Sprint 3) ---------------------------------------- //
+
+export async function listAppConfig(): Promise<AppConfigListResponse> {
+  return request<AppConfigListResponse>("/admin/config");
+}
+
+export async function updateAppConfig(
+  key: string,
+  value: unknown,
+): Promise<AppConfigItem> {
+  return request<AppConfigItem>(`/admin/config/${key}`, {
+    method: "PATCH",
+    body: { value },
   });
 }

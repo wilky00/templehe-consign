@@ -53,7 +53,7 @@ async def get_preferences(
         raise HTTPException(status_code=404, detail="not found")
 
     pref = await notification_preferences_service.get_for_user(db, user_id=current_user.id)
-    read_only = notification_preferences_service.is_read_only_for_role(role)
+    read_only = await notification_preferences_service.is_read_only_for_role(db, role_slug=role)
     if pref is None:
         return _to_out(
             channel="email",
@@ -78,7 +78,7 @@ async def put_preferences(
     role = await _role_slug(db, current_user)
     if await notification_preferences_service.is_hidden_for_role(db, role_slug=role):
         raise HTTPException(status_code=404, detail="not found")
-    if notification_preferences_service.is_read_only_for_role(role):
+    if await notification_preferences_service.is_read_only_for_role(db, role_slug=role):
         raise HTTPException(
             status_code=403,
             detail="your role cannot edit notification preferences",

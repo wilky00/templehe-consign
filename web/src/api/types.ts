@@ -583,3 +583,26 @@ export interface DeactivateUserResponse {
   reassigned_events: UUID[];
   new_status: string;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 Sprint 3 — AppConfig admin
+// ---------------------------------------------------------------------------
+
+export type AppConfigFieldType = "string" | "int" | "uuid" | "list[string]";
+
+export interface AppConfigItem {
+  name: string;
+  category: string;
+  field_type: AppConfigFieldType | string;
+  description: string;
+  default: unknown;
+  value: unknown;
+}
+
+export interface AppConfigListResponse {
+  items: AppConfigItem[];
+}
+
+export interface AppConfigUpdateRequest {
+  value: unknown;
+}

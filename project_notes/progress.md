@@ -892,6 +892,45 @@ Admin can now manage every customer record from the SPA — search, edit, soft-d
 - **UserDeactivationModal frontend** deferred — backend endpoint + tests are complete, but there's no `/admin/users` page for the modal to live on yet. Will land alongside the user-management page in a later sprint (likely Sprint 4 or 7) or as an action on a registered customer's edit page when admin needs to deactivate the *user* tied to that customer.
 - Customer profile auto-creation still happens on first `/me/equipment` intake; the spec allows admin to create a customer record without an immediate intake. Existing flow continues to work; the walk-in path is the new alternative.
 
+### Sprint 3 — AppConfig admin UI + iOS config endpoint + RO roles key — COMPLETE (2026-04-26)
+
+The whole platform's runtime knobs are now reachable from the SPA: admin sees every registered AppConfig key with its live value, edits it, validation errors surface inline, no deploy needed. The iOS app gets a single bundle endpoint + a deterministic hash so it can cache + skip refetches.
+
+- [x] **7 new AppConfig keys registered** in `api/services/app_config_registry.py`:
+  - `intake_fields_visible` (list[string]) + `intake_fields_order` (list[string]) — admin-controlled customer-intake form visibility + ordering
+  - `consignment_price_change_threshold_pct` (int) — Phase 6 manager-approval threshold
+  - `calendar_buffer_minutes_default` (int) — pre-routing default gap between events
+  - `security_session_ttl_minutes` (int) — access-token TTL knob (range 5–720)
+  - `notification_preferences_read_only_roles` (list[string]) — replaces hard-coded `_READ_ONLY_ROLES`. **Resolves Architectural Debt #2.**
+  - `equipment_record_overdue_threshold_days` (int) — Sprint 1 hard-code lifted into AppConfig
+  - Validators: per-spec ValueErrors map to 422; intake-field validators reject unknown slugs (typo guard)
+- [x] **Constants migrated to AppConfig reads:**
+  - `notification_preferences_service.is_read_only_for_role(...)` is now `async`, takes `db`, reads through the registry. Both call sites in `me_notifications.py` updated.
+  - `admin_operations_service` adds `_resolve_overdue_threshold(db, override)` — caller can still pin (tests do); production path reads AppConfig.
+- [x] **`api/services/intake_visibility_service.py`** (NEW) — `visible_fields(db)` and `field_order(db)`. Field-order honors admin's pick first, then appends the rest in canonical order; unknown / non-canonical slugs are dropped silently.
+- [x] **`GET /me/equipment/form-config`** (extends `routers/equipment.py`) — customer intake page can fetch admin-controlled visibility + order before rendering. Default response = every canonical field, canonical order.
+- [x] **`api/routers/admin_config.py`** (NEW) — `GET /admin/config` returns every registered KeySpec + its live value (sorted by `(category, name)` for deterministic admin form render); `PATCH /admin/config/{key}` runs the per-key validator (ValueError → 422) + serializer + upsert. Unknown key = 404. Admin-only RBAC.
+- [x] **`api/routers/ios_config.py`** (NEW) — `GET /api/v1/ios/config`. Returns `{config_version (sha256), categories, components, inspection_prompts (current-version, active), red_flag_rules (current-version, active), app_config[]}`. Hash computed with `sort_keys=True, separators=(",",":")` for deterministic encoding so the same body always hashes to the same hex string. Locked to appraiser/admin/sales/sales_manager — customers don't need it. Phase 5 iOS will consume.
+- [x] **Frontend:**
+  - `web/src/pages/AdminConfig.tsx` (NEW) — fetches `/admin/config`, groups by category, per-key Save with optimistic refresh + ApiError → inline alert. `Saved ✓` indicator on settled rows; Save button disabled when draft equals server value.
+  - `web/src/components/admin/ConfigField.tsx` (NEW) — type-driven input renderer (`int` → number input, `list[string]` → comma-separated textarea, `string`/`uuid` → text input).
+  - Routes + nav: `/admin/config` registered; admin nav gains a Config tab between Customers and Reports.
+  - Types + API client extended (`AppConfigItem`, `AppConfigListResponse`, `listAppConfig`, `updateAppConfig`).
+- [x] **Tests:** 17 new (8 in `test_admin_config.py`, 6 in `test_ios_config.py`, 3 in `test_intake_visibility.py`). 399/399 backend pass (was 382 + 17 new).
+
+**Bugs found and fixed during sprint:**
+- iOS-config initial draft assumed `CategoryComponent.weight` — actual field is `weight_pct` (Numeric). Fixed by reading `weight_pct` and stringifying for stable JSON encoding (Decimal isn't JSON-serializable; we hash the body so the encoding has to be consistent).
+- `is_read_only_for_role` was sync; switching to async meant updating both call sites in `me_notifications.py` to `await`.
+
+**Decisions confirmed:**
+- AppConfig is read at request time (no in-process cache yet) — at the org's scale, the SELECT is well under 1ms and a cache adds invalidation complexity. Revisit if dashboards add latency budget pressure.
+- iOS config endpoint locked to field roles (`appraiser/admin/sales/sales_manager`) so the bundle (which exposes every category, prompt, and AppConfig value) can't accidentally surface in a customer flow.
+- `consignment_price_change_threshold_pct` is registered but no consumer reads it yet (Phase 6 will). Registering early lets admin see + tune the value before the feature ships.
+
+**Carry-forward:**
+- Customer intake page (`web/src/pages/IntakeForm.tsx`) doesn't yet consume `/me/equipment/form-config` — fields are still hard-coded. Backend is ready; the React refactor to dynamically render from `visible_fields` + `field_order` is straightforward but a UX-impacting change. Lands in Sprint 8 (the gate sprint) or as a follow-up before the Phase 4 close-out.
+- `security_session_ttl_minutes` AppConfig key is registered but `auth_service` token mint still uses the env-var TTL only. Wiring the AppConfig read into `auth_service.create_access_token` is a one-liner; deferred to keep this sprint scoped to the registry + UI.
+
 ---
 
 ## Phase 5–8 — Not started
