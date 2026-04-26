@@ -44,3 +44,43 @@ COMPLETE 2026-04-26
 - Status dropdown on the manual-transition modal duplicates the `equipment_status_machine.Status` enum; Sprint 3 swaps for a fetched metadata endpoint.
 - E2E coverage (`web/e2e/phase4_admin.spec.ts`) deferred to Sprint 8 (the dedicated phase-gate sprint).
 - Lighthouse on `/admin/*` deferred to Sprint 8 per the Phase 4 carry-forward issue in `known-issues.md`.
+
+---
+
+## Sprint 2 — Customer DB management + walk-in customers + user deactivation
+COMPLETE 2026-04-26
+
+### What was built
+- **Migration 016** — `customers.user_id` becomes nullable, partial unique index `uq_customers_user_id_when_set` replaces the column-level UNIQUE so multiple NULL walk-ins can coexist. New `customers.invite_email` (String 255). CHECK `ck_customers_user_or_invite` requires one of the two. Reversible (downgrade asserts no NULL-user rows first).
+- **`api/services/admin_customer_service.py`** (NEW) — `list_customers` (paginated + multi-field search across name/business/email/phone), `get_customer`, `update_customer` (audit diff), `soft_delete_customer` (cascades to equipment records), `create_walkin`, `send_walkin_invite` (BackgroundTasks). Email regex + state uppercase normalization. `_serialize(customer, *, include_records)` skips the equipment relationship when not selectinload'd to avoid MissingGreenlet in async context.
+- **`api/services/admin_user_service.py`** (NEW) — `deactivate_user`. Counts open records (excludes terminal statuses) + future calendar events; refuses 409 if reassign target required + missing. Validates reassignee shares a *work role* (sales/sales_manager/admin/appraiser; `customer` doesn't count). Per-record audit + new-assignee notification fan-out.
+- **`api/services/email_service.py`** — `send_walkin_invite_email` template.
+- **`api/routers/admin.py`** — extended with customer CRUD + `/send-invite` + `/users/{id}/deactivate`.
+- **`api/schemas/admin.py`** — `AdminCustomerOut/ListResponse/Create/Patch/EquipmentSummary`, `SendInviteResponse`, `DeactivateUserRequest/Response/OpenWork`.
+- **Frontend:** `AdminCustomers.tsx` (list + search + filter chips + walk-in modal), `AdminCustomerEdit.tsx` (form + invite send + soft-delete with confirm), `web/src/api/admin.ts` extension, App.tsx + Layout.tsx wiring.
+- **Tests:** 22 new (14 customer + 8 deactivation). 382/382 backend.
+
+### Key design decisions
+1. **Walk-in flow** — admin creates customer with `user_id=NULL` + `invite_email` set. Invite is a *separate explicit action* (not auto-sent on create) so admin can capture details before customer interaction. Resolved Architectural Debt #8.
+2. **`_WORK_ROLES` reassignment filter** — registration auto-grants `customer` so a naïve role intersection would let any registered user inherit a sales rep's open records. Limited to `{sales, sales_manager, admin, appraiser}`.
+3. **Audit per-record on deactivation** — one `equipment_record.deactivation_reassigned` AuditLog row per moved record + one `calendar_event.deactivation_reassigned` per moved event + a single summary `user.admin_deactivated`. The trail tells exactly what moved + why.
+4. **Partial unique index for user_id** — replaces the column-level UNIQUE so multiple walk-ins (NULL user_id) coexist freely; the partial index `WHERE user_id IS NOT NULL` keeps the one-customer-per-registered-user invariant.
+5. **`_serialize` async-safe** — explicit `include_records` flag + reload via `_load(include_records=True)` after writes that mutate relationships. Caught a MissingGreenlet during initial test run.
+6. **CHECK `ck_customers_user_or_invite`** — DB-level guarantee that every customer has a way to be reached (either a user account or an invite address).
+7. **UserDeactivationModal frontend deferred** — backend complete + tested. The modal needs a `/admin/users` page to live on; that page is not in Sprint 2's scope. Documented as carry-forward.
+
+### Test results
+- 382 / 382 backend tests pass (was 360; +14 in test_admin_customers, +8 in test_admin_user_deactivation).
+- `make lint`: ruff + format + eslint all green.
+- `npx tsc --noEmit`: clean.
+- Migration 016 applied + downgraded + re-upgraded cleanly against local dev DB.
+
+### Bugs found and fixed during sprint
+- `_serialize` MissingGreenlet from accessing unloaded `equipment_records` relationship — fixed by `include_records` flag + selective reload.
+- Role-overlap check accepted `customer` role because registration auto-grants it — fixed by intersecting against `_WORK_ROLES`.
+- Initial overdue test from Sprint 1 mutated `record.updated_at` before realizing the DB trigger reverts it — covered in Sprint 1 status report; mention here only because it informed the Sprint 2 design (no pattern of trying to backdate `updated_at`).
+
+### Open issues / follow-ups
+- **UserDeactivationModal UI** — backend ready; UI lands when there's an admin-users page (likely Sprint 4 or 7).
+- Customer profile auto-creation on first /me/equipment intake remains; the new walk-in path is alternative, not replacement.
+- Sprint 4 should consider exposing the AppConfig "default sales rep" key visibility on the customer record so admin can override per-customer routing without going to /admin/config.

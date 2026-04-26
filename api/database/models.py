@@ -345,9 +345,17 @@ class Customer(Base):
     __tablename__ = "customers"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, unique=True
+    # Phase 4 Sprint 2 (migration 016): user_id is now nullable so admin
+    # can create walk-in customers (sales rep met the customer in
+    # person; no portal account yet). The DB-level CHECK
+    # ck_customers_user_or_invite guarantees at least one of (user_id,
+    # invite_email) is set, and a partial unique index on user_id WHERE
+    # NOT NULL preserves the one-customer-per-user invariant for
+    # registered users.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
+    invite_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     business_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     submitter_name: Mapped[str] = mapped_column(String(200), nullable=False)
     title: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -367,7 +375,7 @@ class Customer(Base):
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user: Mapped[User] = relationship("User", back_populates="customer_profile")
+    user: Mapped[User | None] = relationship("User", back_populates="customer_profile")
     equipment_records: Mapped[list[EquipmentRecord]] = relationship(
         "EquipmentRecord", back_populates="customer"
     )

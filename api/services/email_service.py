@@ -219,3 +219,31 @@ async def send_2fa_warning_email(to_email: str, remaining: int) -> None:
         "Low on 2FA recovery codes — action needed",
         _base_html("2FA recovery codes running low", body),
     )
+
+
+@_safe_send
+async def send_walkin_invite_email(
+    to_email: str, register_url: str, customer_name: str, inviter_name: str
+) -> None:
+    """Phase 4 Sprint 2 — admin clicks "Send Portal Invite" on a walk-in
+    customer record. Email links to /register pre-seeded with the
+    invite_email so the customer keeps the same email address the admin
+    typed."""
+    button_style = (
+        "background:#1a1a1a;color:#fff;padding:12px 24px;"
+        "text-decoration:none;border-radius:4px;display:inline-block;"
+    )
+    body = f"""
+    <p>Hi {customer_name},</p>
+    <p>{inviter_name} from Temple Heavy Equipment created a customer
+       account for you and invited you to set up portal access so you
+       can track your equipment submissions online.</p>
+    <p><a href="{register_url}" style="{button_style}">Set up your portal account</a></p>
+    <p>This invite was sent to <strong>{to_email}</strong>. If you didn't expect this,
+       feel free to ignore the message.</p>
+    """
+    await send_email(
+        to_email,
+        "You're invited to the Temple Heavy Equipment customer portal",
+        _base_html("Set up your TempleHE portal account", body),
+    )

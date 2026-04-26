@@ -480,3 +480,106 @@ export interface AdminReportTab {
 export interface AdminReportsIndexResponse {
   tabs: AdminReportTab[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 Sprint 2 — Customer DB management + walk-in customers + deactivation
+// ---------------------------------------------------------------------------
+
+export interface AdminCustomerEquipmentSummary {
+  id: UUID;
+  reference_number: string | null;
+  status: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  deleted_at: ISODateTime | null;
+}
+
+export interface AdminCustomer {
+  id: UUID;
+  user_id: UUID | null;
+  user_email: string | null;
+  invite_email: string | null;
+  business_name: string | null;
+  submitter_name: string;
+  title: string | null;
+  address_street: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  business_phone: string | null;
+  business_phone_ext: string | null;
+  cell_phone: string | null;
+  is_walkin: boolean;
+  is_deleted: boolean;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+  deleted_at: ISODateTime | null;
+  equipment_records: AdminCustomerEquipmentSummary[];
+}
+
+export interface AdminCustomerListResponse {
+  customers: AdminCustomer[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+export interface AdminCustomerListFilters {
+  search?: string | null;
+  include_deleted?: boolean;
+  walkins_only?: boolean;
+  page?: number;
+  per_page?: number;
+}
+
+export interface AdminCustomerCreate {
+  submitter_name: string;
+  invite_email: string;
+  business_name?: string | null;
+  title?: string | null;
+  address_street?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_zip?: string | null;
+  business_phone?: string | null;
+  business_phone_ext?: string | null;
+  cell_phone?: string | null;
+}
+
+export interface AdminCustomerPatch {
+  submitter_name?: string | null;
+  business_name?: string | null;
+  title?: string | null;
+  address_street?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_zip?: string | null;
+  business_phone?: string | null;
+  business_phone_ext?: string | null;
+  cell_phone?: string | null;
+  invite_email?: string | null;
+}
+
+export interface SendInviteResponse {
+  customer_id: UUID;
+  invite_email: string;
+  sent_at: ISODateTime;
+}
+
+export interface DeactivateUserRequest {
+  reassign_to_id: UUID | null;
+}
+
+export interface DeactivateUserOpenWork {
+  detail: string;
+  open_record_count: number;
+  future_event_count: number;
+}
+
+export interface DeactivateUserResponse {
+  user_id: UUID;
+  reassigned_records: UUID[];
+  reassigned_events: UUID[];
+  new_status: string;
+}

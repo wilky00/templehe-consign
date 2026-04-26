@@ -1,11 +1,19 @@
 // ABOUTME: Admin panel API client — operations dashboard, CSV export, manual transitions, reports.
 // ABOUTME: Phase 4 Sprint 1 surface; Sprints 2+ extend with customers, config, routing, etc.
 import {
+  type AdminCustomer,
+  type AdminCustomerCreate,
+  type AdminCustomerListFilters,
+  type AdminCustomerListResponse,
+  type AdminCustomerPatch,
   type AdminOperationsFilters,
   type AdminOperationsResponse,
   type AdminReportsIndexResponse,
+  type DeactivateUserRequest,
+  type DeactivateUserResponse,
   type ManualTransitionRequest,
   type ManualTransitionResponse,
+  type SendInviteResponse,
   type UUID,
 } from "./types";
 import { useAuthStore } from "../state/auth";
@@ -78,4 +86,69 @@ export async function manualTransition(
 
 export async function getAdminReportsIndex(): Promise<AdminReportsIndexResponse> {
   return request<AdminReportsIndexResponse>("/admin/reports");
+}
+
+// --- Customer admin (Sprint 2) ----------------------------------------- //
+
+function _customerListParams(filters: AdminCustomerListFilters): URLSearchParams {
+  const p = new URLSearchParams();
+  if (filters.search) p.set("search", filters.search);
+  if (filters.include_deleted) p.set("include_deleted", "true");
+  if (filters.walkins_only) p.set("walkins_only", "true");
+  if (filters.page) p.set("page", String(filters.page));
+  if (filters.per_page) p.set("per_page", String(filters.per_page));
+  return p;
+}
+
+export async function listAdminCustomers(
+  filters: AdminCustomerListFilters = {},
+): Promise<AdminCustomerListResponse> {
+  const qs = _customerListParams(filters).toString();
+  const path = qs ? `/admin/customers?${qs}` : "/admin/customers";
+  return request<AdminCustomerListResponse>(path);
+}
+
+export async function getAdminCustomer(customerId: UUID): Promise<AdminCustomer> {
+  return request<AdminCustomer>(`/admin/customers/${customerId}`);
+}
+
+export async function createWalkinCustomer(
+  body: AdminCustomerCreate,
+): Promise<AdminCustomer> {
+  return request<AdminCustomer>("/admin/customers", { method: "POST", body });
+}
+
+export async function updateAdminCustomer(
+  customerId: UUID,
+  body: AdminCustomerPatch,
+): Promise<AdminCustomer> {
+  return request<AdminCustomer>(`/admin/customers/${customerId}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function softDeleteAdminCustomer(customerId: UUID): Promise<AdminCustomer> {
+  return request<AdminCustomer>(`/admin/customers/${customerId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function sendWalkinInvite(customerId: UUID): Promise<SendInviteResponse> {
+  return request<SendInviteResponse>(
+    `/admin/customers/${customerId}/send-invite`,
+    { method: "POST" },
+  );
+}
+
+// --- User deactivation (Sprint 2) -------------------------------------- //
+
+export async function deactivateUser(
+  userId: UUID,
+  body: DeactivateUserRequest,
+): Promise<DeactivateUserResponse> {
+  return request<DeactivateUserResponse>(`/admin/users/${userId}/deactivate`, {
+    method: "POST",
+    body,
+  });
 }

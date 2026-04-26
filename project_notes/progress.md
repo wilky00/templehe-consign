@@ -859,6 +859,39 @@ Built the entry-point admin surface so the rest of Phase 4 has somewhere to land
 
 **Carry-forward:** `equipment_record_overdue_threshold_days` AppConfig key tracked for Sprint 3 (currently hard-coded 7d in `admin_operations_service`).
 
+### Sprint 2 — Customer DB management + walk-in customers + user deactivation — COMPLETE (2026-04-26)
+
+Admin can now manage every customer record from the SPA — search, edit, soft-delete, and create walk-ins for people who haven't registered. Backend also ships the user-deactivation + reassignment workflow (security baseline §11), even though the user-management UI doesn't exist yet.
+
+- [x] **Migration 016** (`016_phase4_walkin_customers_and_invite_email.py`) — `customers.user_id` becomes nullable, replaces the column-level UNIQUE with a partial unique index (`uq_customers_user_id_when_set`) so multiple NULL walk-ins coexist; adds `customers.invite_email` (String 255, nullable); installs `ck_customers_user_or_invite` so every customer must have either a user or an invite address. Reversible: downgrade asserts no NULL-user_id rows exist before tightening the column.
+- [x] **`Customer` model** — `user_id: Mapped[uuid.UUID | None]`; new `invite_email`; `user` relationship optional. Health-check expected migration head bumped 015 → 016.
+- [x] **`api/services/admin_customer_service.py`** (NEW) — `list_customers` (paginated + multi-field substring search across submitter_name/business_name/invite_email/user.email/phones), `get_customer`, `update_customer` (audit_log diff), `soft_delete_customer` (cascades to `equipment_records.deleted_at` with the affected IDs in the audit log), `create_walkin`, `send_walkin_invite` (BackgroundTasks dispatch + audit log). Email regex validation on invite_email; auto-uppercase on address_state.
+- [x] **`api/services/admin_user_service.py`** (NEW) — `deactivate_user(user_id, reassign_to_id)`. Counts open records (status not in sold/declined/withdrawn) + future calendar events; refuses 409 with `DeactivateUserOpenWork` payload if reassignment target is required and missing. Validates reassignee shares a *work role* (sales/sales_manager/admin/appraiser — customer doesn't count as work). Per-record audit_log + assignment notification fan-out via existing `equipment_service.enqueue_assignment_notification`. Self-deactivation blocked with 409.
+- [x] **`api/services/email_service.py`** — `send_walkin_invite_email(to, register_url, customer_name, inviter_name)` so walk-in invites have a dedicated template instead of reusing verification copy.
+- [x] **`api/routers/admin.py`** (extend) — `GET/POST /admin/customers`, `GET/PATCH/DELETE /admin/customers/{id}`, `POST /admin/customers/{id}/send-invite`, `POST /admin/users/{id}/deactivate`. Customer endpoints admin-only; deactivation admin-only.
+- [x] **`api/schemas/admin.py`** (extend) — `AdminCustomerOut`, `AdminCustomerListResponse`, `AdminCustomerCreate`, `AdminCustomerPatch`, `AdminCustomerEquipmentSummary`, `SendInviteResponse`, `DeactivateUserRequest/Response/OpenWork`.
+- [x] **Frontend:**
+  - `web/src/pages/AdminCustomers.tsx` (NEW) — paginated list with search bar + active/walk-ins/deleted filter chips + walk-in create modal.
+  - `web/src/pages/AdminCustomerEdit.tsx` (NEW) — full edit form, "Send Portal Invite" button (visible for walk-ins only), equipment summary, soft-delete danger zone with confirm step.
+  - `web/src/api/admin.ts` + `web/src/api/types.ts` extended with the customer + deactivation surface.
+  - `web/src/App.tsx` — `/admin/customers` and `/admin/customers/:id` routes.
+  - `web/src/components/Layout.tsx` — admin nav gains the Customers tab.
+- [x] **Tests:** 22 new integration tests — 14 in `test_admin_customers.py` (list shape, walk-in filter, search, get + summary, patch + audit diff, invalid invite email, 404, soft-delete cascade, walk-in create + audit, invalid email reject, send invite mock, 409 for registered customer, RBAC sales/reporting blocked) and 8 in `test_admin_user_deactivation.py` (409 paths, happy path with audit + record reassignment + new-assignee email, no-open-work succeeds without reassign, calendar event reassignment, role-overlap rejection — customer role doesn't count as a work role, self-deactivation blocked, sales-role 403). 382/382 backend green.
+
+**Bugs found and fixed during sprint:**
+- Initial `_serialize` triggered MissingGreenlet in async context because it accessed `customer.equipment_records` even when relationships weren't selectinload'd. Fixed by making `_serialize(customer, *, include_records)` skip the relationship when not loaded; list endpoint passes `include_records=False`, detail/create/update/delete pass `True` after `_load(include_records=True)`.
+- Initial role-overlap check in deactivation accepted any shared role — including `customer`, which every registered user holds since registration auto-grants it. Fixed by intersecting against `_WORK_ROLES = {sales, sales_manager, admin, appraiser}` so a portal-only customer can't take a sales rep's open records.
+
+**Decisions confirmed:**
+- Walk-in customer = `user_id IS NULL` + `invite_email` set; invite is a separate explicit action, not auto-sent at create
+- `_WORK_ROLES` filter on reassignment validation
+- Per-record audit_log on reassignment (one row per moved record) + per-event audit_log on calendar reassignment
+- Soft-delete cascade is one-way at the API; the audit log carries the impacted record IDs for re-construction if needed
+
+**Carry-forward:**
+- **UserDeactivationModal frontend** deferred — backend endpoint + tests are complete, but there's no `/admin/users` page for the modal to live on yet. Will land alongside the user-management page in a later sprint (likely Sprint 4 or 7) or as an action on a registered customer's edit page when admin needs to deactivate the *user* tied to that customer.
+- Customer profile auto-creation still happens on first `/me/equipment` intake; the spec allows admin to create a customer record without an immediate intake. Existing flow continues to work; the walk-in path is the new alternative.
+
 ---
 
 ## Phase 5–8 — Not started

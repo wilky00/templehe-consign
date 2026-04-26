@@ -5,6 +5,8 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AccountPage } from "./pages/Account";
 import { AccountNotificationsPage } from "./pages/AccountNotifications";
+import { AdminCustomerEditPage } from "./pages/AdminCustomerEdit";
+import { AdminCustomersPage } from "./pages/AdminCustomers";
 import { AdminOperationsPage } from "./pages/AdminOperations";
 import { AdminReportsPage } from "./pages/AdminReports";
 import { DashboardPage } from "./pages/Dashboard";
@@ -113,6 +115,26 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <AdminOperationsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/customers"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminCustomersPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/customers/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminCustomerEditPage />
             </Layout>
           </ProtectedRoute>
         }
