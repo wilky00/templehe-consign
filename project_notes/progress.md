@@ -806,4 +806,27 @@ Every Phase 3 sales-side flow is now exercised in a real browser against a real 
 
 ---
 
+## Phase 3 → Phase 4 Pre-Work — COMPLETE (2026-04-25, merged 2026-04-26)
+
+Phase 3 close-out architectural review (ADR-018) flagged 16 items the Phase 4 admin surface would build on. Four were significant enough to fix before Phase 4 work starts; the other 12 were deferred into Phase 4 proper (`dev_plan/04_phase4_admin_panel.md` § Architectural Debt to Address).
+
+**Shipped (PRs #31 + #33):**
+
+- [x] **#1 Multi-role users** — migration 015 + `user_roles` join table + `User.role_id` retained as primary; `services/user_roles_service.py` (grant/revoke/set_primary_role); SQLAlchemy `before_flush` mirror invariant so 12 test sites + future admin paths stay correct without per-call-site code; `require_roles()` switched to set intersection; `CurrentUser.roles: list[str]` added (back-compat with `role: str`); frontend `Layout.tsx` checks the full roles array. ADR-019.
+- [x] **#3 Inspection prompt + red-flag rule versioning** — migration 014 adds `version` + `replaced_at` columns; `services/category_versioning_service.py` (current_*, *_version_at, supersede_*) so Phase 4 admin's prompt edits insert v+1 instead of UPDATE-in-place; `AppraisalSubmission.field_values`/`red_flags` JSONB shape doc updated to require `prompt_version` / `rule_version` embed for Phase 5 iOS writers + Phase 7 PDF report regeneration.
+- [x] **#4 AppConfig key registry** — `services/app_config_registry.py` enumerates every `app_config` key with `KeySpec(name, category, field_type, default, parser, serializer, validator)`. Five existing keys registered (tos / privacy versions, drive_time_fallback_minutes, default_sales_rep_id, notification_preferences_hidden_roles); existing JSONB shapes preserved so no data migration. Four consumer services moved off raw selects.
+- [x] **#6 Equipment status state machine** — `services/equipment_status_machine.py` owns `Status` StrEnum + per-status metadata + denylisted transitions; migration 013 installs Postgres CHECK constraint enumerating the same set; unit-test drift guard parses the migration's tuple and asserts equality with the runtime registry. Caught the missing `withdrawn` status during refactor.
+
+**Three migrations** (013 + 014 + 015) all additive and reversible. Health check expected migration head at 015.
+
+**Test gates green:** 344/344 backend (was 319 before pre-work + 25 new), 22/22 e2e + axe + Lighthouse.
+
+**Calendar test fix (`phase3_calendar.spec.ts`):** the `eventCell.toBeVisible()` assertion was fragile near UTC midnight — the +30min schedule could push the event into next week, outside the calendar's WEEK view range. Added `isInThisWeek()` helper and clicks the toolbar's "Next" button when the event lands in the following week. Caught when CI on PR #31 failed twice while local runs passed; documented in known-issues for the broader pattern.
+
+**Deferred to Phase 4** (Architectural Debt section in dev plan): #2 notification template registry, #5 configurable read-only roles, #7 lead_routing_rules.priority uniqueness, #8 routing-rule JSON Schema, #9 two-prefs reconciliation, #10 lock resource registry, #11 multi-attendee calendar, #12 nullable customers.user_id, #13 assignment watchers, #14 category versioning, #15 Redis round-robin at GCP, #16 notification_jobs.template registry.
+
+ADRs: 018 (overall pre-work decisions + the three immediate fixes) + 019 (multi-role users design).
+
+---
+
 ## Phase 4–8 — Not started

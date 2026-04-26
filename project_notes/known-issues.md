@@ -159,3 +159,14 @@ fly machine run . --app temple-sweeper \
 **Impact:** When a manager overrides a lock, `DELETE /record-locks/:id/override` removes the prior holder's lock but does not insert one for the manager. The hook (`useRecordLock.ts`) calls `refreshLock()` (heartbeat) afterwards instead of `acquireLock`, so the heartbeat 404s and the page renders "Your editing session timed out" rather than "You are editing this record." The override itself works (broken-lock email lands, prior holder's lock is gone, manager can refresh and re-acquire) — only the post-click banner is wrong.
 **Fix sketch:** in `web/src/pages/SalesEquipmentDetail.tsx::onOverride`, after `await overrideLock(id)` call a fresh acquire (or expose `acquire` from `useRecordLock` and call it). Single-file change; integration test in `test_record_locks.py` already covers the backend.
 **Tracked for:** Phase 4 admin lock-picker work, where the lock UI gets a broader pass anyway. The Sprint 6 spec asserts "conflict banner clears" so the UX gap doesn't re-regress further.
+
+## FIXED — Calendar e2e test fragile near UTC midnight (Phase 4 pre-work)
+**Fixed:** 2026-04-26 in `e6d60a1` on the `phase4-prework` branch (PR #31).
+**Was:** `web/e2e/phase3_calendar.spec.ts` scheduled events at `todayPlusMinutes(30)` and asserted visibility in the calendar's default WEEK view. When the test runs near 23:30 UTC on Saturday, that pushes the event into Sunday → next week → outside the visible range, so `eventCell.toBeVisible()` times out. Caught the test passing locally (CST) on every run while CI (UTC) failed the calendar visibility check twice.
+**Fix:** Added an `isInThisWeek(dateStr)` helper. After scheduling, if the event landed in next week, the test clicks the toolbar's "Next" button to advance the WEEK view before asserting visibility. Same coverage; deterministic regardless of test runtime.
+**Pattern to watch for:** any e2e assertion that compounds `new Date()` + an offset and then renders against a calendar/date-window UI is at risk of TZ drift between local + CI. Anchor to a deterministic date or navigate the UI to the event's date.
+
+## OPEN — Lighthouse on auth-gated routes is not yet wired (Phase 4 carry-forward)
+**Status:** Phase 3 Sprint 6 + Phase 4 pre-work both shipped Lighthouse CI against unauth `/login` + `/register` only. The sales-side and admin-side pages aren't covered.
+**Impact:** Accessibility for those pages IS gated via axe-core in `phase3_accessibility.spec.ts`; only the Lighthouse perf/SEO/best-practices score is missing. Low risk for a 15-person internal app.
+**Fix when Phase 4 needs it:** add `/sales` + `/admin` to `web/lighthouserc.cjs` with the static-dist + auth-injection wiring. Alternative: use Lighthouse-as-a-test in Playwright with an authenticated context.
