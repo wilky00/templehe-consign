@@ -19,7 +19,12 @@ export function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: user } = useMe();
-  const isSalesSide = user && SALES_ROLES.has(user.role);
+  // Phase 4 pre-work: a user can hold multiple roles. Show the sales-side
+  // shell when ANY of their roles puts them on that side. Older payloads
+  // without `roles` fall back to the primary `role` string.
+  const isSalesSide =
+    !!user &&
+    ((user.roles ?? [user.role]).some((r) => SALES_ROLES.has(r)));
 
   const onLogout = async () => {
     try {

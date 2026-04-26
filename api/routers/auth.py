@@ -142,15 +142,17 @@ async def me(
     from sqlalchemy import select
 
     from database.models import Role
-    from services import legal_service
+    from services import legal_service, user_roles_service
 
     role_result = await db.execute(select(Role).where(Role.id == current_user.role_id))
     role = role_result.scalar_one_or_none()
     current_tos, current_privacy = await legal_service.get_current_versions(db)
+    held_roles = await user_roles_service.role_slugs_for_user(db, user=current_user)
     return CurrentUser(
         id=current_user.id,
         email=current_user.email,
         role=role.slug if role else "customer",
+        roles=sorted(held_roles),
         status=current_user.status,
         first_name=current_user.first_name,
         last_name=current_user.last_name,

@@ -152,6 +152,7 @@ async def seed(session: AsyncSession) -> None:
             return
 
         password_hash = _hash_password(admin_password)
+        admin_user_id = str(uuid.uuid4())
         await session.execute(
             text(
                 "INSERT INTO users "
@@ -160,11 +161,23 @@ async def seed(session: AsyncSession) -> None:
                 "ON CONFLICT (email) DO NOTHING"
             ),
             {
-                "id": str(uuid.uuid4()),
+                "id": admin_user_id,
                 "email": admin_email,
                 "password_hash": password_hash,
                 "role_id": str(admin_role_id),
             },
+        )
+        # Mirror the primary role into the user_roles join table. Required
+        # since Phase 4 pre-work moved RBAC checks onto the join table;
+        # raw SQL inserts bypass the SQLAlchemy event listener that
+        # handles this for ORM writes.
+        await session.execute(
+            text(
+                "INSERT INTO user_roles (user_id, role_id) "
+                "SELECT id, role_id FROM users WHERE email = :email "
+                "ON CONFLICT (user_id, role_id) DO NOTHING"
+            ),
+            {"email": admin_email},
         )
     else:
         print("Skipping admin user (SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD not set)")

@@ -19,7 +19,7 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["system"])
 
-_EXPECTED_MIGRATION_HEAD = "014"
+_EXPECTED_MIGRATION_HEAD = "015"
 
 
 async def _check_database(db: AsyncSession) -> str:

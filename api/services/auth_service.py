@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database.models import AuditLog, KnownDevice, Role, TotpRecoveryCode, User
-from services import email_service, legal_service, session_service
+from services import email_service, legal_service, session_service, user_roles_service
 
 logger = structlog.get_logger(__name__)
 
@@ -237,6 +237,10 @@ async def register_user(
     )
     db.add(user)
     await db.flush()
+    # Mirror the primary role into user_roles. Phase 4 admin grants
+    # additional roles via user_roles_service.grant; the registration
+    # path is the customer-only entry point.
+    await user_roles_service.grant(db, user=user, role_slug="customer", granted_by=None)
 
     await legal_service.record_acceptance(
         db=db,
