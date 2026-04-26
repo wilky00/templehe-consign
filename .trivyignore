@@ -67,3 +67,21 @@ CVE-2026-0861
 #           still affected; awaiting a Debian patch or trixie upgrade.
 # Review:   Re-evaluate on next base-image / sqlite version bump.
 CVE-2025-7458
+
+# -----------------------------------------------------------------------------
+# CVE-2026-41989 — HIGH — libgcrypt20 1.10.1-3 DoS/buffer overflow via crafted
+#                 ECDH ciphertext.
+# Packages: libgcrypt20 (transitive via systemd / GnuPG tooling in
+#           python:3.12-slim base; not directly installed by us)
+# Tracker:  https://security-tracker.debian.org/tracker/CVE-2026-41989
+# Stance:   The application's crypto path is `cryptography` (pyca/
+#           cryptography), which links against OpenSSL — not libgcrypt
+#           (verified: `grep -rE "gnupg|libgcrypt|import gpg" api/` = 0
+#           hits; the only match for "gcrypt" is the Postgres `pgcrypto`
+#           extension, which is server-side and uses OpenSSL/its own
+#           impl, not libgcrypt). The vulnerable ECDH ciphertext
+#           code path is never reached by API code; the library is
+#           present only because base-image tooling depends on it.
+# Review:   Drop on next base-image bump (Debian 13 trixie ships a newer
+#           libgcrypt) or when Debian 12 backports a fix.
+CVE-2026-41989
