@@ -166,10 +166,34 @@ fly machine run . --app temple-sweeper \
 **Fix:** Added an `isInThisWeek(dateStr)` helper. After scheduling, if the event landed in next week, the test clicks the toolbar's "Next" button to advance the WEEK view before asserting visibility. Same coverage; deterministic regardless of test runtime.
 **Pattern to watch for:** any e2e assertion that compounds `new Date()` + an offset and then renders against a calendar/date-window UI is at risk of TZ drift between local + CI. Anchor to a deterministic date or navigate the UI to the event's date.
 
-## FIXED — Lighthouse on auth-gated routes is not yet wired (Phase 4 carry-forward)
-**Fixed:** 2026-04-27 in Phase 4 Sprint 8.
-**Was:** Phase 3 Sprint 6 + Phase 4 pre-work both shipped Lighthouse CI against unauth `/login` + `/register` only. Sales-side and admin-side pages weren't covered. Risk was low (axe-core covered accessibility) but the perf/SEO/best-practices score was missing on every authenticated route.
-**Fix:** `web/lighthouserc.cjs` switches from `staticDistDir` to the running vite preview server + adds `/admin/operations`, `/admin/customers`, `/admin/config`, `/admin/categories` to the URL set. `web/lighthouse-auth.cjs` is a Lighthouse CI puppeteer hook that direct-API-logs in as the seeded admin user and pre-injects the access token into `sessionStorage` on every page lhci subsequently opens (via a `targetcreated` listener calling `evaluateOnNewDocument`, since sessionStorage doesn't survive a tab close). Login + register pages stay in the audit set; their flow ignores the injected token. CI runs the Phase 4 seeder before lhci so the admin user always exists.
+## OPEN — Lighthouse CI doesn't actually run on GitHub Actions (latent regression, surfaced 2026-04-27)
+**Status:** Phase 4 Sprint 8 wired the lhci CONFIG correctly (auth-injection puppeteer hook + admin URLs + seeder pre-step) — `lighthouserc.cjs` + `lighthouse-auth.cjs` are correct. The latent issue is at a lower layer: when Sprint 8 dropped `staticDistDir` in favor of `url:` mode, lhci stopped spawning its bundled Chrome and started looking for a system Chrome installation. GitHub Actions ubuntu runners don't have Chrome installed — Playwright installs `chromium` to `~/.cache/ms-playwright/` but lhci's `chrome-launcher` doesn't find it.
+
+**Symptom in CI logs:** `❌ Chrome installation not found / ERROR: The "path" argument must be of type string. Received undefined / Healthcheck failed!`. The Lighthouse CI step exits 1, but the workflow has `continue-on-error: true` so the overall job is still green.
+
+**Impact:** Low. The accessibility gate is enforced by `phase4_accessibility.spec.ts` + `phase3_accessibility.spec.ts` (axe-core inside Playwright) which DOES run. Lighthouse adds Best-Practices / Performance / SEO scores on top — useful but not a phase-blocking gate per `dev_plan/09_testing_strategy.md` §7.
+
+**Fix sketch (one of):**
+1. Install Chrome explicitly in `.github/workflows/ci.yml` before the Lighthouse step:
+   ```yaml
+   - name: Install Chrome for Lighthouse CI
+     run: |
+       wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+       sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
+   ```
+2. OR point lhci at Playwright's chromium via `CHROME_PATH`:
+   ```yaml
+   - name: Lighthouse CI
+     env:
+       CHROME_PATH: ${{ runner.tool_cache }}/ms-playwright/chromium-*/chrome-linux64/chrome
+     run: cd web && npx lhci autorun --config=./lighthouserc.cjs
+   ```
+   (Path glob requires resolving the actual versioned dir at runtime.)
+3. OR pin Playwright's chromium path explicitly via `lhci`'s `settings.chromePath` in `lighthouserc.cjs`.
+
+**Tracked for:** Phase 5 Sprint 0 polish bundle (alongside Node 20 GHA deprecation + the `_EXPECTED_MIGRATION_HEAD` derive-from-alembic cleanup).
+
+**Phase 4 Sprint 7 baseline:** Lighthouse CI WAS finding Chrome (`✅ Chrome installation found`) when `staticDistDir: "./dist"` was set, because lhci spawns its bundled Chrome in static-server mode. It still failed on every URL with "Lighthouse failed with exit code 1" because the SPA needs a backend at runtime to render — the static server only serves `dist/` and has no API proxy. So the pre-Sprint-8 setup was ALSO broken end-to-end, just at a different stage. Sprint 8's URL-mode + auth-injection is the right architecture; Chrome installation is the missing piece.
 
 ## OPEN — Phase 4 carry-forwards (Sprint 5+ polish)
 **Status:** Phase 4 Sprint 8 closed every Architectural Debt item but punted these UI polish + ops cleanup tasks to follow-up sprints.
