@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     # 2FA / TOTP
     totp_encryption_key: str  # Fernet key for encrypting TOTP secrets at rest
 
+    # Phase 4 Sprint 7 — separate Fernet key for the integration credentials
+    # vault. Kept distinct from totp_encryption_key so the two key materials
+    # can rotate independently. Comma-separated list of keys is supported
+    # via MultiFernet — first key is used for new writes, all keys are
+    # tried on decrypt (rotation-friendly). Falls back to the TOTP key when
+    # unset so dev / test environments don't need two secrets configured.
+    credentials_encryption_key: str = ""
+
     # Email
     sendgrid_api_key: str = ""
     sendgrid_from_email: str = "noreply@saltrun.net"

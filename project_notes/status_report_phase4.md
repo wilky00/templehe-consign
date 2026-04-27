@@ -262,3 +262,49 @@ Epic 4.8 + Architectural Debt #10. Brings `equipment_categories` to the same ver
 | #16 | Inline composer side-effects → registry | 5 |
 
 10 of 12 architectural debt items resolved (per phase plan). Remaining: #7, #12, #13, #14, #15.
+
+---
+
+## Sprint 7 — Integration credentials vault + health dashboard + Slack dispatch (2026-04-27)
+
+**Built:**
+- Migration 020 — `integration_credentials` (Fernet-encrypted blob) + `service_health_state` (one row per monitored service); also widens `chk_notification_channel` on `notification_jobs` to admit `slack`.
+- `services/credentials_vault.py` — Fernet vault with MultiFernet rotation; falls back to `totp_encryption_key` when the dedicated key isn't set.
+- `services/integration_testers/` — single dispatch (`run`); per-integration probes for slack, twilio, sendgrid, google_maps, plus stubbed esign + valuation.
+- `services/admin_credentials_service.py` — store / reveal / test_credential / list_metadata. Reveal is gated on password + TOTP fresh + 10/hour rate limit; failure paths audit-logged with the specific reason but the API surface returns generic "wrong password or TOTP".
+- `services/slack_dispatch_service.py` (NEW) — wires the `channel='slack'` notification_jobs path through a real webhook POST; classifies failures into transient (5xx + 429 + connection) vs permanent (4xx). **Resolves Phase 3 Slack-dispatch deferral.**
+- `services/notification_service.py` — channel guard + `_dispatch_slack`.
+- `services/health_check_service.py` — `run_all` probes db + r2 + each saved integration, persists state, dispatches `service_health_red_alert*` on green→red flip with idempotency keying + 15min cooldown.
+- `services/notification_templates.py` — registers email + SMS + Slack variants of `service_health_red_alert`.
+- `routers/admin_credentials.py` + `routers/admin_health.py` — admin-only endpoints; both wired in `main.py`.
+- `scripts/health_poller.py` — long-running poller for the `temple-health-poller` Fly Machine (manual ops item).
+- `routers/health.py` — `_EXPECTED_MIGRATION_HEAD = "020"`.
+- `config.py` — `credentials_encryption_key` (separate rotation cadence; falls back to TOTP key).
+- Frontend: `AdminIntegrations.tsx`, `AdminHealth.tsx`, `CredentialRevealModal.tsx`. Routes registered; admin nav extends with Integrations + Health.
+
+**Tests:** 28 new — 5 unit `test_credentials_vault.py`, 15 unit `test_integration_testers.py`, 16 integration `test_admin_integrations.py`, 6 integration `test_slack_dispatch.py`, 7 integration `test_admin_health.py`. **523/523 backend pass.** Lint + format + tsc + npm build + npm lint clean.
+
+**Bugs found and fixed during sprint:**
+- Twilio tester's optional SMS POST was outside the `async with httpx.AsyncClient()` block → "Cannot send a request, as the client has been closed". Moved the if-branch inside the `async with`.
+- `notification_jobs.chk_notification_channel` rejected `'slack'` until migration 020 widened it.
+- `health_check_service._admin_recipients` first read `prefs.preferred_channel` / `prefs.sms_number`; the actual model fields are `channel` / `phone_number`. Aligned to the model.
+- Inline `User(...)` test fixture hit an FK trap: the `user_roles` mirror listener tries to INSERT before the parent `users` row lands. Routed admin creation through `auth_service.register_user` instead.
+- Cooldown test was flaky because the alert idempotency key seeds off `last_checked_at` at seconds resolution. Test sleeps 1.1s between passes; production behaviour intentional (race dedup).
+
+**Decisions confirmed:**
+- Multi-field credentials (Twilio) serialize to JSON in a single `plaintext` field.
+- Reveal step-up is per-call (not session-scoped); plaintext shown for 30s then auto-masks.
+- Admin recipients filter on `notification_preference.channel` set; missing pref defaults to email.
+- Health idempotency keys at seconds resolution so two pollers racing within the same second dedupe.
+- `service_health_red_alert_slack` renders through the SMS env (autoescape off) for clean block-kit / unicode payloads.
+
+**Open carry-forward:**
+- `temple-health-poller` Fly Machine unprovisioned (manual ops).
+- `credentials_encryption_key` Fly secret unprovisioned (manual ops; fallback to TOTP key works).
+- Twilio + SendGrid "send a real test message" UI inputs deferred (backend already accepts `extra_args`).
+- Reveal "copy to clipboard" + "I understand" confirm deferred.
+- Slack staging-channel guard ("non-prod dispatches go to #staging-test only") not yet implemented; Sprint 8.
+- `_EXPECTED_MIGRATION_HEAD` derive-from-alembic still hard-coded; Sprint 8 cleanup.
+
+### Architectural Debt resolved (updated tally)
+Sprint 7 doesn't close one of the 12 numbered debt items directly, but it ships the Phase 3 Slack-dispatch carry-forward and lays the credentials-vault foundation Phase 6 eSign + Phase 8 listing will build on. Running tally unchanged: 10 of 12 closed.

@@ -320,3 +320,53 @@ RECORD_LOCK_OVERRIDDEN_SMS = register(
         ),
     )
 )
+
+
+# Phase 4 Sprint 7 — Health alert dispatched to admins when a service flips red.
+SERVICE_HEALTH_RED_ALERT_EMAIL = register(
+    Template(
+        name="service_health_red_alert",
+        channel="email",
+        category="health",
+        variables=("service_name", "error_detail", "checked_at"),
+        description="Email to admins when a monitored service flips to red status.",
+        subject_template="[TempleHE] {{ service_name }} is unhealthy",
+        body_template=(
+            "<p>Service <strong>{{ service_name }}</strong> flipped to "
+            "red status at {{ checked_at }}.</p>"
+            "<p>Detail: {{ error_detail }}</p>"
+            "<p>Visit /admin/health for the live dashboard.</p>"
+        ),
+    )
+)
+
+
+SERVICE_HEALTH_RED_ALERT_SMS = register(
+    Template(
+        name="service_health_red_alert_sms",
+        channel="sms",
+        category="health",
+        variables=("service_name", "error_detail"),
+        description="SMS to admins when a monitored service flips to red status.",
+        body_template="TempleHE health alert: {{ service_name }} is red. {{ error_detail }}",
+    )
+)
+
+
+SERVICE_HEALTH_RED_ALERT_SLACK = register(
+    Template(
+        name="service_health_red_alert_slack",
+        channel="sms",  # Slack body uses the SMS env (no autoescape) — same shape.
+        category="health",
+        variables=("service_name", "error_detail", "checked_at"),
+        description=(
+            "Slack message body when a monitored service flips to red. "
+            "Routes through the same plain-text env as SMS — autoescape "
+            "would corrupt block-kit JSON."
+        ),
+        body_template=(
+            ":rotating_light: TempleHE health alert: *{{ service_name }}* "
+            "is red as of {{ checked_at }}. Detail: {{ error_detail }}"
+        ),
+    )
+)

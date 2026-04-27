@@ -1204,6 +1204,55 @@ class NotificationTemplateOverride(Base):
     )
 
 
+class IntegrationCredential(Base):
+    """Phase 4 Sprint 7 — admin-managed integration credentials.
+
+    Plaintext never lands here; ``encrypted_value`` carries a Fernet
+    blob keyed off ``settings.credentials_encryption_key``. The
+    ``last_tested_*`` columns are admin-UI conveniences — they let the
+    integrations page render "✓ tested N minutes ago" without a fresh
+    round-trip to the upstream service."""
+
+    __tablename__ = "integration_credentials"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    integration_name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    encrypted_value: Mapped[bytes] = mapped_column(sa.LargeBinary, nullable=False)
+    set_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    set_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_test_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_test_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_test_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class ServiceHealthState(Base):
+    """Phase 4 Sprint 7 — single source of truth for service health.
+
+    Row per monitored service: ``db``, ``r2``, ``slack``, ``twilio``,
+    ``sendgrid``, ``google_maps``. Status is one of green / yellow /
+    red / unknown / stubbed. ``last_alerted_at`` gates the 1-per-15min
+    flip-to-red admin notification rule."""
+
+    __tablename__ = "service_health_state"
+
+    service_name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_detail: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+
+
 # --- Multi-attendee mirror invariant ---------------------------------------- #
 # When a CalendarEvent is created or its appraiser_id changes, mirror that
 # user into calendar_event_attendees with role='primary'. Mirrors the

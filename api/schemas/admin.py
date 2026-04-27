@@ -477,3 +477,75 @@ class CategoryImportResult(BaseModel):
     added_attachment_ids: list[uuid.UUID] = Field(default_factory=list)
     added_photo_slot_ids: list[uuid.UUID] = Field(default_factory=list)
     added_rule_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- #
+# Sprint 7 — Integration credentials + health
+# --------------------------------------------------------------------------- #
+
+
+class IntegrationOut(BaseModel):
+    """Metadata-only view of an integration. Plaintext is never serialized;
+    reveal goes through the dedicated step-up endpoint."""
+
+    name: str
+    is_set: bool
+    set_by: uuid.UUID | None = None
+    set_at: datetime | None = None
+    last_tested_at: datetime | None = None
+    last_test_status: Literal["success", "failure", "stubbed"] | None = None
+    last_test_detail: str | None = None
+    last_test_latency_ms: int | None = None
+
+
+class IntegrationListResponse(BaseModel):
+    integrations: list[IntegrationOut]
+
+
+class IntegrationStoreRequest(BaseModel):
+    """``plaintext`` is the credential value. For multi-field integrations
+    (Twilio) it's a JSON-serialized blob; the per-tester knows how to
+    parse it."""
+
+    plaintext: str = Field(min_length=1)
+
+
+class IntegrationRevealRequest(BaseModel):
+    password: str = Field(min_length=1)
+    totp_code: str = Field(min_length=4, max_length=10)
+
+
+class IntegrationRevealResponse(BaseModel):
+    name: str
+    plaintext: str
+    revealed_at: datetime
+
+
+class IntegrationTestRequest(BaseModel):
+    """Per-integration extra arguments. Twilio accepts ``to_number`` for an
+    SMS dispatch; SendGrid accepts ``to_email`` for a real send. Empty
+    extras run the cred-validation-only path."""
+
+    extra_args: dict | None = None
+
+
+class IntegrationTestResponse(BaseModel):
+    name: str
+    success: bool
+    status: Literal["success", "failure", "stubbed"]
+    detail: str
+    latency_ms: int
+
+
+class HealthStateRow(BaseModel):
+    service_name: str
+    status: Literal["green", "yellow", "red", "unknown", "stubbed"]
+    last_checked_at: datetime | None = None
+    last_alerted_at: datetime | None = None
+    error_detail: dict | None = None
+    latency_ms: int | None = None
+
+
+class HealthSnapshotResponse(BaseModel):
+    services: list[HealthStateRow]
+    snapshot_at: datetime

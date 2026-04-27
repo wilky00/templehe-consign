@@ -422,3 +422,48 @@ export async function importAdminCategory(
     body: payload,
   });
 }
+
+// --- Phase 4 Sprint 7 — integrations + health ---
+
+export async function listAdminIntegrations(): Promise<
+  import("./types").IntegrationListResponse
+> {
+  return request<import("./types").IntegrationListResponse>("/admin/integrations");
+}
+
+export async function storeAdminIntegration(
+  name: import("./types").IntegrationName,
+  body: import("./types").IntegrationStoreRequest,
+): Promise<import("./types").IntegrationOut> {
+  return request<import("./types").IntegrationOut>(
+    `/admin/integrations/${name}`,
+    { method: "PUT", body },
+  );
+}
+
+export async function revealAdminIntegration(
+  name: import("./types").IntegrationName,
+  body: import("./types").IntegrationRevealRequest,
+): Promise<import("./types").IntegrationRevealResponse> {
+  return request<import("./types").IntegrationRevealResponse>(
+    `/admin/integrations/${name}/reveal`,
+    { method: "POST", body },
+  );
+}
+
+export async function testAdminIntegration(
+  name: import("./types").IntegrationName,
+  body: import("./types").IntegrationTestRequest = {},
+): Promise<import("./types").IntegrationTestResponse> {
+  return request<import("./types").IntegrationTestResponse>(
+    `/admin/integrations/${name}/test`,
+    { method: "POST", body },
+  );
+}
+
+export async function getAdminHealth(
+  refresh = false,
+): Promise<import("./types").HealthSnapshotResponse> {
+  const path = refresh ? "/admin/health?refresh=true" : "/admin/health";
+  return request<import("./types").HealthSnapshotResponse>(path);
+}
