@@ -11,13 +11,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.base import get_db
-from database.models import AuditLog, EquipmentRecord, Role, User
+from database.models import AuditLog, Role, User
 from middleware.auth import get_current_user
 from middleware.rbac import require_roles
 from schemas.record_lock import LockAcquireRequest, LockConflictOut, LockInfoOut
 from services import (
+    lock_registry,
     notification_preferences_service,
     notification_service,
+    notification_templates,
     record_lock_service,
 )
 from services.record_lock_service import (
@@ -29,8 +31,6 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/record-locks", tags=["record-locks"])
 
-_ALLOWED_RECORD_TYPES = {"equipment_record"}
-
 
 async def _role_slug(db: AsyncSession, user: User) -> str | None:
     result = await db.execute(select(Role.slug).where(Role.id == user.role_id))
@@ -38,11 +38,9 @@ async def _role_slug(db: AsyncSession, user: User) -> str | None:
 
 
 def _validate_record_type(record_type: str) -> None:
-    if record_type not in _ALLOWED_RECORD_TYPES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"unsupported record_type: {record_type}",
-        )
+    """Phase 4 Sprint 5 — delegates to lock_registry which raises 422
+    on unknown types. Wrapper kept so call-sites stay simple."""
+    lock_registry.get(record_type)
 
 
 @router.post("", response_model=LockInfoOut)
@@ -208,17 +206,23 @@ async def _notify_prior_lock_holder(
     idem = f"lock_overridden:{record_id}:{prior_user_id}"
 
     if resolved.channel == "sms" and resolved.destination:
+        sms = await notification_templates.render_with_overrides(
+            db,
+            "record_lock_overridden_sms",
+            variables={
+                "reference": ref,
+                "manager_first_name": manager_first_name,
+            },
+        )
         await notification_service.enqueue(
             db,
             idempotency_key=idem,
             user_id=prior.id,
             channel="sms",
-            template="record_lock_overridden",
+            template="record_lock_overridden_sms",
             payload={
                 "to_number": resolved.destination,
-                "body": (
-                    f"TempleHE: your editing lock on {ref} was released by {manager_first_name}."
-                ),
+                "body": sms.body,
                 "reference_number": ref,
             },
         )
@@ -227,12 +231,14 @@ async def _notify_prior_lock_holder(
     if not resolved.destination:
         return
 
-    subject = f"Your editing lock on {ref} was released"
-    body = (
-        f"<p>Hi {prior.first_name or 'team'},</p>"
-        f"<p>Your editing lock on <strong>{ref}</strong> was released "
-        f"by {manager_first_name} so the record could be edited.</p>"
-        "<p>Reopen the record from the sales dashboard if you still need to make changes.</p>"
+    rendered = await notification_templates.render_with_overrides(
+        db,
+        "record_lock_overridden",
+        variables={
+            "first_name": prior.first_name or "team",
+            "reference": ref,
+            "manager_first_name": manager_first_name,
+        },
     )
     await notification_service.enqueue(
         db,
@@ -242,20 +248,15 @@ async def _notify_prior_lock_holder(
         template="record_lock_overridden",
         payload={
             "to_email": resolved.destination,
-            "subject": subject,
-            "html_body": body,
+            "subject": rendered.subject,
+            "html_body": rendered.body,
             "reference_number": ref,
         },
     )
 
 
 async def _record_reference(db: AsyncSession, *, record_id: uuid.UUID, record_type: str) -> str:
-    """Best-effort human-readable label for the locked record."""
-    if record_type != "equipment_record":
-        return str(record_id)
-    ref = (
-        await db.execute(
-            select(EquipmentRecord.reference_number).where(EquipmentRecord.id == record_id)
-        )
-    ).scalar_one_or_none()
-    return ref or str(record_id)
+    """Best-effort human-readable label for the locked record. Delegates
+    to lock_registry so per-resource loaders are the single source of
+    truth (Sprint 5 — Architectural Debt #6)."""
+    return await lock_registry.reference_for(db, record_id=record_id, record_type=record_type)

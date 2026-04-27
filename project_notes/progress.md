@@ -965,6 +965,40 @@ Resolves Architectural Debt #3 + #4. Admin can now build/edit/test/reorder lead 
 - "Add ad_hoc rule" form's `assigned_user_id` is a free UUID input — Sprint 7 (or whenever a user-picker exists) can swap to an autocomplete.
 - Geographic metro lat/lng entry is manual; integrating with the Google Maps geocoding flow (already used at runtime) for "type a city name" would land naturally with Sprint 7's integrations work.
 
+### Sprint 5 — Notification template registry + cross-cutting Architectural Debt — COMPLETE (2026-04-26)
+
+The largest sprint of Phase 4 — bundles the notification template registry refactor (#1) with the lock registry (#6), watchers (#9), multi-attendee calendar mirror (#11), unified-prefs read view (#5), and admin "edit email copy" UI. Five Architectural Debt items resolved.
+
+- [x] **Migration 018** — three additive tables: `equipment_record_watchers` (#9), `calendar_event_attendees` with backfill from existing `appraiser_id` (#11), `notification_template_overrides` (#1). All cascades set on parent delete; partial unique index pattern not needed (PK on join cols).
+- [x] **`api/services/notification_templates.py`** (NEW) — `Template` dataclass + Jinja2 Environment with `autoescape=select_autoescape` for HTML and `autoescape=False` for SMS (autoescape would corrupt `&` etc.). 9 templates registered covering existing inline composers in equipment_status_service + record_locks router. `render(name, variables)` for tests / sync paths; `render_with_overrides(db, name, variables)` consults `notification_template_overrides` and falls back to code defaults. **Resolves Architectural Debt #1 + #16.**
+- [x] **`api/services/lock_registry.py`** (NEW) — `LockableResource(type, display_name, audit_prefix, reference_loader)` registry. Pre-registers `equipment_record`. `record_locks` router delegates type validation + reference lookup to the registry. **Resolves Architectural Debt #6.**
+- [x] **`api/services/watchers_service.py`** (NEW) — `add_watcher` / `remove_watcher` / `list_watchers` / `watcher_user_ids`. Idempotent add via `ON CONFLICT DO NOTHING`. **Resolves Architectural Debt #9.**
+- [x] **`equipment_status_service.record_transition`** — fan-out widens. After customer + sales-rep dispatch, `_notify_watchers` enqueues `status_update_watcher` per active watcher with their preferred channel; suppressed when admin override sets `notify_override=False`. Idempotency key `status_watcher:{record_id}:{to_status}:{user_id}` so two watchers each get one email.
+- [x] **Multi-attendee mirror invariant** (#11) — SQLAlchemy `before_flush` listener on `Session` mirrors `CalendarEvent.appraiser_id` into `calendar_event_attendees` with role='primary'. New events ORM-add via `session.add(...)` so SQLAlchemy honors FK ordering (raw INSERT pre-flush violates the parent FK). Dirty events use `pg_insert(...).on_conflict_do_nothing()`. Migration 018 backfills every existing event.
+- [x] **`api/services/unified_notification_prefs_service.py`** (NEW) — `for_user(db, user_id)` returns `UnifiedNotificationView` merging `customers.communication_prefs` (per-event opt-in) + `notification_preferences` (channel choice). Customer-event opt-ins return `None` for users without a Customer profile so admin UI can hide that section for employees. **Resolves Architectural Debt #5.**
+- [x] **`api/routers/admin_templates.py`** (NEW) — `GET /admin/notification-templates` (every spec + override status), `PATCH /admin/notification-templates/{name}` (subject/body markdown). 422 if email template's PATCH lacks `subject_md`. `delete=true` drops the override row.
+- [x] **`api/routers/admin.py`** (extend) — `GET /admin/equipment/{id}/watchers`, `POST` (add), `DELETE /{user_id}` (remove). `GET /admin/users/{id}/notification-summary` returns the unified view.
+- [x] **Frontend:** `web/src/pages/AdminNotificationTemplates.tsx` (NEW) — per-category cards, per-template subject + body editor with variable picker chips, `Save override` / `Revert to default` actions. `/admin/notification-templates` route + Templates tab in admin nav. Types + API client extended.
+- [x] **Tests:** 32 new — 7 unit `test_notification_templates.py` (render + autoescape behavior + missing-var raise), 5 unit `test_lock_registry.py`, 6 integration `test_watchers.py` (CRUD + dispatch fan-out + RBAC), 3 integration `test_multi_attendee_calendar.py` (mirror invariant + idempotency), 4 integration `test_unified_notification_prefs.py`, 7 integration `test_admin_template_overrides.py`. **457/457 backend pass.**
+
+**Bugs found and fixed during sprint:**
+- Mirror-invariant listener initially used raw `pg_insert` for new events → FK violation because the join INSERT ran before the parent CalendarEvent's INSERT during the same flush. Fixed by `session.add(CalendarEventAttendee(...))` for new events so SQLAlchemy honors FK ordering; dirty events keep the raw INSERT (parent already in DB).
+- New CalendarEvents had `id=None` at `before_flush` time (the `default=uuid.uuid4` fires only at INSERT). Pre-populate `obj.id = uuid.uuid4()` inside the listener so the join row can bind.
+- `record_lock_overridden` template was split into two registered names (`record_lock_overridden` + `record_lock_overridden_sms`) since the registry uses name as unique key. Updated the existing SMS-preferred test to assert the SMS variant name.
+
+**Decisions confirmed:**
+- One template per (name, channel) pair — splitting `record_lock_overridden` into email + SMS variants makes the registry render unambiguous.
+- `StrictUndefined` Jinja2 environment so missing variables raise `UndefinedError` — better to fail loudly during dev than ship "Hi {{ name }}" to a customer.
+- HTML body autoescape via `select_autoescape(default=True)`; SMS body bypasses autoescape to keep punctuation intact.
+- Watchers receive the same template + variables as the customer; new dedicated job template name `status_update_watcher` so list-by-template queries can distinguish.
+- Mirror invariant on `CalendarEvent.appraiser_id` doesn't demote prior primaries — the join table is the historical record, the live primary is the column.
+
+**Carry-forward:**
+- **Multi-attendee calendar UI** (admin schedule modal accepting multiple attendees) — backend + mirror invariant complete; frontend modal change deferred to Sprint 8 since Phase 5 (iOS) doesn't need it. Calendar service still accepts a single `appraiser_id` on create/update; the `attendee_ids` list parameter is a small follow-up.
+- **`SalesEquipmentDetail.tsx` watchers section** — backend endpoints + types ready; sales-side UI to add/remove watchers from a record's view also deferred to Sprint 8 (admin can already manage watchers via the API or a future admin records page).
+- **Notification template "live preview" with example variables** — current admin UI shows the variable picker chips but doesn't render a preview. Add when admin requests it.
+- Add `auth_service` email composers (verification, password reset, etc.) to the registry — currently they live in `email_service.py` as inline functions. Sprint 8 cleanup target since they're not customer-editable in the spec.
+
 ---
 
 ## Phase 5–8 — Not started

@@ -422,10 +422,16 @@ async def test_override_notification_uses_sms_when_preferred(
     )
     assert resp.status_code == 204
 
+    # Sprint 5 split the lock-overridden composer into two registered
+    # templates (one per channel). The SMS path now uses the dedicated
+    # ``record_lock_overridden_sms`` name; the assertion checks the
+    # SMS variant is what got enqueued.
     jobs = (
         (
             await db_session.execute(
-                select(NotificationJob).where(NotificationJob.template == "record_lock_overridden")
+                select(NotificationJob).where(
+                    NotificationJob.template == "record_lock_overridden_sms"
+                )
             )
         )
         .scalars()

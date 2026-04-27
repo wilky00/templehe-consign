@@ -15,6 +15,9 @@ import {
   type DeactivateUserResponse,
   type ManualTransitionRequest,
   type ManualTransitionResponse,
+  type NotificationTemplate,
+  type NotificationTemplateListResponse,
+  type NotificationTemplateOverrideRequest,
   type RoutingRule,
   type RoutingRuleCreate,
   type RoutingRuleListResponse,
@@ -25,6 +28,8 @@ import {
   type RoutingRuleTestResponse,
   type SendInviteResponse,
   type UUID,
+  type Watcher,
+  type WatcherListResponse,
 } from "./types";
 import { useAuthStore } from "../state/auth";
 import { API_BASE_URL, request } from "./client";
@@ -224,5 +229,40 @@ export async function testRoutingRule(
   return request<RoutingRuleTestResponse>(`/admin/routing-rules/${ruleId}/test`, {
     method: "POST",
     body,
+  });
+}
+
+// --- Notification template overrides (Sprint 5) ----------------------- //
+
+export async function listNotificationTemplates(): Promise<NotificationTemplateListResponse> {
+  return request<NotificationTemplateListResponse>("/admin/notification-templates");
+}
+
+export async function updateNotificationTemplate(
+  name: string,
+  body: NotificationTemplateOverrideRequest,
+): Promise<NotificationTemplate> {
+  return request<NotificationTemplate>(`/admin/notification-templates/${name}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+// --- Watchers (Sprint 5) --------------------------------------------- //
+
+export async function listWatchers(recordId: UUID): Promise<WatcherListResponse> {
+  return request<WatcherListResponse>(`/admin/equipment/${recordId}/watchers`);
+}
+
+export async function addWatcher(recordId: UUID, userId: UUID): Promise<Watcher> {
+  return request<Watcher>(`/admin/equipment/${recordId}/watchers`, {
+    method: "POST",
+    body: { user_id: userId },
+  });
+}
+
+export async function removeWatcher(recordId: UUID, userId: UUID): Promise<void> {
+  return request<void>(`/admin/equipment/${recordId}/watchers/${userId}`, {
+    method: "DELETE",
   });
 }

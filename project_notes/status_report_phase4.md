@@ -159,3 +159,46 @@ COMPLETE 2026-04-26
 - Drag-reorder uses optimistic re-fetch on success; full optimistic UI with rollback-on-error is a future polish.
 - Ad-hoc form's `assigned_user_id` is a free UUID input — swap to autocomplete when a user-picker exists.
 - Geographic metro lat/lng entry is manual; integrate with Google Maps geocoding (Sprint 7 territory) for "type a city name".
+
+---
+
+## Sprint 5 — Notification template registry + cross-cutting Architectural Debt
+COMPLETE 2026-04-26
+
+Largest sprint of Phase 4. Resolves Architectural Debt items #1, #5, #6, #9, #11.
+
+### What was built
+- **Migration 018** — `equipment_record_watchers`, `calendar_event_attendees` (with backfill), `notification_template_overrides`. All cascade on parent delete.
+- **`notification_templates.py`** — Jinja2-driven registry with autoescape per channel, `StrictUndefined` for loud failure on missing vars, 9 templates covering existing inline composers. `render_with_overrides(db, name, vars)` consults the overrides table; falls back to code defaults. Resolves Architectural Debt #1.
+- **`lock_registry.py`** — `LockableResource` registry (type, display_name, audit_prefix, reference_loader). `record_locks` router delegates type validation + reference lookup. Resolves Architectural Debt #6.
+- **`watchers_service.py`** — add/remove/list/watcher_user_ids. Idempotent ON CONFLICT. Dispatch fan-out wired into `record_transition` so watchers receive customer-facing status emails. Resolves Architectural Debt #9.
+- **CalendarEvent mirror invariant** — `before_flush` listener auto-mirrors `appraiser_id` into `calendar_event_attendees` with role='primary'. New events ORM-add for FK ordering; dirty events use raw INSERT. Resolves Architectural Debt #11.
+- **`unified_notification_prefs_service.py`** — read view merging `customers.communication_prefs` + `notification_preferences`. Resolves Architectural Debt #5.
+- **`admin_templates.py` router** — `GET` lists every registered template + override status; `PATCH` writes/deletes the override row.
+- **`admin.py` router extension** — watcher CRUD endpoints + `/users/{id}/notification-summary`.
+- **Frontend:** `AdminNotificationTemplates.tsx` — per-category cards, per-template subject + body editor with variable picker chips, save/revert. `/admin/notification-templates` route + Templates nav tab.
+
+### Key design decisions
+1. **One template per (name, channel) pair** — splitting `record_lock_overridden` into email + SMS variants keeps the registry's name-as-key invariant clean.
+2. **`StrictUndefined` Jinja2** — missing variables raise UndefinedError; better to fail loudly during dev.
+3. **Per-channel autoescape** — HTML body autoescapes (XSS protection); SMS body doesn't (would corrupt `&` etc.).
+4. **Mirror invariant uses ORM-add for new events** — raw `pg_insert` pre-flush violates parent FK because the join INSERT runs before the parent. ORM-add lets SQLAlchemy figure out FK ordering. Pre-populate `obj.id = uuid.uuid4()` so the relationship binds.
+5. **Watchers get a dedicated job template name** (`status_update_watcher`) so list-by-template queries can distinguish customer vs watcher dispatches.
+6. **Override deletion via `delete=true` PATCH flag** — admin's "Revert to default" path; cleaner than a separate DELETE endpoint.
+
+### Test results
+- 457 / 457 backend tests pass (was 425; +32 across 6 new test files: 12 unit + 20 integration).
+- `make lint` clean (ruff + format + eslint).
+- `npx tsc --noEmit` clean.
+- Migration 018 applied + downgraded + re-upgraded cleanly.
+
+### Bugs found and fixed during sprint
+- Mirror-invariant FK violation on new events → ORM-add fix.
+- Pre-flush `obj.id = None` → pre-populate UUID.
+- SMS test asserted old template name → updated to `record_lock_overridden_sms`.
+
+### Open issues / follow-ups
+- **Multi-attendee calendar UI** — backend + mirror complete; admin schedule modal accepting multiple attendees deferred to Sprint 8.
+- **Sales-side watchers section on `SalesEquipmentDetail`** — backend ready; UI deferred to Sprint 8.
+- **`auth_service` inline composers** (verification, password reset) — not yet migrated to the registry; Sprint 8 cleanup since spec doesn't require admin-editable copy for those.
+- **Live template preview** — current admin UI shows variable chips but no render preview. Add when admin requests it.
