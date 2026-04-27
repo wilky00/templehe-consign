@@ -250,9 +250,18 @@ CATEGORY_BUNDLE: dict[str, dict[str, Any]] = {
 
 
 async def import_category(db: AsyncSession, slug: str, data: dict[str, Any]) -> bool:
-    """Insert the category + all children if the slug is new. Returns True on insert."""
+    """Insert the category + all children if the slug is new. Returns True on insert.
+
+    "Slug exists" means a current, non-deleted row with this slug — migration 019
+    allows superseded rows to share a slug with their successor, so the lookup
+    has to scope to ``replaced_at IS NULL AND deleted_at IS NULL``.
+    """
     existing = await db.execute(
-        select(EquipmentCategory).where(EquipmentCategory.slug == slug)
+        select(EquipmentCategory).where(
+            EquipmentCategory.slug == slug,
+            EquipmentCategory.replaced_at.is_(None),
+            EquipmentCategory.deleted_at.is_(None),
+        )
     )
     if existing.scalar_one_or_none() is not None:
         logger.info("category_already_seeded slug=%s", slug)
