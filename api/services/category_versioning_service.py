@@ -37,10 +37,15 @@ from typing import TypeVar
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import CategoryInspectionPrompt, CategoryRedFlagRule
+from database.models import CategoryInspectionPrompt, CategoryRedFlagRule, EquipmentCategory
 
-# Bound to the two versioned models — both share the version + replaced_at columns.
-Versioned = TypeVar("Versioned", CategoryInspectionPrompt, CategoryRedFlagRule)
+# Bound to the versioned models — all share the version + replaced_at columns.
+Versioned = TypeVar(
+    "Versioned",
+    CategoryInspectionPrompt,
+    CategoryRedFlagRule,
+    EquipmentCategory,
+)
 
 
 async def current_inspection_prompts(
@@ -194,6 +199,63 @@ async def supersede_red_flag_rule(
         actions=new_actions if new_actions is not None else existing.actions,
         label=new_label if new_label is not None else existing.label,
         active=existing.active,
+        version=existing.version + 1,
+        replaced_at=None,
+    )
+    db.add(successor)
+    await db.flush()
+    return successor
+
+
+async def current_category_by_slug(db: AsyncSession, *, slug: str) -> EquipmentCategory | None:
+    """Return the current, non-deleted category for ``slug`` if any.
+
+    "Current" = ``replaced_at IS NULL AND deleted_at IS NULL``. This
+    matches the partial unique index from migration 019 so the lookup
+    is a single index seek.
+    """
+    stmt = select(EquipmentCategory).where(
+        and_(
+            EquipmentCategory.slug == slug,
+            EquipmentCategory.replaced_at.is_(None),
+            EquipmentCategory.deleted_at.is_(None),
+        )
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def supersede_category(
+    db: AsyncSession,
+    *,
+    existing: EquipmentCategory,
+    new_name: str | None = None,
+    new_slug: str | None = None,
+    new_display_order: int | None = None,
+    new_status: str | None = None,
+) -> EquipmentCategory:
+    """Mark ``existing`` superseded and insert a successor row.
+
+    Use this for identity-affecting edits (rename, slug change, status flip)
+    so historical appraisals stay anchored to the category definition they
+    were authored against. Trivial display_order tweaks could in principle
+    UPDATE in place; we still route them through supersede here for a
+    single, predictable edit path.
+
+    The successor inherits ``created_by`` and ``created_at`` from the
+    prior version; ``updated_at`` is fresh.
+    """
+    now = datetime.now(UTC)
+    existing.replaced_at = now
+    db.add(existing)
+
+    successor = EquipmentCategory(
+        name=new_name if new_name is not None else existing.name,
+        slug=new_slug if new_slug is not None else existing.slug,
+        status=new_status if new_status is not None else existing.status,
+        display_order=(
+            new_display_order if new_display_order is not None else existing.display_order
+        ),
+        created_by=existing.created_by,
         version=existing.version + 1,
         replaced_at=None,
     )

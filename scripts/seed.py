@@ -99,12 +99,16 @@ async def seed(session: AsyncSession) -> None:
         )
 
     print("Seeding equipment categories (placeholders)...")
+    # Migration 019 replaced UNIQUE(slug) with a partial unique index
+    # scoped to current, non-deleted versions. ON CONFLICT must reference
+    # the same index predicate so Postgres infers the right index.
     for cat in EQUIPMENT_CATEGORIES:
         await session.execute(
             text(
                 "INSERT INTO equipment_categories (id, name, slug, status, display_order) "
                 "VALUES (:id, :name, :slug, 'active', :display_order) "
-                "ON CONFLICT (slug) DO NOTHING"
+                "ON CONFLICT (slug) WHERE replaced_at IS NULL AND deleted_at IS NULL "
+                "DO NOTHING"
             ),
             {"id": str(uuid.uuid4()), **cat},
         )

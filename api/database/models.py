@@ -527,7 +527,10 @@ class EquipmentCategory(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    # Uniqueness is enforced via partial unique index ``uq_equipment_categories_slug_current``
+    # (migration 019) scoped to ``replaced_at IS NULL AND deleted_at IS NULL`` so
+    # superseded versions can share a slug with their successor.
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
@@ -540,6 +543,11 @@ class EquipmentCategory(Base):
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Phase 4 Sprint 6 versioning — see migration 019 + category_versioning_service.
+    # ``replaced_at IS NULL`` = current. Edits insert a successor row + flip
+    # ``replaced_at`` on the prior row instead of UPDATE-in-place.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     components: Mapped[list[CategoryComponent]] = relationship(
         "CategoryComponent", back_populates="category"

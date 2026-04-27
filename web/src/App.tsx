@@ -5,6 +5,8 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AccountPage } from "./pages/Account";
 import { AccountNotificationsPage } from "./pages/AccountNotifications";
+import { AdminCategoriesPage } from "./pages/AdminCategories";
+import { AdminCategoryEditPage } from "./pages/AdminCategoryEdit";
 import { AdminConfigPage } from "./pages/AdminConfig";
 import { AdminCustomerEditPage } from "./pages/AdminCustomerEdit";
 import { AdminCustomersPage } from "./pages/AdminCustomers";
@@ -168,6 +170,26 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <AdminNotificationTemplatesPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/categories"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminCategoriesPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/categories/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminCategoryEditPage />
             </Layout>
           </ProtectedRoute>
         }
