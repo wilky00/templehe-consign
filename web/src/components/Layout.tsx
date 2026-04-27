@@ -99,6 +99,18 @@ export function Layout({ children }: { children: ReactNode }) {
                   Categories
                 </NavLink>
                 <NavLink
+                  to="/admin/integrations"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Integrations
+                </NavLink>
+                <NavLink
+                  to="/admin/health"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Health
+                </NavLink>
+                <NavLink
                   to="/admin/reports"
                   className={({ isActive }) => navLinkClasses(isActive)}
                 >

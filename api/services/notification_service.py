@@ -61,7 +61,7 @@ async def enqueue(
     claim query on the same clock — Python-on-host vs Postgres-in-Docker
     can drift by hundreds of milliseconds, which otherwise races the worker.
     """
-    if channel not in ("email", "sms"):
+    if channel not in ("email", "sms", "slack"):
         raise ValueError(f"Unknown notification channel: {channel}")
     values: dict = {
         "idempotency_key": idempotency_key,
@@ -165,6 +165,8 @@ async def process_job(db: AsyncSession, job: NotificationJob) -> str:
             new_status = await _dispatch_email(job)
         elif job.channel == "sms":
             new_status = await _dispatch_sms(job)
+        elif job.channel == "slack":
+            new_status = await _dispatch_slack(db, job)
         else:
             new_status = "failed"
             job.last_error = f"unknown channel: {job.channel}"
@@ -258,4 +260,33 @@ async def _dispatch_sms(job: NotificationJob) -> str:
         to=to_number,
         body=body,
     )
+    return "delivered"
+
+
+async def _dispatch_slack(db: AsyncSession, job: NotificationJob) -> str:
+    """Dispatch via :mod:`services.slack_dispatch_service`.
+
+    Permanent errors (4xx, missing creds) → ``failed`` (no retry).
+    Transient errors (5xx, 429, connection) → re-raise so the outer
+    try/except in :func:`process_job` flips status to ``retry`` and
+    schedules the next attempt with the existing backoff buckets."""
+    from services import slack_dispatch_service
+
+    payload = job.payload or {}
+    text_body = payload.get("text") or payload.get("body") or ""
+    blocks = payload.get("blocks")
+    if not text_body:
+        job.last_error = "slack payload missing text"
+        return "failed"
+
+    try:
+        await slack_dispatch_service.send(db=db, text_body=text_body, blocks=blocks)
+    except slack_dispatch_service.PermanentSlackError as exc:
+        # Credential not configured or upstream returned 4xx (channel
+        # not found, invalid payload, etc.) — no retry, mark failed.
+        if str(exc) == "slack_skipped_not_configured":
+            job.last_error = "slack_skipped_not_configured"
+            return "skipped"
+        job.last_error = f"slack_permanent: {exc}"[:1000]
+        return "failed"
     return "delivered"

@@ -847,6 +847,76 @@ export interface RedFlagRulePatch {
   active?: boolean;
 }
 
+// --- Phase 4 Sprint 7 — integrations + health ---
+
+export type IntegrationName =
+  | "slack"
+  | "twilio"
+  | "sendgrid"
+  | "google_maps"
+  | "esign"
+  | "valuation";
+
+export type IntegrationTestStatus = "success" | "failure" | "stubbed";
+
+export interface IntegrationOut {
+  name: IntegrationName;
+  is_set: boolean;
+  set_by: UUID | null;
+  set_at: string | null;
+  last_tested_at: string | null;
+  last_test_status: IntegrationTestStatus | null;
+  last_test_detail: string | null;
+  last_test_latency_ms: number | null;
+}
+
+export interface IntegrationListResponse {
+  integrations: IntegrationOut[];
+}
+
+export interface IntegrationStoreRequest {
+  plaintext: string;
+}
+
+export interface IntegrationRevealRequest {
+  password: string;
+  totp_code: string;
+}
+
+export interface IntegrationRevealResponse {
+  name: IntegrationName;
+  plaintext: string;
+  revealed_at: string;
+}
+
+export interface IntegrationTestRequest {
+  extra_args?: Record<string, unknown>;
+}
+
+export interface IntegrationTestResponse {
+  name: IntegrationName;
+  success: boolean;
+  status: IntegrationTestStatus;
+  detail: string;
+  latency_ms: number;
+}
+
+export type HealthStatus = "green" | "yellow" | "red" | "unknown" | "stubbed";
+
+export interface HealthStateRow {
+  service_name: string;
+  status: HealthStatus;
+  last_checked_at: string | null;
+  last_alerted_at: string | null;
+  error_detail: Record<string, unknown> | null;
+  latency_ms: number | null;
+}
+
+export interface HealthSnapshotResponse {
+  services: HealthStateRow[];
+  snapshot_at: string;
+}
+
 export interface CategoryImportResult {
   category_id: UUID;
   created: boolean;

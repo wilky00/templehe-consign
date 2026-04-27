@@ -1047,6 +1047,70 @@ Epic 4.8 + Architectural Debt #10. Brings `equipment_categories` to the same ver
 - `GET    /api/v1/admin/categories/{id}/export.json` — JSON download (admin)
 - `POST   /api/v1/admin/categories/import` — idempotent on slug (admin)
 
+### Sprint 7 — Integration Credentials Vault + Health Dashboard + Slack Dispatch — COMPLETE (verified green 2026-04-27)
+
+Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, reveal (with password + TOTP step-up), and test integration credentials from the SPA; `/admin/health` shows live service status with a 30s poll cadence; flipping any service to red dispatches a rate-limited admin notification through the existing template + dispatch pipeline.
+
+- [x] **Migration 020** — `integration_credentials` table (id, integration_name UNIQUE, encrypted_value bytea, set_by, set_at, last_tested_at/status/detail/latency_ms) and `service_health_state` table (service_name PK, status, last_checked_at, last_alerted_at, error_detail jsonb, latency_ms). Also widens the existing `chk_notification_channel` CHECK on `notification_jobs` to include `'slack'` so the dispatch worker can claim Slack jobs. Reversible (drop tables + revert constraint to email/sms only).
+- [x] **`api/services/credentials_vault.py`** (NEW) — Fernet-encrypted at rest with `MultiFernet` rotation support (comma-separated key list — first is primary, all are tried on decrypt). Falls back to `totp_encryption_key` when `credentials_encryption_key` isn't set so dev/test don't need two secrets configured. `VaultDecryptError` distinguishes "key removed before re-save" from missing-row.
+- [x] **`api/services/integration_testers/__init__.py`** (NEW) — single `run(name, plaintext, **extras) -> TestResult` dispatch. Per-integration probes:
+  - **Slack** — POST minimal `{"text": ...}` to webhook; expect HTTP 200 + body `"ok"`.
+  - **Twilio** — multi-field JSON plaintext (`account_sid`/`auth_token`/`from_number`); validates against `GET /Accounts/{sid}.json` with HTTP Basic auth (no SMS unless admin supplies `to_number`).
+  - **SendGrid** — `GET /v3/scopes` with the API key as a Bearer token; no email is sent.
+  - **Google Maps** — geocodes a sample US address against the Geocoding API; `status=OK` is the success path.
+  - **eSign + valuation** — `test_stubbed`; returns success with `status='stubbed'` so admin can save creds ahead of Phase 5/6.
+- [x] **`api/services/admin_credentials_service.py`** (NEW) — `store/reveal/test_credential/list_metadata`. Reveal is gated on the actor having both a password and active TOTP; verifies password (bcrypt) + TOTP (pyotp, valid_window=1) fresh against the user row; rate-limited to 10/hour/admin via the existing `rate_limit_counters` table; failures audit-logged with the specific reason but the API surface returns generic "wrong password or TOTP" so the admin UI doesn't leak which factor failed. Plaintext lives only in the function frame; we never log it or hash it for audit.
+- [x] **`api/services/slack_dispatch_service.py`** (NEW) — Slack webhook dispatcher. Loads the saved webhook URL via the credentials vault; classifies failures into `TransientSlackError` (5xx + 429 + connection error) and `PermanentSlackError` (4xx + missing creds). The notification_service worker re-raises transients so the existing exponential-backoff retry path runs unchanged. **Resolves Phase 3 Slack-dispatch deferral.**
+- [x] **`api/services/notification_service.py`** (extend) — channel guard widened to admit `'slack'`; new `_dispatch_slack(db, job)` routes through `slack_dispatch_service.send`; permanent failures mark the job `'failed'` with detail in `last_error`; missing-creds → `'skipped'`.
+- [x] **`api/services/health_check_service.py`** (NEW) — `run_all(db)` probes database (`SELECT 1`) + R2 (`HeadBucket`) + each saved integration; persists per-service status to `service_health_state`; on green→red flip dispatches `service_health_red_alert` (or the SMS / Slack variant) per active admin via `notification_service.enqueue` with idempotency key `health_alert:{service}:{checked_at_seconds}:{admin_id}`; rate-limited to 1 alert per service per 15 minutes via the `last_alerted_at` column.
+- [x] **`scripts/health_poller.py`** (NEW) — long-running poller that runs `run_all` every `HEALTH_POLL_INTERVAL` seconds (default 30s). Mirrors the `notification_worker.py` shape so future ops scripts share the same pattern. Will deploy as the `temple-health-poller` Fly Machine — captured as a manual ops item.
+- [x] **`api/services/notification_templates.py`** (extend) — registered `service_health_red_alert` (email), `service_health_red_alert_sms` (SMS), and `service_health_red_alert_slack` (plain-text body, routed through the SMS environment so block-kit-free Slack messages aren't HTML-escaped).
+- [x] **`api/routers/admin_credentials.py`** (NEW) — `GET /admin/integrations` (metadata, masked), `PUT /admin/integrations/{name}` (store), `POST /admin/integrations/{name}/reveal` (step-up), `POST /admin/integrations/{name}/test` (extra_args optional). Admin-only RBAC.
+- [x] **`api/routers/admin_health.py`** (NEW) — `GET /admin/health` returns the persisted snapshot; `?refresh=true` forces a fresh probe; first request in a fresh deploy auto-probes since the snapshot is empty. Admin-only RBAC.
+- [x] **`api/schemas/admin.py`** (extend) — `IntegrationOut`, `IntegrationListResponse`, `IntegrationStoreRequest`, `IntegrationRevealRequest/Response`, `IntegrationTestRequest/Response`, `HealthStateRow`, `HealthSnapshotResponse`.
+- [x] **`api/main.py`** wires the two new routers.
+- [x] **`api/routers/health.py`** — `_EXPECTED_MIGRATION_HEAD = "020"`.
+- [x] **`api/config.py`** — adds `credentials_encryption_key` setting (separate from TOTP key for independent rotation; falls back to TOTP key when unset).
+- [x] **Frontend:**
+  - `web/src/pages/AdminIntegrations.tsx` (NEW) — per-integration card with `is_set` badge, last-tested badge with success/failure/stubbed coloring, Save/Update form (Twilio's form has 3 fields and serializes to JSON), Test button (mutation status + latency in the alert), Reveal button.
+  - `web/src/components/admin/CredentialRevealModal.tsx` (NEW) — password + TOTP form → on success shows plaintext in monospace yellow alert with a 30s countdown auto-mask; reveal can't be re-clicked while the plaintext is visible (modal hides the form).
+  - `web/src/pages/AdminHealth.tsx` (NEW) — service status grid (color-coded by status), last-check + latency + last-alert per card, manual `Refresh now` button calls `?refresh=true` then invalidates the React Query; refetchInterval=30_000 keeps it live without explicit polling logic.
+  - Routes registered: `/admin/integrations`, `/admin/health`. Admin nav extends with both.
+  - Types + API client: `IntegrationOut/ListResponse/StoreRequest/RevealRequest/Response/TestRequest/Response`, `HealthStateRow/SnapshotResponse`; `listAdminIntegrations`, `storeAdminIntegration`, `revealAdminIntegration`, `testAdminIntegration`, `getAdminHealth`.
+- [x] **Tests:** 28 new — 15 unit (`test_credentials_vault.py` 5 + `test_integration_testers.py` 15 — covers slack/twilio/sendgrid/google_maps success + failure + network error + run dispatch + stubbed providers) + 16 integration `test_admin_integrations.py` (RBAC, store + audit, reset on resave, reveal happy path with TOTP, wrong password / wrong TOTP / no-TOTP-blocked / unset-credential, rate-limit at 10/hour, test button updates DB row, Twilio extra_args passes through to SMS POST) + 6 integration `test_slack_dispatch.py` (200/200-ok happy path, 5xx retry, 4xx permanent fail, missing-creds skipped, missing-text fail, 429 transient via direct `slack_dispatch_service.send`) + 7 integration `test_admin_health.py` (snapshot returns all services, RBAC, DB probe green, red flip dispatches alert per admin, 15min rate limit, re-fires after cooldown, unconfigured integration is unknown not red). **523/523 backend pass.** Lint + format + tsc + npm build + npm lint all clean.
+
+**Bugs found and fixed during sprint:**
+- Initial `test_twilio_with_to_number_sends_sms` failed with `RuntimeError: Cannot send a request, as the client has been closed` — the SMS POST block was OUTSIDE the `async with httpx.AsyncClient()` block, so the second call hit a closed client. Fixed by moving the if-to_number branch inside the `async with`.
+- `_dispatch_slack` initial guard tried to enqueue `channel="slack"` jobs but `chk_notification_channel` (migration 006) only allowed `email`/`sms`. Migration 020 widens the constraint AND `notification_service.enqueue`'s in-Python guard. Both belt-and-suspenders.
+- `health_check_service._admin_recipients` initially read `prefs.preferred_channel` and `prefs.sms_number`; the actual model fields are `channel` and `phone_number`. Caught at first-test runtime; fixed by aligning to the model.
+- The `User.role_id` mirror invariant in `models.py` skips when `obj.id is None` (a fresh `db.add(User(...))` has `id=None` until INSERT). For the health tests I started with an inline `User(...)` and got an FK violation on the `user_roles` listener insert. Fixed by routing admin creation through `auth_service.register_user` (which goes through the registration path that re-fetches the User with its id populated before the role_id change triggers the listener).
+- `test_alert_re_fires_after_cooldown` was flaky because the idempotency-key seed uses `last_checked_at` at seconds resolution. Two passes within the same second produced the same key → second enqueue collapsed via `ON CONFLICT DO NOTHING`. Fixed in the test by `asyncio.sleep(1.1)` between passes; production benefit unchanged (two pollers racing within the same second still dedupe correctly).
+
+**Decisions confirmed:**
+- Multi-field credentials (Twilio) serialize to JSON in a single `plaintext` field — keeps the vault interface uniform (`encrypt(str) -> bytes`). The admin UI for Twilio is the only place that knows it's three inputs.
+- Reveal step-up is per-call (not session-scoped) — every reveal asks for password + TOTP fresh. Prevents a stolen session from bulk-revealing during a 1-hour rate-limit window.
+- Reveal returns plaintext; the SPA shows it for 30 seconds with a countdown then auto-masks. No "copy to clipboard" — admin reads + types it into the upstream service. (Future polish: add a clipboard button gated on a "I understand" confirm.)
+- Admin recipient channel filter is "anyone whose preference channel is set" — admins with no `notification_preference` row default to email (their account email). SMS recipients without a `phone_number` are silently skipped (not a hard error).
+- Health idempotency keys seconds-resolution `last_checked_at` so two pollers racing within the same second dedupe. Sub-second uniqueness is unnecessary at our scale (single poller machine).
+- DB + R2 probes share the same `_probe_*` shape as integrations so a future "add memcache to health" lands as one function + a `_PLATFORM_SERVICES` tuple addition, no reshape.
+- Slack channel for `service_health_red_alert_slack` template uses the SMS environment (`autoescape=False`) — Slack rendering eats `&amp;` etc., and we want to keep the option open to embed block-kit JSON later.
+
+**Carry-forward:**
+- **`temple-health-poller` Fly Machine** is unprovisioned — the `scripts/health_poller.py` script ships in this PR but the Fly app + scheduled-machine config doesn't exist yet. **Manual ops item, tracked in Outline.** Until then, the snapshot endpoint's `?refresh=true` path keeps the dashboard accurate when admin manually clicks "Refresh now"; the `staleness` auto-probe in `admin_health.get_health_snapshot` keeps casual page loads fresh too.
+- **`credentials_encryption_key` Fly secret** is unprovisioned — same fallback (`totp_encryption_key`) keeps prod working, but the two should rotate independently. **Manual ops item, tracked in Outline.**
+- **Twilio test SMS UI** — backend already accepts `extra_args.to_number`, but the SPA doesn't yet expose a "send a test SMS to this number" input on the Twilio test button. Sprint 8 polish.
+- **SendGrid test email UI** — same shape as the Twilio note; backend ready, no UI input yet.
+- **Reveal "copy to clipboard" + "I understand" confirm** — UX polish deferred. Current flow expects admin to type the plaintext into the upstream service.
+- **Slack staging guard** — Sprint 7 plan flagged: "in non-prod environments, dispatch only to a `#staging-test` channel regardless of saved channel ID." Not yet implemented; tracked for Sprint 8.
+- **`_EXPECTED_MIGRATION_HEAD` derive-from-alembic** — still hard-coded "020"; Sprint 8 cleanup target.
+
+**Endpoints (new in Sprint 7):**
+- `GET    /api/v1/admin/integrations` — masked metadata (admin)
+- `PUT    /api/v1/admin/integrations/{name}` — store (admin, encrypted)
+- `POST   /api/v1/admin/integrations/{name}/reveal` — step-up (admin, 10/hour)
+- `POST   /api/v1/admin/integrations/{name}/test` — runs the per-integration probe (admin)
+- `GET    /api/v1/admin/health?refresh=true|false` — snapshot or fresh probe (admin)
+
 ---
 
 ## Phase 5–8 — Not started

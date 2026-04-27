@@ -10,6 +10,8 @@ import { AdminCategoryEditPage } from "./pages/AdminCategoryEdit";
 import { AdminConfigPage } from "./pages/AdminConfig";
 import { AdminCustomerEditPage } from "./pages/AdminCustomerEdit";
 import { AdminCustomersPage } from "./pages/AdminCustomers";
+import { AdminHealthPage } from "./pages/AdminHealth";
+import { AdminIntegrationsPage } from "./pages/AdminIntegrations";
 import { AdminNotificationTemplatesPage } from "./pages/AdminNotificationTemplates";
 import { AdminOperationsPage } from "./pages/AdminOperations";
 import { AdminReportsPage } from "./pages/AdminReports";
@@ -190,6 +192,26 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <AdminCategoryEditPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/integrations"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminIntegrationsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/health"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminHealthPage />
             </Layout>
           </ProtectedRoute>
         }
