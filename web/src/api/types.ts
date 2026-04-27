@@ -711,3 +711,150 @@ export interface Watcher {
 export interface WatcherListResponse {
   watchers: Watcher[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 Sprint 6 — equipment categories admin
+// ---------------------------------------------------------------------------
+
+export interface CategoryComponent {
+  id: UUID;
+  name: string;
+  weight_pct: number;
+  display_order: number;
+  active: boolean;
+}
+
+export interface CategoryInspectionPrompt {
+  id: UUID;
+  label: string;
+  response_type: "yes_no_na" | "text" | "scale_1_5";
+  required: boolean;
+  display_order: number;
+  active: boolean;
+  version: number;
+}
+
+export interface CategoryAttachment {
+  id: UUID;
+  label: string;
+  description: string | null;
+  display_order: number;
+  active: boolean;
+}
+
+export interface CategoryPhotoSlot {
+  id: UUID;
+  label: string;
+  helper_text: string | null;
+  required: boolean;
+  display_order: number;
+  active: boolean;
+}
+
+export interface CategoryRedFlagRule {
+  id: UUID;
+  label: string;
+  condition_field: string;
+  condition_operator: "equals" | "is_true" | "is_false";
+  condition_value: string | null;
+  actions: Record<string, unknown>;
+  active: boolean;
+  version: number;
+}
+
+export interface CategorySummary {
+  id: UUID;
+  name: string;
+  slug: string;
+  status: string;
+  display_order: number;
+  version: number;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+  deleted_at: ISODateTime | null;
+  replaced_at: ISODateTime | null;
+}
+
+export interface CategoryDetail extends CategorySummary {
+  components: CategoryComponent[];
+  inspection_prompts: CategoryInspectionPrompt[];
+  attachments: CategoryAttachment[];
+  photo_slots: CategoryPhotoSlot[];
+  red_flag_rules: CategoryRedFlagRule[];
+  weight_total: number;
+  weight_warning: boolean;
+}
+
+export interface CategoryListResponse {
+  categories: CategorySummary[];
+}
+
+export interface CategoryCreate {
+  name: string;
+  slug: string;
+  display_order?: number;
+}
+
+export interface CategoryPatch {
+  name?: string;
+  slug?: string;
+  display_order?: number;
+  status?: "active" | "inactive";
+}
+
+export interface ComponentCreate {
+  name: string;
+  weight_pct: number;
+  display_order?: number;
+}
+
+export interface ComponentPatch {
+  name?: string;
+  weight_pct?: number;
+  display_order?: number;
+  active?: boolean;
+}
+
+export interface InspectionPromptCreate {
+  label: string;
+  response_type: "yes_no_na" | "text" | "scale_1_5";
+  required?: boolean;
+  display_order?: number;
+}
+
+export interface InspectionPromptPatch {
+  label?: string;
+  response_type?: "yes_no_na" | "text" | "scale_1_5";
+  required?: boolean;
+  display_order?: number;
+  active?: boolean;
+}
+
+export interface RedFlagRuleCreate {
+  label: string;
+  condition_field: string;
+  condition_operator: "equals" | "is_true" | "is_false";
+  condition_value?: string | null;
+  actions?: Record<string, unknown>;
+}
+
+export interface RedFlagRulePatch {
+  label?: string;
+  condition_field?: string;
+  condition_operator?: "equals" | "is_true" | "is_false";
+  condition_value?: string | null;
+  actions?: Record<string, unknown>;
+  active?: boolean;
+}
+
+export interface CategoryImportResult {
+  category_id: UUID;
+  created: boolean;
+  superseded_prompt_ids: UUID[];
+  superseded_rule_ids: UUID[];
+  added_component_ids: UUID[];
+  added_prompt_ids: UUID[];
+  added_attachment_ids: UUID[];
+  added_photo_slot_ids: UUID[];
+  added_rule_ids: UUID[];
+}

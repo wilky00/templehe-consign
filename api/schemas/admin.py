@@ -271,3 +271,209 @@ class NotificationTemplateOverrideRequest(BaseModel):
         default=False,
         description="When true, drop any existing override and revert to the code default.",
     )
+
+
+# --- Equipment categories admin (Sprint 6) -------------------------------- #
+
+
+class CategoryComponentOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    weight_pct: float
+    display_order: int
+    active: bool
+
+
+class CategoryInspectionPromptOut(BaseModel):
+    id: uuid.UUID
+    label: str
+    response_type: str
+    required: bool
+    display_order: int
+    active: bool
+    version: int
+
+
+class CategoryAttachmentOut(BaseModel):
+    id: uuid.UUID
+    label: str
+    description: str | None
+    display_order: int
+    active: bool
+
+
+class CategoryPhotoSlotOut(BaseModel):
+    id: uuid.UUID
+    label: str
+    helper_text: str | None
+    required: bool
+    display_order: int
+    active: bool
+
+
+class CategoryRedFlagRuleOut(BaseModel):
+    id: uuid.UUID
+    label: str
+    condition_field: str
+    condition_operator: str
+    condition_value: str | None
+    actions: dict
+    active: bool
+    version: int
+
+
+class CategoryOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    status: str
+    display_order: int
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
+    replaced_at: datetime | None
+
+
+class CategoryDetail(CategoryOut):
+    """Full category bundle for the admin edit page. ``weight_warning``
+    surfaces the 'components don't sum to 100%' banner without forcing
+    the admin to do mental math; the scorer normalizes at runtime."""
+
+    components: list[CategoryComponentOut] = Field(default_factory=list)
+    inspection_prompts: list[CategoryInspectionPromptOut] = Field(default_factory=list)
+    attachments: list[CategoryAttachmentOut] = Field(default_factory=list)
+    photo_slots: list[CategoryPhotoSlotOut] = Field(default_factory=list)
+    red_flag_rules: list[CategoryRedFlagRuleOut] = Field(default_factory=list)
+    weight_total: float = 0.0
+    weight_warning: bool = False
+
+
+class CategoryListResponse(BaseModel):
+    categories: list[CategoryOut]
+
+
+class CategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    slug: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    display_order: int = Field(default=0, ge=0)
+
+
+class CategoryPatch(BaseModel):
+    """Identity-affecting edits (name, slug, status) supersede the row;
+    pure ``display_order`` tweaks also route through supersede so the
+    audit trail stays consistent."""
+
+    name: str | None = Field(default=None, max_length=100)
+    slug: str | None = Field(default=None, max_length=100, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    display_order: int | None = Field(default=None, ge=0)
+    status: str | None = Field(default=None, pattern=r"^(active|inactive)$")
+
+
+class ComponentCreate(BaseModel):
+    # weight_pct is NUMERIC(6, 4) — max storable value is 99.9999.
+    # Components share weight across siblings; "100% in one component"
+    # is degenerate (no scoring) and intentionally rejected.
+    name: str = Field(min_length=1, max_length=100)
+    weight_pct: float = Field(ge=0, lt=100)
+    display_order: int = Field(default=0, ge=0)
+
+
+class ComponentPatch(BaseModel):
+    name: str | None = Field(default=None, max_length=100)
+    weight_pct: float | None = Field(default=None, ge=0, lt=100)
+    display_order: int | None = Field(default=None, ge=0)
+    active: bool | None = None
+
+
+class InspectionPromptCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=255)
+    response_type: Literal["yes_no_na", "text", "scale_1_5"]
+    required: bool = True
+    display_order: int = Field(default=0, ge=0)
+
+
+class InspectionPromptPatch(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
+    response_type: Literal["yes_no_na", "text", "scale_1_5"] | None = None
+    required: bool | None = None
+    display_order: int | None = Field(default=None, ge=0)
+    active: bool | None = None
+
+
+class AttachmentCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    display_order: int = Field(default=0, ge=0)
+
+
+class AttachmentPatch(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    display_order: int | None = Field(default=None, ge=0)
+    active: bool | None = None
+
+
+class PhotoSlotCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=255)
+    helper_text: str | None = None
+    required: bool = True
+    display_order: int = Field(default=0, ge=0)
+
+
+class PhotoSlotPatch(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
+    helper_text: str | None = None
+    required: bool | None = None
+    display_order: int | None = Field(default=None, ge=0)
+    active: bool | None = None
+
+
+class RedFlagRuleCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=255)
+    condition_field: str = Field(min_length=1, max_length=100)
+    condition_operator: Literal["equals", "is_true", "is_false"]
+    condition_value: str | None = Field(default=None, max_length=255)
+    actions: dict = Field(default_factory=dict)
+
+
+class RedFlagRulePatch(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
+    condition_field: str | None = Field(default=None, max_length=100)
+    condition_operator: Literal["equals", "is_true", "is_false"] | None = None
+    condition_value: str | None = Field(default=None, max_length=255)
+    actions: dict | None = None
+    active: bool | None = None
+
+
+class CategoryExportPayload(BaseModel):
+    """Serialization of a category at a point in time. Re-importing the
+    same payload (matched on slug) supersedes prompts + rules whose body
+    changed and creates new ones for additions; it never duplicates an
+    existing item with the same identity. ``version`` + ``replaced_at``
+    are emitted so the file documents history but they're advisory on
+    re-import — the importer doesn't trust client timestamps."""
+
+    name: str
+    slug: str
+    status: str
+    display_order: int
+    version: int
+    replaced_at: datetime | None = None
+    components: list[dict] = Field(default_factory=list)
+    inspection_prompts: list[dict] = Field(default_factory=list)
+    attachments: list[dict] = Field(default_factory=list)
+    photo_slots: list[dict] = Field(default_factory=list)
+    red_flag_rules: list[dict] = Field(default_factory=list)
+
+
+class CategoryImportResult(BaseModel):
+    category_id: uuid.UUID
+    created: bool
+    superseded_prompt_ids: list[uuid.UUID] = Field(default_factory=list)
+    superseded_rule_ids: list[uuid.UUID] = Field(default_factory=list)
+    added_component_ids: list[uuid.UUID] = Field(default_factory=list)
+    added_prompt_ids: list[uuid.UUID] = Field(default_factory=list)
+    added_attachment_ids: list[uuid.UUID] = Field(default_factory=list)
+    added_photo_slot_ids: list[uuid.UUID] = Field(default_factory=list)
+    added_rule_ids: list[uuid.UUID] = Field(default_factory=list)

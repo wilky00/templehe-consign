@@ -1,0 +1,20 @@
+# ABOUTME: Gitleaks config — extends defaults; allowlists project_notes/ where audit docs reference commit SHAs.
+# ABOUTME: Without this, weekly scheduled scans flag commit-SHA + section-id text inside review notes.
+
+[extend]
+# Inherit every default rule and any default allowlists shipped with the
+# action's bundled config. We only ADD a path allowlist; we do not loosen
+# any rule semantics.
+useDefault = true
+
+[allowlist]
+description = "TempleHE — generated audit docs are commit-SHA-heavy and trip generic-api-key heuristics."
+paths = [
+    # Engineering audit notes — code reviews, decisions, progress logs.
+    # These reference commit SHAs (8–10 hex chars) + section identifiers
+    # that gitleaks' default `generic-api-key` rule scores as
+    # high-entropy secrets. False positives on every weekly scheduled
+    # full-history scan; not flagged on per-push diffs because the
+    # offending lines haven't changed since they were authored.
+    '''^project_notes/.*\.md$''',
+]

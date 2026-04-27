@@ -266,3 +266,159 @@ export async function removeWatcher(recordId: UUID, userId: UUID): Promise<void>
     method: "DELETE",
   });
 }
+
+// --- Equipment categories admin (Sprint 6) ---------------------------- //
+
+export async function listAdminCategories(opts: {
+  include_inactive?: boolean;
+  include_deleted?: boolean;
+} = {}): Promise<import("./types").CategoryListResponse> {
+  const p = new URLSearchParams();
+  if (opts.include_inactive) p.set("include_inactive", "true");
+  if (opts.include_deleted) p.set("include_deleted", "true");
+  const qs = p.toString();
+  const path = qs ? `/admin/categories?${qs}` : "/admin/categories";
+  return request<import("./types").CategoryListResponse>(path);
+}
+
+export async function getAdminCategory(
+  categoryId: UUID,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(`/admin/categories/${categoryId}`);
+}
+
+export async function createAdminCategory(
+  body: import("./types").CategoryCreate,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>("/admin/categories", {
+    method: "POST",
+    body,
+  });
+}
+
+export async function updateAdminCategory(
+  categoryId: UUID,
+  body: import("./types").CategoryPatch,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(`/admin/categories/${categoryId}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function deactivateAdminCategory(
+  categoryId: UUID,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(
+    `/admin/categories/${categoryId}/deactivate`,
+    { method: "POST" },
+  );
+}
+
+export async function deleteAdminCategory(
+  categoryId: UUID,
+): Promise<import("./types").CategorySummary> {
+  return request<import("./types").CategorySummary>(`/admin/categories/${categoryId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function addCategoryComponent(
+  categoryId: UUID,
+  body: import("./types").ComponentCreate,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(
+    `/admin/categories/${categoryId}/components`,
+    { method: "POST", body },
+  );
+}
+
+export async function updateCategoryComponent(
+  categoryId: UUID,
+  componentId: UUID,
+  body: import("./types").ComponentPatch,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(
+    `/admin/categories/${categoryId}/components/${componentId}`,
+    { method: "PATCH", body },
+  );
+}
+
+export async function addCategoryInspectionPrompt(
+  categoryId: UUID,
+  body: import("./types").InspectionPromptCreate,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(
+    `/admin/categories/${categoryId}/inspection-prompts`,
+    { method: "POST", body },
+  );
+}
+
+export async function updateCategoryInspectionPrompt(
+  categoryId: UUID,
+  promptId: UUID,
+  body: import("./types").InspectionPromptPatch,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(
+    `/admin/categories/${categoryId}/inspection-prompts/${promptId}`,
+    { method: "PATCH", body },
+  );
+}
+
+export async function addCategoryRedFlagRule(
+  categoryId: UUID,
+  body: import("./types").RedFlagRuleCreate,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(
+    `/admin/categories/${categoryId}/red-flag-rules`,
+    { method: "POST", body },
+  );
+}
+
+export async function updateCategoryRedFlagRule(
+  categoryId: UUID,
+  ruleId: UUID,
+  body: import("./types").RedFlagRulePatch,
+): Promise<import("./types").CategoryDetail> {
+  return request<import("./types").CategoryDetail>(
+    `/admin/categories/${categoryId}/red-flag-rules/${ruleId}`,
+    { method: "PATCH", body },
+  );
+}
+
+export function adminCategoryExportUrl(categoryId: UUID): string {
+  return `${API_BASE_URL}/admin/categories/${categoryId}/export.json`;
+}
+
+export async function downloadAdminCategoryExport(
+  categoryId: UUID,
+  filename: string,
+): Promise<void> {
+  const token = useAuthStore.getState().accessToken;
+  const resp = await fetch(adminCategoryExportUrl(categoryId), {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
+  });
+  if (!resp.ok) {
+    throw new Error(`Export failed (HTTP ${resp.status}).`);
+  }
+  const blob = await resp.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+export async function importAdminCategory(
+  payload: Record<string, unknown>,
+): Promise<import("./types").CategoryImportResult> {
+  return request<import("./types").CategoryImportResult>("/admin/categories/import", {
+    method: "POST",
+    body: payload,
+  });
+}

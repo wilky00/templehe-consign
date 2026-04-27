@@ -215,3 +215,64 @@ async def test_current_red_flag_rules_filters_superseded_and_inactive(
     assert "No serial" in labels
     assert "Inactive" not in labels
     assert "No VIN" not in labels
+
+
+# ---------------------------------------------------------------------------
+# Category-level supersede (Phase 4 Sprint 6)
+# ---------------------------------------------------------------------------
+
+
+async def test_supersede_category_inserts_v2_and_marks_v1_replaced(
+    db_session: AsyncSession,
+):
+    slug = f"sup-{uuid.uuid4().hex[:8]}"
+    v1 = EquipmentCategory(name="Skid Steers", slug=slug, status="active")
+    db_session.add(v1)
+    await db_session.flush()
+    assert v1.version == 1
+    assert v1.replaced_at is None
+
+    v2 = await category_versioning_service.supersede_category(
+        db_session, existing=v1, new_name="Skid Steer Loaders"
+    )
+    assert v2.version == 2
+    assert v2.name == "Skid Steer Loaders"
+    assert v2.slug == slug
+    assert v2.replaced_at is None
+
+    await db_session.refresh(v1)
+    assert v1.replaced_at is not None
+
+
+async def test_current_category_by_slug_returns_only_current(
+    db_session: AsyncSession,
+):
+    slug = f"slugtest-{uuid.uuid4().hex[:8]}"
+    v1 = EquipmentCategory(name="V1", slug=slug, status="active")
+    db_session.add(v1)
+    await db_session.flush()
+    v2 = await category_versioning_service.supersede_category(
+        db_session, existing=v1, new_name="V2"
+    )
+
+    found = await category_versioning_service.current_category_by_slug(db_session, slug=slug)
+    assert found is not None
+    assert found.id == v2.id
+    assert found.name == "V2"
+
+
+async def test_current_category_by_slug_skips_deleted(
+    db_session: AsyncSession,
+):
+    slug = f"deleted-{uuid.uuid4().hex[:8]}"
+    cat = EquipmentCategory(
+        name="Soon to delete",
+        slug=slug,
+        status="active",
+        deleted_at=datetime.now(UTC),
+    )
+    db_session.add(cat)
+    await db_session.flush()
+
+    found = await category_versioning_service.current_category_by_slug(db_session, slug=slug)
+    assert found is None

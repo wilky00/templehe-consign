@@ -999,6 +999,54 @@ The largest sprint of Phase 4 — bundles the notification template registry ref
 - **Notification template "live preview" with example variables** — current admin UI shows the variable picker chips but doesn't render a preview. Add when admin requests it.
 - Add `auth_service` email composers (verification, password reset, etc.) to the registry — currently they live in `email_service.py` as inline functions. Sprint 8 cleanup target since they're not customer-editable in the spec.
 
+### Sprint 6 — Dynamic Equipment Category Management + Versioning + Export/Import — COMPLETE (verified green 2026-04-27)
+
+Epic 4.8 + Architectural Debt #10. Brings `equipment_categories` to the same versioned model as inspection prompts + red-flag rules (migration 014); ships full admin CRUD + JSON export/import; surfaces a "weights don't sum to 100" banner on the edit page so admins notice scoring drift without being forced to do mental math.
+
+- [x] **Migration 019** — adds `version` + `replaced_at` to `equipment_categories`; drops the column-level UNIQUE on `slug` and replaces it with partial unique index `uq_equipment_categories_slug_current` scoped to `replaced_at IS NULL AND deleted_at IS NULL`. Mirrors migration 014's prompt + rule pattern. **Resolves Architectural Debt #10.**
+- [x] **`api/services/category_versioning_service.py`** (extend) — `current_category_by_slug(db, slug)` + `supersede_category(existing, new_name=..., new_slug=..., new_display_order=..., new_status=...)`. Same shape as the prompt + rule supersedes; `created_by` + `created_at` inherit from the prior version.
+- [x] **`api/services/admin_category_service.py`** (NEW) — full CRUD: list/get/create/update (supersede)/deactivate/soft_delete; component CRUD; inspection-prompt + red-flag-rule CRUD that route through versioning helpers; attachment + photo-slot CRUD as plain UPDATE; weight-warning logic (active components must sum to 100 ± 0.5%); idempotent `import_from_payload` that supersedes prompts/rules whose body changed and additively merges new components/prompts/rules. Hard-delete blocked when `equipment_records` reference the category — admins must deactivate or reassign first.
+- [x] **`api/routers/admin_categories.py`** (NEW) — `GET /admin/categories`, `POST`, `GET /{id}`, `PATCH /{id}`, `POST /{id}/deactivate`, `DELETE /{id}` (soft); component + inspection-prompt + red-flag-rule + attachment + photo-slot endpoints; `GET /{id}/export.json` (downloadable, content-disposition attachment); `POST /admin/categories/import` (idempotent on slug). Admin-only RBAC. Wired in `main.py`.
+- [x] **`api/schemas/admin.py`** (extend) — `CategoryOut`, `CategoryDetail` (with `weight_total` + `weight_warning`), `CategoryListResponse`, `CategoryCreate`/`CategoryPatch`, per-child create/patch shapes, `CategoryExportPayload`, `CategoryImportResult`. `weight_pct` schema constraint changed from `le=100` to `lt=100` to match the underlying `Numeric(6, 4)` storage limit (no single component can be 100%).
+- [x] **`api/routers/health.py`** — `_EXPECTED_MIGRATION_HEAD = "019"`. Standard bump.
+- [x] **Frontend:** `web/src/pages/AdminCategories.tsx` (NEW, list + create modal + import modal), `web/src/pages/AdminCategoryEdit.tsx` (NEW, header actions + tabs for components/prompts/red-flags/photos/attachments + rename modal), `web/src/components/admin/ComponentWeightWarning.tsx` (NEW). Routes registered; "Categories" added to admin nav. Types + API client extended.
+- [x] **`.gitleaks.toml`** (NEW) — extends defaults; allowlists `^project_notes/.*\.md$`. Resolves the weekly-scheduled false positive on `project_notes/code_review_phase1.md:22` (commit-SHA + section identifier in audit-doc table). Folded into Sprint 6 PR per Jim's call (2026-04-27); lands before Mon 2026-05-04 08:00 UTC scheduled run.
+- [x] **Tests:** 24 new — 11 integration `test_admin_categories.py` (create/get/duplicate-slug/rename/weight-warning/prompt-supersede/delete-blocked/delete-when-empty/deactivate/RBAC/partial-unique-index), 3 integration `test_category_export_import.py` (fresh-slug create / supersede on changed prompt / idempotent re-import), 3 integration `test_category_versioning.py` extended (category supersede + slug lookup + deleted-skip). 104 unit + 388 integration green; ruff + ruff-format + tsc + npm build all clean.
+
+**Bugs found and fixed during sprint:**
+- Initial `weight_pct: float = Field(ge=0, le=100)` triggered `NumericValueOutOfRangeError` because `Numeric(6, 4)` storage caps at `9.9999`. Reality is "components share weight across siblings" — single 100% component is degenerate. Fixed schema to `lt=100`; updated tests to use multi-component splits.
+- First weight-warning logic flagged empty categories (no components) as a misconfiguration. That's actually a "not configured yet" state, not a problem. Suppressed warning when `len(active_components) == 0`.
+- `_EXPECTED_MIGRATION_HEAD` in `routers/health.py` was hardcoded `"018"` — broke the health check the moment migration 019 ran, which then failed `test_health.py` + `test_rbac.py::test_security_headers_present` + `test_auth_flows.py::test_health_still_works`. Bumped to `"019"`. Standard hazard with this constant; flagged for follow-up to derive head dynamically from alembic config in a future sprint.
+
+**Decisions confirmed:**
+- Category supersede covers all identity-affecting edits (rename, slug, status); pure `display_order` edits also supersede so the audit trail stays consistent — single, predictable edit path is better than a split UPDATE-vs-supersede heuristic.
+- Hard-delete of a category referenced by equipment_records returns 409 with the count instead of cascading or auto-reassigning. Admin must deactivate (preferred — keeps history) or reassign records first.
+- Import idempotency keys on `slug`, lowercase-trim. Components match by name; prompts + rules match by label. Body-diff drives supersede; missing items don't trigger deletes (additive merge only).
+- `weight_warning` tolerance is 0.5% to absorb floating-point sums (`99.9999998` etc.); banner copy explicitly notes runtime normalization so admins know nothing breaks if they ignore it.
+- Component max weight is `lt=100` (not `le=100`) — matches `Numeric(6, 4)` storage; "100% in one component" was always degenerate (no scoring).
+
+**Carry-forward:**
+- **Photo-slot + attachment CRUD UI** — backend endpoints + service methods ship in this sprint; the AdminCategoryEdit page surfaces the lists but the edit forms are stubbed to "coming with iOS work". Sprint 8 or Phase 5 can flesh out the inputs since iOS is the primary consumer.
+- **Component + red-flag-rule edit-in-place UI** — list view + add forms ship; edit-existing-row UI ships only for inspection prompts (single-line label edit). Component weight + rule body editors deferred to Sprint 8.
+- **`_EXPECTED_MIGRATION_HEAD` follow-up** — derive head dynamically from `alembic.config.Config.get_section("alembic")` instead of hardcoding the string, so future migrations don't re-trip this gotcha. Add to Phase 4 Sprint 8 close-out cleanup.
+- **Component weight validator** — current validation is per-row (`0 ≤ w < 100`); a category-level "active weights must sum to 100" validator would be stronger. Deferred to Sprint 8 since the runtime scorer normalizes regardless.
+- **Re-import to *new* slug** — current importer maps payload slug → category. Want to support "import as-new with renamed slug"? Out of scope; admin can rename manually after import.
+
+**Endpoints (new in Sprint 6):**
+- `GET    /api/v1/admin/categories?include_inactive=&include_deleted=` — list current categories (admin)
+- `POST   /api/v1/admin/categories` — create (admin)
+- `GET    /api/v1/admin/categories/{id}` — full bundle with weight banner (admin)
+- `PATCH  /api/v1/admin/categories/{id}` — supersede (admin)
+- `POST   /api/v1/admin/categories/{id}/deactivate` — supersede with status=inactive (admin)
+- `DELETE /api/v1/admin/categories/{id}` — soft-delete; 409 if records reference (admin)
+- `POST   /api/v1/admin/categories/{id}/components` + `PATCH /{id}/components/{cid}` (admin)
+- `POST   /api/v1/admin/categories/{id}/inspection-prompts` + `PATCH /{id}/inspection-prompts/{pid}` — superseding edit (admin)
+- `POST   /api/v1/admin/categories/{id}/red-flag-rules` + `PATCH /{id}/red-flag-rules/{rid}` — superseding edit (admin)
+- `POST   /api/v1/admin/categories/{id}/attachments` + `PATCH /{id}/attachments/{aid}` (admin)
+- `POST   /api/v1/admin/categories/{id}/photo-slots` + `PATCH /{id}/photo-slots/{sid}` (admin)
+- `GET    /api/v1/admin/categories/{id}/export.json` — JSON download (admin)
+- `POST   /api/v1/admin/categories/import` — idempotent on slug (admin)
+
 ---
 
 ## Phase 5–8 — Not started
