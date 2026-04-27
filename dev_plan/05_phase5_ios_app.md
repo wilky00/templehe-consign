@@ -13,7 +13,18 @@
 
 Before any iOS-surface work begins:
 
-- **TOTP `MultiFernet` rotation must ship first.** Phase 1 Hardening intentionally deferred this (`project_notes/code_review_phase1.md §5 Medium`) because no iOS volume existed yet. Before the iOS app starts writing TOTP-protected sessions at scale, `api/config.py` needs a `totp_encryption_keys: list[str]` (primary + rotating keys) and `api/services/auth_service.py` needs to wrap `Fernet` in `MultiFernet` for decrypt + encrypt-to-primary semantics. One migration to re-encrypt existing `totp_secret_enc` rows with the new primary if the key was ever rotated. Tracked in `dev_plan/11_security_baseline.md §14`.
+- **TOTP `MultiFernet` rotation must ship first.** Phase 1 Hardening intentionally deferred this (`project_notes/code_review_phase1.md §5 Medium`) because no iOS volume existed yet. Before the iOS app starts writing TOTP-protected sessions at scale, `api/config.py` needs a `totp_encryption_keys: list[str]` (primary + rotating keys) and `api/services/auth_service.py` needs to wrap `Fernet` in `MultiFernet` for decrypt + encrypt-to-primary semantics. One migration to re-encrypt existing `totp_secret_enc` rows with the new primary if the key was ever rotated. Tracked in `dev_plan/11_security_baseline.md §14`. **Note:** Phase 4 Sprint 7 already ships MultiFernet decode in `credentials_vault.py` for the integration credentials path; the same shape lifts cleanly into `auth_service`.
+
+## Phase 4 Carry-Ins (Live + Ready for Phase 5)
+
+Phase 4 closed 2026-04-27 (ADR-020); Phase 5 inherits these surfaces:
+
+- **iOS config endpoint** — `GET /api/v1/ios/config` returns `{config_version, categories, inspection_prompts, red_flag_rules, app_config}`. `config_version` is a deterministic SHA-256 hash over the sorted JSON body; iOS app caches the response and only re-fetches when the hash changes. Auth-gated to `appraiser/admin/sales/sales_manager`.
+- **Dynamic equipment categories** — admin can add/rename/deactivate categories from `/admin/categories`; changes flow through to the iOS config endpoint immediately (hash bumps). Component weights, inspection prompts, photo slots, attachment options, red-flag rules all CRUD'able.
+- **Versioned inspection prompts + red flag rules + categories** — `current_*()` selectors filter on `replaced_at IS NULL`; historical appraisals stay anchored to the version they were submitted against. Phase 5 reads only the current-version slice, but appraisal submissions should store the version at submit time so retro-reporting in Phase 8 stays correct.
+- **Notification template registry + Slack dispatch** — every admin notification (lock break, status change, health alert) renders through `notification_templates.py`; iOS push notifications can land as a new channel by registering APNs templates with the same shape.
+- **Health dashboard + poller** — `service_health_state` is observable from `/admin/health`; iOS-specific probes (APNs / FCM) plug in by registering an integration tester + service name in `health_check_service`.
+- **Multi-attendee calendar + watchers** — `calendar_event_attendees` + `equipment_record_watchers` tables are live; iOS scheduling UX can surface "who's attending" without further backend work.
 
 ---
 

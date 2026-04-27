@@ -223,6 +223,14 @@ jobs:
       - name: Playwright E2E + axe
         run: cd web && npx playwright test --reporter=github
 
+      - name: Seed Phase 4 admin user for Lighthouse CI auth
+        # Phase 4 lhci runs against authed admin routes. Re-run the
+        # phase 4 seeder so the admin user exists even if E2E failed
+        # before any phase4 spec touched it. Idempotent.
+        if: always()
+        run: |
+          DATABASE_URL=$DATABASE_URL uv --project api run python scripts/seed_e2e_phase4.py --mode default >/dev/null
+
       - name: Lighthouse CI
         if: always()
         run: cd web && npx lhci autorun --config=./lighthouserc.cjs

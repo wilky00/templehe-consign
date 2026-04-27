@@ -46,6 +46,34 @@ export function seedPhase3<T>(
   return JSON.parse(out.trim()) as T;
 }
 
+/**
+ * Phase 4 fixture seeder — admin + reporting + sales + customer users.
+ *
+ * `default` resets rate limits + AppConfig overrides only. `routing`
+ * additionally seeds two geographic rules at priorities 10/20 with a
+ * `phase4_e2e_marker` JSONB key so re-runs purge cleanly.
+ */
+export function seedPhase4<T>(mode: "default" | "routing" = "default"): T {
+  const args = [
+    "run",
+    "python",
+    path.join(REPO_ROOT, "scripts", "seed_e2e_phase4.py"),
+    "--mode",
+    mode,
+  ];
+  const out = execFileSync("uv", args, {
+    cwd: path.join(REPO_ROOT, "api"),
+    env: {
+      ...process.env,
+      DATABASE_URL:
+        process.env.E2E_DATABASE_URL ??
+        "postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe",
+    },
+    encoding: "utf8",
+  });
+  return JSON.parse(out.trim()) as T;
+}
+
 const VALID_PASSWORD = "TestPassword1!";
 
 export interface TestUser {
@@ -127,6 +155,34 @@ export async function apiLogin(user: TestUser): Promise<string> {
     throw new Error(`login failed (${resp.status()}): ${await resp.text()}`);
   }
   const body = (await resp.json()) as { access_token: string };
+  return body.access_token;
+}
+
+/**
+ * Direct-API login for pre-seeded staff users (admin/reporting/sales/etc).
+ * Returns the bearer token. Phase 4 specs use this to drive admin endpoints
+ * outside the browser to verify server-side state (e.g. reorder
+ * persistence, RBAC denial). Throws if TOTP is enabled — the caller would
+ * need a different code path to handle the partial-token flow.
+ */
+export async function apiLoginAsStaff(args: {
+  email: string;
+  password: string;
+  fakeIp: string;
+}): Promise<string> {
+  const api = await ctx(args.fakeIp);
+  const resp = await api.post("/api/v1/auth/login", {
+    data: { email: args.email, password: args.password },
+  });
+  if (resp.status() !== 200) {
+    throw new Error(`login failed (${resp.status()}): ${await resp.text()}`);
+  }
+  const body = (await resp.json()) as { access_token?: string };
+  if (!body.access_token) {
+    throw new Error(
+      `login did not return access_token (TOTP enabled?): ${JSON.stringify(body)}`,
+    );
+  }
   return body.access_token;
 }
 

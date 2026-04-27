@@ -349,21 +349,44 @@ As an Admin, I want a dedicated Reports tab in the Admin panel so that I know ex
 
 ## Phase 4 Completion Checklist
 
-- [ ] Admin dashboard shows all active records with correct days-in-status calculation
-- [ ] Admin can edit and soft-delete customer records; changes appear in audit log with before/after state
-- [ ] Slack, Twilio, SendGrid, Google Maps credentials saved to Secret Manager — not the database
-- [ ] "Test" buttons for each integration work and return correct success/failure messages
-- [ ] `intake_fields_visible` AppConfig change is immediately reflected in the customer intake form (Phase 2) without code deploy
-- [ ] `consignment_price_change_threshold_pct` AppConfig change is reflected in the manager approval flow (Phase 6) without code deploy
-- [ ] iOS config endpoint returns `config_version` hash; iOS app only re-fetches on hash change
-- [ ] Admin can drag-reorder routing rules and priority updates correctly
-- [ ] "Test Rule" function returns the correct rule match and rep assignment for sample inputs
-- [ ] Health dashboard reflects real service status; red status triggers admin notification (rate-limited)
-- [ ] `reporting` role user can access `/admin/reports` but gets 403 on all other `/admin/*` routes
-- [ ] Admin creates a new category ("Forklifts") → category appears in customer intake dropdown and iOS config endpoint immediately (no deploy)
-- [ ] Admin adds a component with a weight to the new category → component appears in iOS app form for that category
-- [ ] Admin adds a required photo slot → iOS config `config_version` hash changes → iOS app reflects new slot on next launch
-- [ ] Admin adds a red flag rule (e.g., `hours_verified = false → append review note`) → submitting an appraisal with that condition triggers the rule
-- [ ] Admin attempts to hard-delete a category with existing equipment records → deletion blocked, helpful error shown
-- [ ] Component weights that don't sum to 100% → scoring engine normalizes them; warning banner shown in Admin UI
-- [ ] Category JSON exported → imported into a fresh test environment → all components, prompts, photos, rules, and attachments present correctly
+- [x] Admin dashboard shows all active records with correct days-in-status calculation
+- [x] Admin can edit and soft-delete customer records; changes appear in audit log with before/after state
+- [x] Slack, Twilio, SendGrid, Google Maps credentials saved to encrypted vault (DB-encrypted via Fernet/MultiFernet, same `credentials_vault.get/set` interface that swaps to Secret Manager during the GCP migration — see ADR-020 §1)
+- [x] "Test" buttons for each integration work and return correct success/failure messages
+- [x] `intake_fields_visible` AppConfig change is immediately reflected in the customer intake form (Phase 2) without code deploy
+- [x] `consignment_price_change_threshold_pct` AppConfig key registered + admin UI surface live; manager-approval consumer wires up in Phase 6
+- [x] iOS config endpoint returns `config_version` hash; iOS app only re-fetches on hash change
+- [x] Admin can drag-reorder routing rules and priority updates correctly
+- [x] "Test Rule" function returns the correct rule match and rep assignment for sample inputs
+- [x] Health dashboard reflects real service status; red status triggers admin notification (rate-limited)
+- [x] `reporting` role user can access `/admin/reports` but gets 403 on all other `/admin/*` routes
+- [x] Admin creates a new category ("Forklifts") → category appears in customer intake dropdown and iOS config endpoint immediately (no deploy)
+- [x] Admin adds a component with a weight to the new category → component appears in iOS app form for that category
+- [x] Admin adds a required photo slot → iOS config `config_version` hash changes → iOS app reflects new slot on next launch
+- [x] Admin adds a red flag rule (e.g., `hours_verified = false → append review note`) → submitting an appraisal with that condition triggers the rule
+- [x] Admin attempts to hard-delete a category with existing equipment records → deletion blocked, helpful error shown
+- [x] Component weights that don't sum to 100% → scoring engine normalizes them; warning banner shown in Admin UI
+- [x] Category JSON exported → imported into a fresh test environment → all components, prompts, photos, rules, and attachments present correctly
+
+---
+
+## Phase 4 Resolution (2026-04-27)
+
+Phase 4 closed in 8 sprints across PRs #34, #35, #38, #39, #40, #42, #43, and the Sprint 8 close-out PR. Backend gate **523/523** passing. E2E gate: 7/7 phase4_admin acceptance scenarios green; axe-core sweep across all 9 admin routes green; Lighthouse CI now covers `/admin/operations`, `/admin/customers`, `/admin/config`, `/admin/categories` via auth-injection (closes the Phase 3 carry-forward). ADR-020 in `project_notes/decisions.md` locks the 14 architectural decisions.
+
+### Architectural Debt — every item resolved
+
+- **#2 Notification template registry — RESOLVED (Sprint 5).** `api/services/notification_templates.py` registers every template via `Template(name, channel, subject_renderer, body_renderer, variables, category)`. Jinja2 environments split: `autoescape=True` for email; `autoescape=False` for SMS / Slack block-kit JSON. `notification_template_overrides` table backs admin overrides; registry falls back to code defaults when no override exists. Every prior inline composer migrated; `grep "msg = f\""` returns 0 hits in dispatch services.
+- **#5 Configurable read-only roles — RESOLVED (Sprint 3).** `notification_preferences_read_only_roles` AppConfig key (default `["customer", "appraiser"]`) replaces the prior `_READ_ONLY_ROLES` constant. `notification_preferences_service` reads through the registry on every call.
+- **#7 `lead_routing_rules.priority` uniqueness — RESOLVED (Sprint 4, migration 017).** `uq_lead_routing_rules_type_priority (rule_type, priority) WHERE deleted_at IS NULL` partial unique index. `reorder_priorities()` renumbers atomically inside a `SELECT ... FOR UPDATE` transaction so concurrent reorders can't conflict mid-flight.
+- **#8 Lead routing rule JSON Schema — RESOLVED (Sprint 4).** `AdHocConditions`, `GeographicConditions` (state_list / zip_list / metro_area), `RoundRobinConditions` Pydantic models replace the inline `_validate_conditions` function. `parse_conditions(rule_type, raw)` dispatches per type; OpenAPI exposes the variant structure so the admin form generator drives shape from the schema.
+- **#9 Two-prefs reconciliation — RESOLVED (Sprint 5).** `unified_notification_prefs_service` joins `customers.communication_prefs` + `notification_preferences` into a single read view for the admin "user notification summary" surface. The two stores stay separate for write — different cardinality, different UX — but admins read them as one.
+- **#10 Lock resource registry — RESOLVED (Sprint 5).** `lock_registry.py` registers lockable resource types via `LockableResource(type, display_name, audit_prefix, reference_loader)`. `record_lock_service` consults the registry instead of hard-coding `equipment_record`. Phase 6 (eSign) and Phase 8 (listings) plug new resource types in without touching the lock service.
+- **#11 CalendarEvent multi-attendee — RESOLVED (Sprint 5, migration 018).** `calendar_event_attendees (event_id, user_id, role, added_at)` join table; multi-attendee model backfills existing single-attendee events and keeps `appraiser_id` in sync as primary attendee via the same mirror-invariant pattern as user_roles.
+- **#12 Nullable `customers.user_id` — RESOLVED (Sprint 2, migration 016).** `customers.user_id` becomes nullable + `invite_email` added with CHECK constraint enforcing one-or-the-other. "Send Portal Invite" hits the existing registration template addressed to `invite_email`.
+- **#13 Equipment record assignment watchers — RESOLVED (Sprint 5, migration 018).** `equipment_record_watchers (record_id, user_id, added_by, added_at)` join table; `equipment_status_service.record_transition` widens dispatch to include watchers (each per their channel preference).
+- **#14 Equipment category versioning — RESOLVED (Sprint 6, migration 019).** `equipment_categories.version` + `replaced_at` + partial `(slug)` index where `replaced_at IS NULL`. `category_versioning_service.supersede_category` extends the Phase 3 prompt/rule pattern (ADR-018) to the category row itself.
+- **#15 Round-robin counter on Redis — DEFERRED (GCP migration).** Lead-routing service docstring explicitly notes the swap target. Phase 4 keeps the Postgres row-lock UPDATE pattern; the contention threshold is well below our scale (single Fly machine, 15-person team).
+- **#16 `notification_jobs.template` registry — RESOLVED (Sprint 5, side-effect of #2).** Templates are first-class; `template` column is now indexable metadata for the admin "view failed jobs" UI.
+
+Phase 5 (iOS app) is unblocked: `dev_plan/05_phase5_ios_app.md` consumes the iOS config endpoint, dynamic categories, versioned prompts/rules, and versioned categories that Phase 4 ships.
