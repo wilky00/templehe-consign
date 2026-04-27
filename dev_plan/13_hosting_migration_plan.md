@@ -44,6 +44,7 @@ Walk through `12_gcp_production_target.md` §2 end-to-end on staging only:
 - [ ] Artifact Registry repository created for the API Docker image
 - [ ] Cloud Run services stubbed (no image deployed yet) with Cloud SQL + Redis sidecars attached
 - [ ] Secret Manager populated with the same secret *names* as Fly (values will be updated at cutover)
+- [ ] **Integration credentials migration plan rehearsed.** Phase 4 Sprint 7 ships `api/services/credentials_vault.py` with a clean interface (`encrypt(plaintext) -> bytes`, `decrypt(ciphertext) -> str`, MultiFernet rotation support). For GCP cutover, swap the backend to read from Secret Manager directly: each integration credential becomes a separate secret (`templehe-twilio`, `templehe-slack`, etc.) and `credentials_vault.get(name)` reads from `gcp_secret_manager.get_secret_version(name)` instead of the `integration_credentials` table. The vault's public API is unchanged so admin reveal/test/store flows don't move. ADR-020 §1 locks this contract.
 
 ### 2.4 Dual-write or dual-read? Decide.
 

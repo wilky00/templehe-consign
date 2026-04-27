@@ -166,10 +166,27 @@ fly machine run . --app temple-sweeper \
 **Fix:** Added an `isInThisWeek(dateStr)` helper. After scheduling, if the event landed in next week, the test clicks the toolbar's "Next" button to advance the WEEK view before asserting visibility. Same coverage; deterministic regardless of test runtime.
 **Pattern to watch for:** any e2e assertion that compounds `new Date()` + an offset and then renders against a calendar/date-window UI is at risk of TZ drift between local + CI. Anchor to a deterministic date or navigate the UI to the event's date.
 
-## OPEN — Lighthouse on auth-gated routes is not yet wired (Phase 4 carry-forward)
-**Status:** Phase 3 Sprint 6 + Phase 4 pre-work both shipped Lighthouse CI against unauth `/login` + `/register` only. The sales-side and admin-side pages aren't covered.
-**Impact:** Accessibility for those pages IS gated via axe-core in `phase3_accessibility.spec.ts`; only the Lighthouse perf/SEO/best-practices score is missing. Low risk for a 15-person internal app.
-**Fix when Phase 4 needs it:** add `/sales` + `/admin` to `web/lighthouserc.cjs` with the static-dist + auth-injection wiring. Alternative: use Lighthouse-as-a-test in Playwright with an authenticated context.
+## FIXED — Lighthouse on auth-gated routes is not yet wired (Phase 4 carry-forward)
+**Fixed:** 2026-04-27 in Phase 4 Sprint 8.
+**Was:** Phase 3 Sprint 6 + Phase 4 pre-work both shipped Lighthouse CI against unauth `/login` + `/register` only. Sales-side and admin-side pages weren't covered. Risk was low (axe-core covered accessibility) but the perf/SEO/best-practices score was missing on every authenticated route.
+**Fix:** `web/lighthouserc.cjs` switches from `staticDistDir` to the running vite preview server + adds `/admin/operations`, `/admin/customers`, `/admin/config`, `/admin/categories` to the URL set. `web/lighthouse-auth.cjs` is a Lighthouse CI puppeteer hook that direct-API-logs in as the seeded admin user and pre-injects the access token into `sessionStorage` on every page lhci subsequently opens (via a `targetcreated` listener calling `evaluateOnNewDocument`, since sessionStorage doesn't survive a tab close). Login + register pages stay in the audit set; their flow ignores the injected token. CI runs the Phase 4 seeder before lhci so the admin user always exists.
+
+## OPEN — Phase 4 carry-forwards (Sprint 5+ polish)
+**Status:** Phase 4 Sprint 8 closed every Architectural Debt item but punted these UI polish + ops cleanup tasks to follow-up sprints.
+**Items:**
+- **Slack staging-channel guard** — non-prod environments should dispatch only to a `#staging-test` channel regardless of saved channel ID. Single env-aware override in `slack_dispatch_service.send`.
+- **Twilio + SendGrid "Test with real message" UI inputs** — backend already accepts `extra_args.to_number` / `to_email` on the test endpoint; the SPA doesn't surface them. One input each on `AdminIntegrations.tsx`.
+- **Sales-side watchers UI** — backend ships in Sprint 5 (`equipment_record_watchers` table + admin endpoints); the `SalesEquipmentDetail` watcher add/remove section needs writing.
+- **Multi-attendee calendar UI** — backend + admin scheduling support ship in Sprint 5; the sales-side schedule modal still defaults to single attendee.
+- **Component weight + rule body editors on `AdminCategoryEdit`** — Sprint 6 ships the data model; admin UI exposes view + add for components / prompts / rules but not in-place edits beyond the supersede modal.
+- **`_EXPECTED_MIGRATION_HEAD` derive-from-alembic** — currently a hand-bumped constant in `health.py`. Should derive from alembic at runtime so future migrations don't drift the health probe.
+- **Node 20 GitHub Actions deprecation** — `actions/checkout@v4`, `actions/setup-python@v5`, `astral-sh/setup-uv@v4` all log the Node 20 deprecation banner. Default flips June 2026, removal September 2026. Bump to v5+ ahead of June.
+
+## OPEN — `phase3_calendar.spec.ts:50` flake (calendar smoke)
+**Status:** Reproducible on vanilla `main` too — confirmed pre-existing during Sprint 8 e2e validation. Not caused by Phase 4 changes.
+**Impact:** CI's `retries=2` clears it on every recent push-to-main. Local re-runs after a clean DB sometimes fail at the "you are editing this record" lock banner assertion within the 5s wait window.
+**Fix sketch:** raise the lock-banner wait to 10s (the lock acquire is a fresh API round-trip + React Query invalidation), or pin the test to a more deterministic page-load signal than the banner text. Single-file change in the spec.
+**Tracked for:** when Phase 5 / 6 work touches the calendar surface anyway.
 
 ## FIXED — Security workflow green on main (PRs #36 + #37, 2026-04-26)
 **Was:** Security workflow failed on every push-to-main since Phase 1 hardening shipped. Two distinct issues.

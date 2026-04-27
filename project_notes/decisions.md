@@ -667,3 +667,72 @@ Phase 1's `users.role_id` FK enforced one role per user. The moment Phase 4 admi
 - Implementation: `api/alembic/versions/015_phase4_prework_multirole_users.py`, `api/database/models.py` (UserRole + User.roles + User.role_grants + before_flush mirror listener), `api/services/user_roles_service.py` (grant / revoke / set_primary_role / role_slugs_for_user), `api/middleware/rbac.py` (intersection check), `api/routers/auth.py` (CurrentUser.roles populated via the service), `api/schemas/auth.py` (CurrentUser.roles field), `api/services/auth_service.py` (registration grants customer role explicitly), `web/src/api/types.ts` (CurrentUser.roles), `web/src/components/Layout.tsx` (sales-side check across all roles), `scripts/seed.py` + `scripts/seed_e2e_phase3.py` (raw-SQL paths write the join row).
 - Tests: `tests/integration/test_rbac.py` extended with two new cases — multi-role user passes both checks; revoke refuses the primary. Full backend gate **344/344** (was 341 + 3 new RBAC tests).
 - Phase 4 admin user-management UI now plugs into `user_roles_service.grant()` / `revoke()` / `set_primary_role()` rather than inventing its own write path.
+
+---
+
+## ADR-020: Phase 4 — Admin Panel + Architectural Debt Resolution
+
+**Date:** 2026-04-27
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 4 ships the admin panel (8 epics, `dev_plan/04_phase4_admin_panel.md`) and lands the 12 architectural-debt items recorded under "Architectural Debt to Address" in that file. Outcome: admin can drive every customer + record + integration + config + routing rule + dynamic category + health alert from the SPA, and the cross-cutting refactors (template registry, lock registry, multi-attendee calendar, watchers, walk-in customers, category versioning) ship before any feature builds on the brittle versions.
+
+Eight sprints landed sprint-by-sprint via PRs #34, #35, #38, #39, #40, #42, #43, and the Sprint 8 close-out PR. ADR-018 + ADR-019 covered the Phase 3 → Phase 4 prework. This ADR locks the Phase 4 build itself.
+
+### Decisions
+
+1. **Integration credentials live in `integration_credentials` (DB-encrypted, Fernet/MultiFernet).** Mirrors the TOTP key pattern. Same `credentials_vault.get/set` interface swaps to GCP Secret Manager during the hosting migration; ADR-013 already documents that path. Encryption key falls back to `totp_encryption_key` if `credentials_encryption_key` is unset, so existing prod can roll without a new key generation. Reveal requires step-up auth (password + TOTP) and is rate-limited at 10/hour/admin via `rate_limit_counters`.
+
+2. **Manual record transition: admin chooses notification behavior per-action.** `equipment_status_service.record_transition(notify_override=...)` accepts an explicit `True/False` to override the per-status notify defaults; the modal toggle in Admin Operations sends the override. Always audit-logged with `actor_role="admin"` + reason field.
+
+3. **Walk-in customers: `customers.user_id` becomes nullable + `invite_email` added.** A customer always has either a user or an invite address (CHECK constraint). Migration 016 widens the FK; "Send Portal Invite" hits the same registration template addressed to `invite_email`. The walk-in row converts to a regular customer when the invitee registers.
+
+4. **Slack runtime resolves the Phase 3 deferral.** `slack_dispatch_service.send` posts to the configured webhook; `notification_service._dispatch_slack` routes the channel through the existing `notification_jobs` queue with the same exponential backoff (30s → 6h, 5 attempts) the email/SMS dispatchers use. Permanent 4xx → "failed"; missing creds → "skipped"; transient 5xx/429/connection → retry. `chk_notification_channel` widened from `('email','sms')` to `('email','sms','slack')`.
+
+5. **Notification template registry replaces every inline composer.** `notification_templates.py` registers every template via `Template(name, channel, subject_renderer, body_renderer, variables, category)` with Jinja2 `Environment(autoescape=True, undefined=StrictUndefined)` for email and a separate `autoescape=False` env for SMS / Slack block-kit JSON. Admin overrides persist in `notification_template_overrides`; the registry falls back to code defaults when no override exists.
+
+6. **Lock registry generalizes record-locking.** `lock_registry.py` registers lockable resource types via `LockableResource(type, display_name, audit_prefix, reference_loader)`. `record_lock_service` consults the registry instead of hard-coding `equipment_record`. Phase 6 (eSign) and Phase 8 (listings) plug new resource types in without touching the lock service.
+
+7. **Watchers + multi-attendee calendar via dedicated join tables.** Migration 018 adds `equipment_record_watchers (record_id, user_id, added_by, added_at)` + `calendar_event_attendees (event_id, user_id, role, added_at)`. Status-change dispatch widens to include watchers; the multi-attendee model backfills existing single-attendee events and keeps `appraiser_id` in sync as primary attendee via the same mirror-invariant pattern as user_roles.
+
+8. **Two-prefs unified read.** `unified_notification_prefs_service` joins `customers.communication_prefs` (per-event opt-in) + `notification_preferences` (channel choice) into a single response for the admin "user notification summary" view. The two stores stay separate for write — different cardinality, different UX — but admins read them as one.
+
+9. **Category versioning extends the Phase 3 prompt/rule pattern (ADR-018).** Migration 019 adds `equipment_categories.version` + `replaced_at` + a partial `(slug)` index where `replaced_at IS NULL`. Editing prompts/rules supersedes via `category_versioning_service`; `current_inspection_prompts()` + `current_red_flag_rules()` filter on `replaced_at IS NULL`. Hard-deletes blocked when records reference the category. Component weights normalize at runtime when they don't sum to 100 + admin sees a warning banner.
+
+10. **`notification_preferences_read_only_roles` is an AppConfig key.** Phase 4 Sprint 3 registered the spec (default `["customer", "appraiser"]`) and `notification_preferences_service` reads through the registry. Removes the prior `_READ_ONLY_ROLES` constant; admin can flip the gate without a code deploy.
+
+11. **Routing conditions migrate to discriminated-union Pydantic.** `AdHocConditions`, `GeographicConditions` (state_list / zip_list / metro_area), `RoundRobinConditions` replace the inline `_validate_conditions` Python function. `parse_conditions(rule_type, raw)` dispatches per type. Validation surfaces in OpenAPI so the admin form generator drives shape from the schema. Migration 017 adds `uq_lead_routing_rules_type_priority (rule_type, priority) WHERE deleted_at IS NULL`; `reorder_priorities()` renumbers atomically inside a `SELECT ... FOR UPDATE` transaction.
+
+12. **iOS config endpoint emits a deterministic `config_version` hash.** SHA-256 over the sorted JSON body covering categories + inspection_prompts + red_flag_rules + app_config. iOS app caches and only re-fetches when the hash changes. Phase 5 will harden the contract; Phase 4 ships v1 with admin/sales/sales_manager/appraiser gating.
+
+13. **Health poller cadence: 30s.** `health_check_service.run_all` probes DB + R2 + each integration (each integration's tester decrypts its credential then runs the actual API check). Red flips dispatch admin alerts via `notification_templates.service_health_red_alert` with a 15-minute per-service rate limit (`last_alerted_at` on `service_health_state`). Idempotency key is `health_alert:{service}:{checked_at_seconds}:{admin_id}` so two passes within the same wall-clock second collapse via the `notification_jobs.idempotency_key` UNIQUE constraint.
+
+14. **Sprint 8 closes the Phase 3 Lighthouse-on-auth carry-forward.** `lighthouserc.cjs` switches from `staticDistDir` to the running vite preview server + `puppeteerScript: ./lighthouse-auth.cjs`. The hook does a direct-API login as the seeded Phase 4 admin user and pre-injects the access token into `sessionStorage` on every page lhci opens (via a `targetcreated` listener, since sessionStorage isn't shared across tabs). CI runs the Phase 4 seeder before lhci so the admin user always exists. Login + register stay in the audit set; their flow ignores the injected token.
+
+### Open / deferred items
+
+- **Slack staging-channel guard.** Non-prod environments should dispatch only to a `#staging-test` channel regardless of saved channel ID. Sprint 8 carry-forward; a follow-up sprint adds the env-aware override in `slack_dispatch_service`.
+- **Twilio + SendGrid "Test with real message" UI inputs.** The integration testers accept `to_number` / `to_email` kwargs but the SPA doesn't surface them. Sprint 8 carry-forward.
+- **Sales-side watchers UI.** Backend ships in Sprint 5; admin endpoints exist; the `SalesEquipmentDetail` watcher add/remove section is a Sprint 8 carry-forward.
+- **Multi-attendee calendar UI.** Backend + admin scheduling support ship in Sprint 5; the sales-side schedule modal still defaults to single attendee. Sprint 8 carry-forward.
+- **Component weight + rule body editors on `AdminCategoryEdit`.** Sprint 6 ships the data model; the admin UI exposes view + add for components / prompts / rules but not in-place edits beyond the supersede modal. Sprint 8 carry-forward.
+- **`_EXPECTED_MIGRATION_HEAD` is a hand-bumped constant in `health.py`.** Should derive from alembic at runtime so future migrations don't drift the health probe. Sprint 8 carry-forward.
+- **Node 20 deprecation warning on GitHub Actions.** Default flips June 2026, removal September 2026 (`actions/checkout@v4`, `actions/setup-python@v5`, `astral-sh/setup-uv@v4` all log the banner). Tracked separately.
+
+### Consequences
+
+- Health check expected migration head bumps to `020`. Future migrations bump in lockstep.
+- `credentials_vault` is the only path that touches `integration_credentials`. Production rollout requires generating `credentials_encryption_key` via `Fernet.generate_key()` and adding it to `fly secrets`; absent the key, the vault falls back to the TOTP key (acceptable for dev; flagged in known-issues for prod hygiene).
+- Health poller runs as a separate Fly Machine (`temple-health-poller`); creation tracked in the Outline Manual Tasks doc.
+- Notification template registry is the single Jinja2 entry point. Future composers MUST register a template; the inline-string pattern is no longer load-bearing anywhere (verified by `grep "msg = f\""` returning zero hits in services that dispatch).
+- Lock registry + watchers + multi-attendee + category versioning together unblock Phase 6 (eSign) and Phase 8 (public listing) without further schema work — both new resource types plug into the existing surfaces.
+
+### References
+
+- Working branches: `phase4-sprint1-shell`, `phase4-sprint2-customers`, `phase4-sprint3-config`, `phase4-sprint4-routing`, `phase4-sprint5-templates-and-debt`, `phase4-sprint6-categories`, `phase4-sprint7-credentials-health`, `phase4-sprint8-gate`. PRs #34, #35, #38, #39, #40, #42, #43, and the Sprint 8 close-out PR.
+- Implementation: ~80 files across `api/services/`, `api/routers/`, `api/schemas/`, `api/database/models.py`, `api/alembic/versions/016–020`, `api/services/integration_testers/`, `api/services/notification_templates.py`, `api/services/credentials_vault.py`, `api/services/lock_registry.py`, `api/services/health_check_service.py`, `api/services/slack_dispatch_service.py`, `api/services/lead_routing_service.py`, `api/services/category_versioning_service.py`, `api/services/admin_*_service.py`, `web/src/pages/Admin*.tsx`, `web/src/components/admin/*.tsx`, `web/src/api/admin.ts`, `web/lighthouserc.cjs`, `web/lighthouse-auth.cjs`, `scripts/seed_e2e_phase4.py`, `scripts/health_poller.py`.
+- Tests: 100+ new unit + integration tests across the 8 sprints (final backend gate **523/523** passing); `web/e2e/phase4_admin.spec.ts` (7 acceptance scenarios) + `web/e2e/phase4_accessibility.spec.ts` (axe-core sweep across all 9 admin routes).
+- Phase 4 plan flips every Architectural Debt item to "Resolved" in `dev_plan/04_phase4_admin_panel.md`'s closing section.
