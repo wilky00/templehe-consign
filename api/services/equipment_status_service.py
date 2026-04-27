@@ -36,27 +36,39 @@ from services import (
     equipment_status_machine,
     notification_preferences_service,
     notification_service,
+    notification_templates,
+    watchers_service,
 )
 
 logger = structlog.get_logger(__name__)
 
 
-def _compose_email(
-    *, user: User, record: EquipmentRecord, to_status: str, note: str | None
+async def _compose_email(
+    db,
+    *,
+    user: User,
+    record: EquipmentRecord,
+    to_status: str,
+    note: str | None,
 ) -> tuple[str, str]:
+    """Phase 4 Sprint 5 — delegates to the notification template
+    registry so admin can edit the customer-facing status email copy
+    without a redeploy. Variables match the previous inline composer
+    so the rendered output is byte-equivalent absent an admin override."""
     ref = record.reference_number or "(no reference yet)"
-    subject = f"{equipment_status_machine.display_name(to_status)} — {ref}"
-
     note_html = f"<p>{note}</p>" if note else ""
-    body = (
-        f"<p>Hi {user.first_name},</p>"
-        f"<p>The status of your equipment submission "
-        f"(<strong>{ref}</strong>) has changed to <strong>{to_status}</strong>.</p>"
-        f"{note_html}"
-        "<p>You can see the full timeline from your customer portal.</p>"
-        "<p>— The Temple Heavy Equipment team</p>"
+    rendered = await notification_templates.render_with_overrides(
+        db,
+        "status_update",
+        variables={
+            "first_name": user.first_name,
+            "reference_number": ref,
+            "to_status_display": equipment_status_machine.display_name(to_status),
+            "to_status": to_status,
+            "note_html": note_html,
+        },
     )
-    return subject, body
+    return rendered.subject or "", rendered.body
 
 
 async def record_transition(
@@ -118,7 +130,9 @@ async def record_transition(
     )
 
     if customer is not None and customer_should_notify:
-        subject, body = _compose_email(user=customer, record=record, to_status=to_status, note=note)
+        subject, body = await _compose_email(
+            db, user=customer, record=record, to_status=to_status, note=note
+        )
         await notification_service.enqueue(
             db,
             idempotency_key=_email_idempotency_key(record.id, to_status),
@@ -136,6 +150,12 @@ async def record_transition(
 
     if sales_rep_should_notify and record.assigned_sales_rep_id is not None:
         await _notify_sales_rep(db, record=record, to_status=to_status)
+
+    # Sprint 5: watchers receive the same customer-facing email when
+    # the registry says this status is customer-facing. Skip when
+    # notify_override is False (admin chose silent transition).
+    if customer_should_notify:
+        await _notify_watchers(db, record=record, to_status=to_status, note=note)
     return event
 
 
@@ -149,50 +169,57 @@ def _sales_rep_idempotency_key(record_id: uuid.UUID, to_status: str) -> str:
     return f"sales_rep_status:{record_id}:{to_status}"
 
 
-def _compose_sales_rep_email(
-    *, rep: User, record: EquipmentRecord, to_status: str
+_SALES_REP_EMAIL_TEMPLATES = {
+    "approved_pending_esign": "sales_rep_approved_pending_esign",
+    "esigned_pending_publish": "sales_rep_esigned_pending_publish",
+}
+_SALES_REP_SMS_TEMPLATES = {
+    "approved_pending_esign": "sales_rep_approved_pending_esign_sms",
+    "esigned_pending_publish": "sales_rep_esigned_pending_publish_sms",
+}
+
+
+def _sales_rep_template_name(to_status: str, *, channel: str) -> str:
+    table = _SALES_REP_EMAIL_TEMPLATES if channel == "email" else _SALES_REP_SMS_TEMPLATES
+    fallback = "sales_rep_generic_status" if channel == "email" else "sales_rep_generic_status_sms"
+    return table.get(to_status, fallback)
+
+
+async def _compose_sales_rep_email(
+    db,
+    *,
+    rep: User,
+    record: EquipmentRecord,
+    to_status: str,
 ) -> tuple[str, str]:
     ref = record.reference_number or str(record.id)
     make_model = (
         " ".join(part for part in (record.customer_make, record.customer_model) if part)
         or "your equipment record"
     )
-    if to_status == "approved_pending_esign":
-        subject = f"[Approved] Appraisal for {ref} — Ready for eSign"
-        body = (
-            f"<p>Hi {rep.first_name or 'team'},</p>"
-            f"<p>The manager has approved the appraisal for "
-            f"<strong>{ref}</strong> ({make_model}). The record is now "
-            f"<strong>ready for eSign</strong>.</p>"
-            "<p>Open the record in the sales dashboard to start the eSign flow.</p>"
-        )
-    elif to_status == "esigned_pending_publish":
-        subject = f"[Signed] {ref} ready to publish"
-        body = (
-            f"<p>Hi {rep.first_name or 'team'},</p>"
-            f"<p>The customer has signed the consignment agreement for "
-            f"<strong>{ref}</strong> ({make_model}). The listing is "
-            f"<strong>ready to publish</strong>.</p>"
-            "<p>Open the record in the sales dashboard and tap "
-            "<em>Publish Listing</em> when you're ready.</p>"
-        )
-    else:
-        subject = f"Status update — {ref}"
-        body = (
-            f"<p>Hi {rep.first_name or 'team'},</p>"
-            f"<p>Record <strong>{ref}</strong> moved to "
-            f"<strong>{to_status}</strong>.</p>"
-        )
-    return subject, body
+    name = _sales_rep_template_name(to_status, channel="email")
+    rendered = await notification_templates.render_with_overrides(
+        db,
+        name,
+        variables={
+            "first_name": rep.first_name or "team",
+            "reference_number": ref,
+            "make_model": make_model,
+            "to_status": to_status,
+        },
+    )
+    return rendered.subject or "", rendered.body
 
 
-def _compose_sales_rep_sms(*, record: EquipmentRecord, to_status: str) -> str:
+async def _compose_sales_rep_sms(db, *, record: EquipmentRecord, to_status: str) -> str:
     ref = record.reference_number or str(record.id)
-    if to_status == "approved_pending_esign":
-        return f"Manager approved {ref}. Log in to initiate eSign."
-    if to_status == "esigned_pending_publish":
-        return f"TempleHE: customer signed {ref}. Ready to publish."
-    return f"TempleHE: {ref} moved to {to_status}."
+    name = _sales_rep_template_name(to_status, channel="sms")
+    rendered = await notification_templates.render_with_overrides(
+        db,
+        name,
+        variables={"reference_number": ref, "to_status": to_status},
+    )
+    return rendered.body
 
 
 async def _notify_sales_rep(
@@ -217,7 +244,7 @@ async def _notify_sales_rep(
     idem = _sales_rep_idempotency_key(record.id, to_status)
 
     if resolved.channel == "sms" and resolved.destination:
-        body = _compose_sales_rep_sms(record=record, to_status=to_status)
+        body = await _compose_sales_rep_sms(db, record=record, to_status=to_status)
         await notification_service.enqueue(
             db,
             idempotency_key=idem,
@@ -244,7 +271,7 @@ async def _notify_sales_rep(
         )
         return
 
-    subject, body = _compose_sales_rep_email(rep=rep, record=record, to_status=to_status)
+    subject, body = await _compose_sales_rep_email(db, rep=rep, record=record, to_status=to_status)
     await notification_service.enqueue(
         db,
         idempotency_key=idem,
@@ -259,3 +286,59 @@ async def _notify_sales_rep(
             "to_status": to_status,
         },
     )
+
+
+async def _notify_watchers(
+    db: AsyncSession,
+    *,
+    record: EquipmentRecord,
+    to_status: str,
+    note: str | None,
+) -> None:
+    """Phase 4 Sprint 5 — fan out the customer-facing status email to
+    every watcher of this record. Each watcher gets the same template
+    + variables; idempotency key includes the watcher user_id so two
+    watchers each get one email.
+
+    Skips inactive watchers + watchers without a destination on their
+    preferred channel (notification_preferences_service.resolve_channel
+    returns destination=None when there's nothing to deliver to)."""
+    user_ids = await watchers_service.watcher_user_ids(db, record_id=record.id)
+    if not user_ids:
+        return
+    note_html = f"<p>{note}</p>" if note else ""
+    ref = record.reference_number or "(no reference yet)"
+    rendered = await notification_templates.render_with_overrides(
+        db,
+        "status_update",
+        variables={
+            "first_name": "team",
+            "reference_number": ref,
+            "to_status_display": equipment_status_machine.display_name(to_status),
+            "to_status": to_status,
+            "note_html": note_html,
+        },
+    )
+    for watcher_id in user_ids:
+        watcher = (await db.execute(select(User).where(User.id == watcher_id))).scalar_one_or_none()
+        if watcher is None or watcher.status != "active":
+            continue
+        resolved = await notification_preferences_service.resolve_channel(db, user=watcher)
+        if not resolved.destination:
+            continue
+        await notification_service.enqueue(
+            db,
+            idempotency_key=f"status_watcher:{record.id}:{to_status}:{watcher_id}",
+            user_id=watcher.id,
+            channel="email" if resolved.channel != "sms" else "sms",
+            template="status_update_watcher",
+            payload={
+                "to_email": resolved.destination if resolved.channel != "sms" else None,
+                "to_number": resolved.destination if resolved.channel == "sms" else None,
+                "subject": rendered.subject,
+                "html_body": rendered.body,
+                "body": rendered.body,
+                "reference_number": record.reference_number,
+                "to_status": to_status,
+            },
+        )

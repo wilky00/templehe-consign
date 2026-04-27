@@ -16,6 +16,7 @@ from routers import account as account_router
 from routers import admin as admin_router
 from routers import admin_config as admin_config_router
 from routers import admin_routing as admin_routing_router
+from routers import admin_templates as admin_templates_router
 from routers import auth as auth_router
 from routers import calendar as calendar_router
 from routers import customers as customers_router
@@ -64,6 +65,7 @@ app.include_router(account_router.router, prefix="/api/v1")
 app.include_router(admin_router.router, prefix="/api/v1")
 app.include_router(admin_config_router.router, prefix="/api/v1")
 app.include_router(admin_routing_router.router, prefix="/api/v1")
+app.include_router(admin_templates_router.router, prefix="/api/v1")
 app.include_router(auth_router.router, prefix="/api/v1")
 app.include_router(calendar_router.router, prefix="/api/v1")
 app.include_router(customers_router.router, prefix="/api/v1")

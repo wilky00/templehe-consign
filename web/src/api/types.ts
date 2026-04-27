@@ -671,3 +671,43 @@ export interface RoutingRuleTestResponse {
   would_assign_to: UUID | null;
   reason: string;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 Sprint 5 — notification templates + watchers
+// ---------------------------------------------------------------------------
+
+export interface NotificationTemplate {
+  name: string;
+  channel: "email" | "sms";
+  category: string;
+  description: string;
+  variables: string[];
+  subject_template: string | null;
+  body_template: string;
+  has_override: boolean;
+  override_subject: string | null;
+  override_body: string | null;
+}
+
+export interface NotificationTemplateListResponse {
+  templates: NotificationTemplate[];
+}
+
+export interface NotificationTemplateOverrideRequest {
+  subject_md?: string | null;
+  body_md?: string | null;
+  delete?: boolean;
+}
+
+export interface Watcher {
+  user_id: UUID;
+  email: string;
+  first_name: string;
+  last_name: string;
+  added_by: UUID | null;
+  added_at: ISODateTime;
+}
+
+export interface WatcherListResponse {
+  watchers: Watcher[];
+}

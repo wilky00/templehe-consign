@@ -8,6 +8,7 @@ import { AccountNotificationsPage } from "./pages/AccountNotifications";
 import { AdminConfigPage } from "./pages/AdminConfig";
 import { AdminCustomerEditPage } from "./pages/AdminCustomerEdit";
 import { AdminCustomersPage } from "./pages/AdminCustomers";
+import { AdminNotificationTemplatesPage } from "./pages/AdminNotificationTemplates";
 import { AdminOperationsPage } from "./pages/AdminOperations";
 import { AdminReportsPage } from "./pages/AdminReports";
 import { AdminRoutingPage } from "./pages/AdminRouting";
@@ -157,6 +158,16 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <AdminRoutingPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/notification-templates"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminNotificationTemplatesPage />
             </Layout>
           </ProtectedRoute>
         }

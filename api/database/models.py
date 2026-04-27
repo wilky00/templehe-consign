@@ -1106,3 +1106,140 @@ def _mirror_user_role_id_changes(session, flush_context, instances) -> None:
             .values(user_id=user_id, role_id=role_id)
             .on_conflict_do_nothing(index_elements=["user_id", "role_id"])
         )
+
+
+# --------------------------------------------------------------------------- #
+# Phase 4 Sprint 5 — equipment record watchers + calendar multi-attendee +
+# notification template overrides.
+# --------------------------------------------------------------------------- #
+
+
+class EquipmentRecordWatcher(Base):
+    """Architectural Debt #9 — secondary followers for an equipment
+    record. Notification dispatch widens to include watchers; the
+    primary owner stays in ``equipment_records.assigned_sales_rep_id``
+    (drives landing-page logic). Watchers are a "fan-out" set, not an
+    ownership change."""
+
+    __tablename__ = "equipment_record_watchers"
+
+    record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("equipment_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    added_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+
+    user: Mapped[User] = relationship("User", foreign_keys=[user_id])
+
+
+class CalendarEventAttendee(Base):
+    """Architectural Debt #11 — multi-attendee calendar events. The
+    ``role`` slot marks "primary" (mirrors ``calendar_events.appraiser_id``
+    via the before_flush listener below) vs "attendee" (added later via
+    the multi-attendee admin UI). The ``calendar_events.appraiser_id``
+    column stays as the primary attendee for back-compat; this join
+    table is the live source for "who's coming"."""
+
+    __tablename__ = "calendar_event_attendees"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("calendar_events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="attendee")
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+
+    user: Mapped[User] = relationship("User", foreign_keys=[user_id])
+
+
+class NotificationTemplateOverride(Base):
+    """Architectural Debt #1 — admin "edit email copy" stores its
+    overrides here. One row per template name; missing row → render
+    falls back to the code default in
+    ``services.notification_templates``. Subject is None for SMS
+    templates; body_md is the source the Jinja renderer compiles."""
+
+    __tablename__ = "notification_template_overrides"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    subject_md: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_md: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+
+
+# --- Multi-attendee mirror invariant ---------------------------------------- #
+# When a CalendarEvent is created or its appraiser_id changes, mirror that
+# user into calendar_event_attendees with role='primary'. Mirrors the
+# Phase 4 pre-work multi-role pattern from PR #33: keeps the join table
+# in sync with the primary column without forcing every test to
+# explicitly add the row.
+
+
+@sa.event.listens_for(sa.orm.Session, "before_flush")
+def _mirror_calendar_event_appraiser(session, _flush_context, _instances) -> None:
+    """Mirror ``CalendarEvent.appraiser_id`` into the join table on
+    create and on appraiser change. Adds via the ORM (not raw INSERT)
+    so SQLAlchemy honors FK ordering — the join row's INSERT runs
+    after the parent's, which is required for new CalendarEvents that
+    don't yet exist in the DB."""
+    new_pending: list[tuple[CalendarEvent, uuid.UUID]] = []
+    for obj in session.new:
+        if isinstance(obj, CalendarEvent) and obj.appraiser_id is not None:
+            new_pending.append((obj, obj.appraiser_id))
+
+    dirty_pending: list[tuple[uuid.UUID, uuid.UUID]] = []
+    for obj in session.dirty:
+        if not isinstance(obj, CalendarEvent):
+            continue
+        attrs = sa.inspect(obj).attrs
+        if not attrs.appraiser_id.history.has_changes():
+            continue
+        if obj.appraiser_id is None:
+            continue
+        dirty_pending.append((obj.id, obj.appraiser_id))
+
+    # New events: ORM-add the attendee, let SQLAlchemy figure out the
+    # FK dependency ordering. Pre-populate id so the relationship can
+    # bind without a flush round-trip.
+    for event, user_id in new_pending:
+        if event.id is None:
+            event.id = uuid.uuid4()
+        session.add(CalendarEventAttendee(event_id=event.id, user_id=user_id, role="primary"))
+
+    # Dirty events: parent already exists in DB, so a raw INSERT with
+    # ON CONFLICT is safe + cheap (no SELECT round-trip).
+    for event_id, user_id in dirty_pending:
+        session.execute(
+            sa.dialects.postgresql.insert(CalendarEventAttendee.__table__)
+            .values(event_id=event_id, user_id=user_id, role="primary")
+            .on_conflict_do_nothing(index_elements=["event_id", "user_id"])
+        )

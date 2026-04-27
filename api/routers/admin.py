@@ -13,6 +13,7 @@ from database.base import get_db
 from database.models import AuditLog, Customer, EquipmentRecord, User
 from middleware.rbac import require_roles
 from schemas.admin import (
+    AddWatcherRequest,
     AdminCustomerCreate,
     AdminCustomerListResponse,
     AdminCustomerOut,
@@ -25,6 +26,9 @@ from schemas.admin import (
     SendInviteResponse,
     SortDirection,
     SortField,
+    UnifiedNotificationPrefsOut,
+    WatcherListResponse,
+    WatcherOut,
 )
 from services import (
     admin_customer_service,
@@ -32,6 +36,8 @@ from services import (
     admin_user_service,
     equipment_status_machine,
     equipment_status_service,
+    unified_notification_prefs_service,
+    watchers_service,
 )
 
 logger = structlog.get_logger(__name__)
@@ -271,6 +277,90 @@ async def send_walkin_invite(
         actor=admin,
         base_url=str(request.base_url).rstrip("/"),
         background_tasks=background_tasks,
+    )
+
+
+# --- Watchers + unified notification prefs (Sprint 5) --------------------- #
+
+
+def _watcher_to_out(w) -> WatcherOut:
+    return WatcherOut(
+        user_id=w.user_id,
+        email=w.user.email,
+        first_name=w.user.first_name,
+        last_name=w.user.last_name,
+        added_by=w.added_by,
+        added_at=w.added_at,
+    )
+
+
+@router.get("/equipment/{record_id}/watchers", response_model=WatcherListResponse)
+async def list_record_watchers(
+    record_id: uuid.UUID,
+    _admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> WatcherListResponse:
+    rows = await watchers_service.list_watchers(db, record_id=record_id)
+    return WatcherListResponse(watchers=[_watcher_to_out(w) for w in rows])
+
+
+@router.post(
+    "/equipment/{record_id}/watchers",
+    response_model=WatcherOut,
+    status_code=201,
+)
+async def add_record_watcher(
+    record_id: uuid.UUID,
+    body: AddWatcherRequest,
+    admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> WatcherOut:
+    watcher = await watchers_service.add_watcher(
+        db, record_id=record_id, user_id=body.user_id, added_by=admin.id
+    )
+    return _watcher_to_out(watcher)
+
+
+@router.delete(
+    "/equipment/{record_id}/watchers/{user_id}",
+    status_code=204,
+)
+async def remove_record_watcher(
+    record_id: uuid.UUID,
+    user_id: uuid.UUID,
+    _admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    removed = await watchers_service.remove_watcher(db, record_id=record_id, user_id=user_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Watcher not found.")
+    return Response(status_code=204)
+
+
+@router.get(
+    "/users/{user_id}/notification-summary",
+    response_model=UnifiedNotificationPrefsOut,
+)
+async def get_user_notification_summary(
+    user_id: uuid.UUID,
+    _admin: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> UnifiedNotificationPrefsOut:
+    """Sprint 5 — Architectural Debt #5. Merged read of
+    customers.communication_prefs (per-event opt-in) +
+    notification_preferences (channel choice)."""
+    view = await unified_notification_prefs_service.for_user(db, user_id=user_id)
+    return UnifiedNotificationPrefsOut(
+        user_id=view.user_id,
+        email=view.email,
+        role_slug=view.role_slug,
+        channel=view.channel,
+        phone_number=view.phone_number,
+        slack_user_id=view.slack_user_id,
+        intake_confirmations=view.intake_confirmations,
+        status_updates=view.status_updates,
+        marketing=view.marketing,
+        sms_opt_in=view.sms_opt_in,
     )
 
 

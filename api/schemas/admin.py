@@ -209,3 +209,65 @@ class AppConfigUpdateRequest(BaseModel):
     JSONB shape the consumer expects."""
 
     value: object | None = None
+
+
+# --- Watchers + unified prefs + template overrides (Sprint 5) -------------- #
+
+
+class WatcherOut(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str
+    added_by: uuid.UUID | None
+    added_at: datetime
+
+
+class WatcherListResponse(BaseModel):
+    watchers: list[WatcherOut]
+
+
+class AddWatcherRequest(BaseModel):
+    user_id: uuid.UUID
+
+
+class UnifiedNotificationPrefsOut(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    role_slug: str | None
+    channel: str
+    phone_number: str | None
+    slack_user_id: str | None
+    intake_confirmations: bool | None
+    status_updates: bool | None
+    marketing: bool | None
+    sms_opt_in: bool | None
+
+
+class NotificationTemplateOut(BaseModel):
+    name: str
+    channel: str
+    category: str
+    description: str
+    variables: list[str]
+    subject_template: str | None
+    body_template: str
+    has_override: bool
+    override_subject: str | None = None
+    override_body: str | None = None
+
+
+class NotificationTemplateListResponse(BaseModel):
+    templates: list[NotificationTemplateOut]
+
+
+class NotificationTemplateOverrideRequest(BaseModel):
+    """PATCH body. Pass null subject_md / body_md to delete the
+    override and revert to the code default."""
+
+    subject_md: str | None = Field(default=None)
+    body_md: str | None = Field(default=None)
+    delete: bool = Field(
+        default=False,
+        description="When true, drop any existing override and revert to the code default.",
+    )

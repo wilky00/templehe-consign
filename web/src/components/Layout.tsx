@@ -87,6 +87,12 @@ export function Layout({ children }: { children: ReactNode }) {
                   Routing
                 </NavLink>
                 <NavLink
+                  to="/admin/notification-templates"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Templates
+                </NavLink>
+                <NavLink
                   to="/admin/reports"
                   className={({ isActive }) => navLinkClasses(isActive)}
                 >
