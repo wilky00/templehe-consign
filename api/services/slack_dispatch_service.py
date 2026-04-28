@@ -31,6 +31,7 @@ from httpx import AsyncClient, HTTPError, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from database.models import IntegrationCredential
 from services import credentials_vault
 
@@ -72,6 +73,24 @@ async def send(*, db: AsyncSession, text_body: str, blocks: list | None = None) 
     payload: dict = {"text": text_body}
     if blocks:
         payload["blocks"] = blocks
+
+    # Phase 5 Sprint 0 — staging guard. Non-prod environments may set
+    # `slack_staging_channel_id` to redirect every dispatch to a
+    # `#staging-test`-style channel, so staging traffic doesn't page the
+    # production channel the saved webhook is bound to. Production passes
+    # through unchanged. The webhook URL itself stays the saved one —
+    # only the `channel` override on the payload changes. This requires a
+    # webhook configured to honor channel overrides (legacy custom
+    # integrations support this; bot-user webhooks ignore the field, in
+    # which case set up the staging webhook to a dedicated channel
+    # instead — same env var unset path, different webhook).
+    if not settings.is_production and settings.slack_staging_channel_id:
+        payload["channel"] = settings.slack_staging_channel_id
+        logger.info(
+            "slack_dispatch_staging_redirect",
+            channel=settings.slack_staging_channel_id,
+            environment=settings.environment,
+        )
 
     try:
         async with AsyncClient(timeout=10.0) as client:

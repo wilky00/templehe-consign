@@ -1173,4 +1173,52 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 ---
 
-## Phase 5–8 — Not started
+## Phase 5 — In progress (started 2026-04-28)
+
+### Sprint 0 — Pre-flight (TOTP MultiFernet + iOS scaffold + carry-forwards) — IN PROGRESS
+
+**TOTP MultiFernet rotation:**
+- `api/config.py` — added `totp_encryption_keys: str = ""` (comma-separated; first encrypts, all decrypt). Legacy `totp_encryption_key` stays as the fallback so existing dev/test envs keep working without a re-key.
+- `api/services/auth_service.py` — `_fernet()` now returns `MultiFernet`; `_resolve_totp_keys()` picks the active key list with the same precedence pattern as `credentials_vault._resolve_keys`. Existing `totp_secret_enc` rows decrypt unchanged.
+- Migration `021_phase5_totp_multifernet.py` — comment-only marker that the field semantics changed; no DDL.
+
+**Phase 4 carry-forwards closed:**
+- `api/routers/health.py` — `_EXPECTED_MIGRATION_HEAD` is now derived at runtime from `alembic.script.ScriptDirectory.from_config().get_current_head()`, cached via `@lru_cache`. Future migrations no longer require a hand-bump.
+- `api/services/slack_dispatch_service.py` + `api/config.py` — env-aware staging-channel guard. When `environment != "production"` AND `slack_staging_channel_id` is set, every Slack dispatch overrides the payload's `channel` field. Production passes through unchanged.
+- `web/src/pages/AdminIntegrations.tsx` — added Twilio "Test SMS to" + SendGrid "Test email to" optional inputs that pass through to `extra_args.to_number` / `to_email`. Backend already accepted these; the SPA didn't surface them.
+- `api/services/integration_testers/__init__.py` — closed gap where `test_sendgrid` accepted `to_email` but never used it. Now sends a real test email via `POST /v3/mail/send` when `to_email` is supplied. Mirrors the existing Twilio + `to_number` flow.
+- `.github/workflows/ci.yml` — installs `google-chrome-stable` before the Lighthouse CI step (closes the latent regression where lhci silently exited 1 in URL mode because GHA runners don't ship with Chrome). Bumped `actions/checkout@v4 → @v5`, `actions/setup-python@v5 → @v6`, `astral-sh/setup-uv@v4 → @v5`, `actions/setup-node@v4 → @v5` to clear the Node 20 deprecation banner. `continue-on-error: true` stays on the lhci step for one run while we confirm the auth-injection puppeteer hook behaves on real Chrome; flip to `false` in a follow-up.
+
+**iOS scaffold (`ios/`):**
+- `project.yml` — XcodeGen spec (single source of truth). The `.xcodeproj` is gitignored; contributors run `xcodegen generate` after pulling. Mirrors what serious iOS shops do — no binary project-file churn in PRs.
+- `TempleHEAppraiser/App.swift` — SwiftUI `@main` entry point + `WindowGroup`.
+- `TempleHEAppraiser/RootView.swift` — placeholder tab bar (Dashboard | New Appraisal | Calendar | Profile) with accessibility identifiers wired so XCUITest can target them by ID rather than display text.
+- `TempleHEAppraiser/Info.plist` — usage descriptions for camera + location + photo library (the keys exist now so Sprint 1+ feature work doesn't have to revisit Info.plist).
+- `TempleHEAppraiser/Assets.xcassets/` — empty AppIcon + AccentColor placeholders.
+- `TempleHEAppraiserTests/AppLaunchTests.swift` — XCTest smoke ensuring `RootView` constructs.
+- `TempleHEAppraiserUITests/SmokeTest.swift` — XCUITest: app launches, the four tab identifiers exist.
+- `.gitignore`, `README.md` — Xcode 15.4+, XcodeGen install, build/test commands documented. Bundle ID: `com.templehe.appraiser`. iOS 16+ deployment target.
+
+**Tests:**
+- `api/tests/unit/test_auth_service_multifernet.py` (NEW, 6 tests) — encrypt-with-primary, rotation decrypt, key-removal failure, single-key fallback, both-unset error, keys-field-wins precedence.
+- `api/tests/unit/test_slack_dispatch_staging_guard.py` (NEW, 3 tests) — non-prod-with-channel overrides, prod passes through, non-prod-without-channel passes through.
+- `api/tests/integration/test_admin_integrations.py` extended — SendGrid+`to_email` now sends a real `POST /v3/mail/send`; without `to_email`, only `/v3/scopes` is hit.
+
+**Backend:** **534/534 tests green** (was 523 before Sprint 0; +11 new).
+**Web:** lint clean, typecheck clean, prod build clean.
+
+**Decisions confirmed:**
+- The `_EXPECTED_MIGRATION_HEAD` derivation reads alembic *once* at first health-check call and caches the result; the migration tree is fixed at deploy time so re-reading on every probe is wasted IO.
+- The TOTP `MultiFernet` swap is binary-compatible with the existing on-disk format. `MultiFernet([Fernet(k)])` produces tokens that any underlying `Fernet` can read, and `decrypt` tries each key in order. Existing `totp_secret_enc` rows decrypt without re-encryption.
+- The Slack staging guard rides on the `channel` field in the webhook payload, not a separate webhook URL. Webhooks configured to honor channel overrides (legacy custom integrations) get the redirect for free; bot-user webhooks ignore the field, in which case the operator points the saved webhook URL at a `#staging-*` channel directly. Same env-var-set path either way.
+- The iOS scaffold uses XcodeGen rather than a checked-in `.xcodeproj`. The `.xcodeproj` file is regenerated locally from `project.yml` after every pull. Avoids per-developer Xcode-version churn polluting commits.
+
+**Carry-forwards into the next sprint:**
+- Confirm lhci runs green on real Chrome in CI, then flip `continue-on-error: false` on the lhci step.
+- Apple Developer Program enrollment + APNs AuthKey provisioning (Outline §15) — needed before Sprint 2 push dispatch.
+
+---
+
+## Phase 5 Sprints 1–7 — Not yet started
+
+## Phase 6–8 — Not started
