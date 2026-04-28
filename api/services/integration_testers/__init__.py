@@ -28,6 +28,8 @@ from typing import Any
 
 import httpx
 
+from config import settings
+
 # Each tester is a coroutine: ``async def test(plaintext, **kwargs) -> TestResult``.
 # Caller supplies whatever extra arguments make sense (e.g. ``to_email`` for
 # SendGrid). All testers are written to keep credentials in process memory only.
@@ -191,7 +193,10 @@ async def test_twilio(plaintext: str, *, to_number: str = "", **_: Any) -> TestR
 async def test_sendgrid(plaintext: str, *, to_email: str = "", **_: Any) -> TestResult:
     """Validate the SendGrid API key against ``GET /v3/scopes``.
 
-    No email is sent unless ``to_email`` is supplied (admin opt-in)."""
+    Phase 5 Sprint 0 — when ``to_email`` is supplied (admin opt-in), an
+    actual test email is sent via ``POST /v3/mail/send`` after the scope
+    check passes. Mirrors the Twilio + ``to_number`` pattern. Without
+    ``to_email``, no email is sent."""
     t0 = time.perf_counter()
     if not plaintext.startswith("SG."):
         return TestResult(
@@ -206,16 +211,53 @@ async def test_sendgrid(plaintext: str, *, to_email: str = "", **_: Any) -> Test
                 "https://api.sendgrid.com/v3/scopes",
                 headers={"Authorization": f"Bearer {plaintext}"},
             )
-        if response.status_code != 200:
-            return TestResult(
-                success=False,
-                detail=(
-                    f"SendGrid scope fetch returned HTTP {response.status_code}: "
-                    f"{response.text[:200]}"
-                ),
-                latency_ms=_ms_since(t0),
-                status="failure",
-            )
+            if response.status_code != 200:
+                return TestResult(
+                    success=False,
+                    detail=(
+                        f"SendGrid scope fetch returned HTTP {response.status_code}: "
+                        f"{response.text[:200]}"
+                    ),
+                    latency_ms=_ms_since(t0),
+                    status="failure",
+                )
+            if to_email:
+                send = await client.post(
+                    "https://api.sendgrid.com/v3/mail/send",
+                    headers={
+                        "Authorization": f"Bearer {plaintext}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "personalizations": [{"to": [{"email": to_email}]}],
+                        "from": {
+                            "email": settings.sendgrid_from_email,
+                            "name": settings.sendgrid_from_name,
+                        },
+                        "subject": "TempleHE admin connectivity test",
+                        "content": [
+                            {
+                                "type": "text/plain",
+                                "value": "TempleHE admin SendGrid test message.",
+                            }
+                        ],
+                    },
+                )
+                if send.status_code not in (200, 202):
+                    return TestResult(
+                        success=False,
+                        detail=(
+                            f"SendGrid mail send failed (HTTP {send.status_code}): "
+                            f"{send.text[:200]}"
+                        ),
+                        latency_ms=_ms_since(t0),
+                        status="failure",
+                    )
+                return TestResult(
+                    success=True,
+                    detail=f"SendGrid key valid; test email dispatched to {to_email}.",
+                    latency_ms=_ms_since(t0),
+                )
         return TestResult(
             success=True,
             detail="SendGrid API key valid (scope fetch succeeded).",

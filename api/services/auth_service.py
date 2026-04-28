@@ -11,7 +11,7 @@ import bcrypt as _bcrypt
 import jwt
 import pyotp
 import structlog
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -100,8 +100,37 @@ def _decode_token(token: str, expected_type: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _fernet() -> Fernet:
-    return Fernet(settings.totp_encryption_key.encode())
+def _resolve_totp_keys() -> list[str]:
+    """Pick the active TOTP-key material.
+
+    Phase 5 Sprint 0 added rotation: ``totp_encryption_keys`` is a
+    comma-separated list (first key encrypts new tokens, every key is
+    tried on decrypt). Falls back to the legacy single-key
+    ``totp_encryption_key`` so existing dev / test envs don't need a
+    re-key to keep working. At least one key must be configured; both
+    being empty is a startup error.
+    """
+    raw = settings.totp_encryption_keys.strip() or settings.totp_encryption_key.strip()
+    if not raw:
+        raise RuntimeError(
+            "totp_encryption_keys (or totp_encryption_key) must be set; neither is configured."
+        )
+    keys = [k.strip() for k in raw.split(",") if k.strip()]
+    if not keys:
+        raise RuntimeError("totp_encryption_keys parsed to empty list.")
+    return keys
+
+
+def _fernet() -> MultiFernet:
+    """Build a `MultiFernet` over the configured TOTP keys.
+
+    Even with a single key, the `MultiFernet` wrapper is API-compatible
+    with the previous `Fernet` return — `encrypt` produces a token any
+    underlying `Fernet` can read, and `decrypt` tries each key in order.
+    Old tokens encrypted with the lone-key Fernet decrypt unchanged.
+    """
+    keys = _resolve_totp_keys()
+    return MultiFernet([Fernet(k.encode()) for k in keys])
 
 
 def _encrypt_totp_secret(secret: str) -> str:

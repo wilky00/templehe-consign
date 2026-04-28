@@ -98,9 +98,27 @@ interface CardProps {
 function IntegrationCard({ integration, onRevealClick }: CardProps) {
   const qc = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
+  // Optional "send a real test message" inputs for Twilio (SMS) and
+  // SendGrid (email). Empty string = test-only credential validation
+  // (no message sent). Backend already accepts these via extra_args; the
+  // SPA just didn't surface them until Phase 5 Sprint 0.
+  const [testToNumber, setTestToNumber] = useState("");
+  const [testToEmail, setTestToEmail] = useState("");
 
   const test = useMutation({
-    mutationFn: () => testAdminIntegration(integration.name),
+    mutationFn: () => {
+      const extra_args: Record<string, unknown> = {};
+      if (integration.name === "twilio" && testToNumber.trim()) {
+        extra_args.to_number = testToNumber.trim();
+      }
+      if (integration.name === "sendgrid" && testToEmail.trim()) {
+        extra_args.to_email = testToEmail.trim();
+      }
+      return testAdminIntegration(
+        integration.name,
+        Object.keys(extra_args).length > 0 ? { extra_args } : {},
+      );
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: ["admin-integrations"] }),
   });
 
@@ -158,6 +176,39 @@ function IntegrationCard({ integration, onRevealClick }: CardProps) {
           )}
         </Alert>
       )}
+
+      {(integration.name === "twilio" || integration.name === "sendgrid") &&
+        integration.is_set && (
+          <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+            <p className="text-xs text-gray-600">
+              Optional: send a real test message instead of just validating
+              credentials. Leave blank to skip.
+            </p>
+            {integration.name === "twilio" ? (
+              <label className="mt-2 block text-sm">
+                <span className="font-medium text-gray-700">Test SMS to</span>
+                <input
+                  type="tel"
+                  value={testToNumber}
+                  onChange={(e) => setTestToNumber(e.target.value)}
+                  placeholder="+15555550100"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm"
+                />
+              </label>
+            ) : (
+              <label className="mt-2 block text-sm">
+                <span className="font-medium text-gray-700">Test email to</span>
+                <input
+                  type="email"
+                  value={testToEmail}
+                  onChange={(e) => setTestToEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm"
+                />
+              </label>
+            )}
+          </div>
+        )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Button

@@ -1,0 +1,105 @@
+# ABOUTME: XcodeGen spec for TempleHEAppraiser. Run `xcodegen generate` to (re)build .xcodeproj.
+# ABOUTME: Source of truth for the iOS project structure — checked in, .xcodeproj is not.
+
+name: TempleHEAppraiser
+options:
+  bundleIdPrefix: com.templehe
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+  configs:
+    Debug:
+      SWIFT_OPTIMIZATION_LEVEL: -Onone
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: -O
+
+targets:
+  TempleHEAppraiser:
+    type: application
+    platform: iOS
+    sources:
+      - path: TempleHEAppraiser
+    resources:
+      - path: TempleHEAppraiser/Assets.xcassets
+    info:
+      path: TempleHEAppraiser/Info.plist
+      properties:
+        CFBundleDisplayName: TempleHE Appraiser
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen:
+          UIColorName: ""
+        # Sprint 1 turns these on in the actual code paths; the keys
+        # need to exist now so Phase 5 Sprint 0 builds can include any
+        # incidental capability checks without a missing-key warning.
+        NSCameraUsageDescription: >-
+          TempleHE Appraiser uses the camera to capture site, equipment, and
+          condition photos for appraisal reports.
+        NSLocationWhenInUseUsageDescription: >-
+          TempleHE Appraiser tags photos with GPS metadata to verify they
+          were captured at the equipment site.
+        NSPhotoLibraryAddUsageDescription: >-
+          TempleHE Appraiser may save captured photos to your library if you
+          opt in. Camera-roll selection is not used; all photos must be
+          captured live.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.templehe.appraiser
+        # Signing is configured locally; no team in source-of-truth.
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        SUPPORTS_MACCATALYST: NO
+
+  TempleHEAppraiserTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TempleHEAppraiserTests
+    dependencies:
+      - target: TempleHEAppraiser
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.templehe.appraiser.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/TempleHEAppraiser.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TempleHEAppraiser"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+  TempleHEAppraiserUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: TempleHEAppraiserUITests
+    dependencies:
+      - target: TempleHEAppraiser
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.templehe.appraiser.uitests
+        TEST_TARGET_NAME: TempleHEAppraiser
+
+schemes:
+  TempleHEAppraiser:
+    build:
+      targets:
+        TempleHEAppraiser: all
+        TempleHEAppraiserTests: [test]
+        TempleHEAppraiserUITests: [test]
+    test:
+      targets:
+        - TempleHEAppraiserTests
+        - TempleHEAppraiserUITests
+    run:
+      config: Debug
+    archive:
+      config: Release

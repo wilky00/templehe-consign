@@ -420,6 +420,73 @@ async def test_test_twilio_with_to_number_passes_extra_args(
 
 
 @pytest.mark.asyncio
+@respx.mock
+async def test_test_sendgrid_with_to_email_passes_extra_args(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Phase 5 Sprint 0 — admin can opt into a real test email via the
+    `to_email` extra_arg. Mirrors the Twilio + `to_number` pattern. The
+    SPA surfaces this as the "Test email to" input on AdminIntegrations."""
+    admin, _ = await _user_with_role(client, db_session, _email(), "admin")
+    await client.put(
+        "/api/v1/admin/integrations/sendgrid",
+        json={"plaintext": "SG.test-key"},
+        headers=_auth(admin["access_token"]),
+    )
+    respx.get("https://api.sendgrid.com/v3/scopes").respond(
+        status_code=200, json={"scopes": ["mail.send"]}
+    )
+    send_route = respx.post("https://api.sendgrid.com/v3/mail/send").respond(
+        status_code=202, text=""
+    )
+
+    resp = await client.post(
+        "/api/v1/admin/integrations/sendgrid/test",
+        json={"extra_args": {"to_email": "ops@example.com"}},
+        headers=_auth(admin["access_token"]),
+    )
+    assert resp.status_code == 200, resp.json()
+    body = resp.json()
+    assert body["success"] is True
+    assert "ops@example.com" in body["detail"]
+    assert send_route.called
+
+    # Verify the outgoing payload addressed the supplied email.
+    payload = json.loads(send_route.calls[0].request.content)
+    assert payload["personalizations"][0]["to"][0]["email"] == "ops@example.com"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_test_sendgrid_without_to_email_does_not_send(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """Without `to_email`, the test endpoint hits /v3/scopes only —
+    no real email goes out. Default behavior unchanged from Phase 4."""
+    admin, _ = await _user_with_role(client, db_session, _email(), "admin")
+    await client.put(
+        "/api/v1/admin/integrations/sendgrid",
+        json={"plaintext": "SG.test-key"},
+        headers=_auth(admin["access_token"]),
+    )
+    respx.get("https://api.sendgrid.com/v3/scopes").respond(
+        status_code=200, json={"scopes": ["mail.send"]}
+    )
+    send_route = respx.post("https://api.sendgrid.com/v3/mail/send").respond(
+        status_code=202, text=""
+    )
+
+    resp = await client.post(
+        "/api/v1/admin/integrations/sendgrid/test",
+        json={},
+        headers=_auth(admin["access_token"]),
+    )
+    assert resp.status_code == 200, resp.json()
+    assert resp.json()["success"] is True
+    assert not send_route.called
+
+
+@pytest.mark.asyncio
 async def test_non_admin_cannot_store(client: AsyncClient, db_session: AsyncSession):
     sales, _ = await _user_with_role(client, db_session, _email(), "sales")
     resp = await client.put(

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from functools import lru_cache
+from pathlib import Path
 
 import boto3
 import structlog
+from alembic.config import Config as AlembicConfig
+from alembic.script import ScriptDirectory
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -19,7 +23,25 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["system"])
 
-_EXPECTED_MIGRATION_HEAD = "020"
+# Resolve alembic.ini relative to this module so the path holds whether
+# the API runs from the repo root, from `api/`, or inside a container.
+_ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
+
+
+@lru_cache(maxsize=1)
+def _expected_migration_head() -> str:
+    """Read the current alembic head once at first call.
+
+    Phase 5 Sprint 0 replaced the hand-bumped ``_EXPECTED_MIGRATION_HEAD``
+    constant with this runtime lookup so future migrations don't drift
+    the health probe. The result is cached because the migration tree is
+    fixed at deploy time — re-reading on every /health hit is wasted IO.
+    """
+    cfg = AlembicConfig(str(_ALEMBIC_INI))
+    head = ScriptDirectory.from_config(cfg).get_current_head()
+    if head is None:
+        raise RuntimeError("alembic returned no current head — migrations directory empty?")
+    return head
 
 
 async def _check_database(db: AsyncSession) -> str:
@@ -33,12 +55,13 @@ async def _check_database(db: AsyncSession) -> str:
 
 async def _check_migrations(db: AsyncSession) -> str:
     try:
+        expected = _expected_migration_head()
         result = await db.execute(text("SELECT version_num FROM alembic_version"))
         version = result.scalar_one_or_none()
-        if version != _EXPECTED_MIGRATION_HEAD:
+        if version != expected:
             logger.error(
                 "health_check_migration_drift",
-                expected=_EXPECTED_MIGRATION_HEAD,
+                expected=expected,
                 found=version,
             )
             return "error"

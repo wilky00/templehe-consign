@@ -32,7 +32,17 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
 
     # 2FA / TOTP
-    totp_encryption_key: str  # Fernet key for encrypting TOTP secrets at rest
+    # Single-key field (legacy / minimum-viable dev env). Phase 5 Sprint 0
+    # added the rotation-friendly `totp_encryption_keys` below; when that
+    # field is set it wins, and this single-key field is the fallback so
+    # existing dev / test setups keep working without a re-key.
+    totp_encryption_key: str
+    # Phase 5 Sprint 0 — comma-separated list of Fernet keys for TOTP
+    # secret storage. First key is the encrypt-primary; all keys are tried
+    # on decrypt via `MultiFernet`. Mirrors the `credentials_encryption_key`
+    # pattern from Phase 4 Sprint 7 so both stores rotate the same way.
+    # When unset, falls back to `totp_encryption_key` (single-key path).
+    totp_encryption_keys: str = ""
 
     # Phase 4 Sprint 7 — separate Fernet key for the integration credentials
     # vault. Kept distinct from totp_encryption_key so the two key materials
@@ -91,6 +101,14 @@ class Settings(BaseSettings):
     # falls back to AppConfig key `drive_time_fallback_minutes` and metro-area
     # routing rules silently no-op.
     google_maps_api_key: str = ""
+
+    # Phase 5 Sprint 0 — Slack staging-channel guard. When set AND
+    # environment != "production", `slack_dispatch_service.send` overrides
+    # the saved webhook's channel routing to this channel ID instead. Lets
+    # staging exercise real dispatch without paging the production
+    # `#alerts` channel by accident. Webhook URL still comes from the
+    # credentials vault — only the `channel` field on the payload changes.
+    slack_staging_channel_id: str = ""
 
     # Application
     environment: str = "development"

@@ -166,6 +166,11 @@ fly machine run . --app temple-sweeper \
 **Fix:** Added an `isInThisWeek(dateStr)` helper. After scheduling, if the event landed in next week, the test clicks the toolbar's "Next" button to advance the WEEK view before asserting visibility. Same coverage; deterministic regardless of test runtime.
 **Pattern to watch for:** any e2e assertion that compounds `new Date()` + an offset and then renders against a calendar/date-window UI is at risk of TZ drift between local + CI. Anchor to a deterministic date or navigate the UI to the event's date.
 
+## FIXED (PENDING CI VERIFICATION) — Lighthouse CI doesn't actually run on GitHub Actions (Phase 5 Sprint 0)
+**Fixed:** 2026-04-28 in Phase 5 Sprint 0 (`.github/workflows/ci.yml`). Step "Install Chrome for Lighthouse CI" runs before lhci and `apt-get install`s `google-chrome-stable`. The lhci step still has `continue-on-error: true` for one CI run so a fresh-class regression on the real-Chrome path doesn't block merges; flip to `false` in a follow-up after the first green run is observed.
+**Verified locally:** N/A — Chrome install is GHA-runner-only.
+**Remaining follow-up:** verify the auth-injection puppeteer hook behaves on real Chrome (vs the bundled-Chrome path lhci used in `staticDistDir` mode), then drop `continue-on-error`.
+
 ## OPEN — Lighthouse CI doesn't actually run on GitHub Actions (latent regression, surfaced 2026-04-27)
 **Status:** Phase 4 Sprint 8 wired the lhci CONFIG correctly (auth-injection puppeteer hook + admin URLs + seeder pre-step) — `lighthouserc.cjs` + `lighthouse-auth.cjs` are correct. The latent issue is at a lower layer: when Sprint 8 dropped `staticDistDir` in favor of `url:` mode, lhci stopped spawning its bundled Chrome and started looking for a system Chrome installation. GitHub Actions ubuntu runners don't have Chrome installed — Playwright installs `chromium` to `~/.cache/ms-playwright/` but lhci's `chrome-launcher` doesn't find it.
 
@@ -195,16 +200,18 @@ fly machine run . --app temple-sweeper \
 
 **Phase 4 Sprint 7 baseline:** Lighthouse CI WAS finding Chrome (`✅ Chrome installation found`) when `staticDistDir: "./dist"` was set, because lhci spawns its bundled Chrome in static-server mode. It still failed on every URL with "Lighthouse failed with exit code 1" because the SPA needs a backend at runtime to render — the static server only serves `dist/` and has no API proxy. So the pre-Sprint-8 setup was ALSO broken end-to-end, just at a different stage. Sprint 8's URL-mode + auth-injection is the right architecture; Chrome installation is the missing piece.
 
-## OPEN — Phase 4 carry-forwards (Sprint 5+ polish)
-**Status:** Phase 4 Sprint 8 closed every Architectural Debt item but punted these UI polish + ops cleanup tasks to follow-up sprints.
-**Items:**
-- **Slack staging-channel guard** — non-prod environments should dispatch only to a `#staging-test` channel regardless of saved channel ID. Single env-aware override in `slack_dispatch_service.send`.
-- **Twilio + SendGrid "Test with real message" UI inputs** — backend already accepts `extra_args.to_number` / `to_email` on the test endpoint; the SPA doesn't surface them. One input each on `AdminIntegrations.tsx`.
-- **Sales-side watchers UI** — backend ships in Sprint 5 (`equipment_record_watchers` table + admin endpoints); the `SalesEquipmentDetail` watcher add/remove section needs writing.
-- **Multi-attendee calendar UI** — backend + admin scheduling support ship in Sprint 5; the sales-side schedule modal still defaults to single attendee.
-- **Component weight + rule body editors on `AdminCategoryEdit`** — Sprint 6 ships the data model; admin UI exposes view + add for components / prompts / rules but not in-place edits beyond the supersede modal.
-- **`_EXPECTED_MIGRATION_HEAD` derive-from-alembic** — currently a hand-bumped constant in `health.py`. Should derive from alembic at runtime so future migrations don't drift the health probe.
-- **Node 20 GitHub Actions deprecation** — `actions/checkout@v4`, `actions/setup-python@v5`, `astral-sh/setup-uv@v4` all log the Node 20 deprecation banner. Default flips June 2026, removal September 2026. Bump to v5+ ahead of June.
+## PARTIAL — Phase 4 carry-forwards (Sprint 5+ polish)
+**Status:** Phase 5 Sprint 0 (2026-04-28) closed five of seven items. Remaining two are sales-side UI work to be picked up alongside related sprints.
+**Closed in Sprint 0:**
+- Slack staging-channel guard — `slack_dispatch_service.send` now overrides the payload's `channel` field when `environment != "production"` AND `slack_staging_channel_id` is set. Production passes through unchanged.
+- Twilio + SendGrid "Test with real message" UI inputs — `AdminIntegrations.tsx` now surfaces optional inputs that pass through to `extra_args.to_number` / `to_email`. SendGrid's tester also actually sends the email when `to_email` is supplied (was previously accepting the param but never using it).
+- `_EXPECTED_MIGRATION_HEAD` derive-from-alembic — `health.py` now reads the head once via `alembic.script.ScriptDirectory.from_config().get_current_head()` and caches it.
+- Node 20 GHA deprecation — bumped `actions/checkout@v5`, `actions/setup-python@v6`, `astral-sh/setup-uv@v5`, `actions/setup-node@v5`.
+**Still open:**
+- **Sales-side watchers UI** — backend ships (Phase 4 Sprint 5 — `equipment_record_watchers` table + admin endpoints); the `SalesEquipmentDetail` watcher add/remove section needs writing.
+- **Multi-attendee calendar UI** — backend + admin scheduling support ship (Phase 4 Sprint 5); the sales-side schedule modal still defaults to single attendee.
+- **Component weight + rule body editors on `AdminCategoryEdit`** — admin UI exposes view + add for components / prompts / rules but not in-place edits beyond the supersede modal.
+**Tracked for:** alongside the relevant sprint that touches each surface anyway.
 
 ## OPEN — `phase3_calendar.spec.ts:50` flake (calendar smoke)
 **Status:** Reproducible on vanilla `main` too — confirmed pre-existing during Sprint 8 e2e validation. Not caused by Phase 4 changes.
