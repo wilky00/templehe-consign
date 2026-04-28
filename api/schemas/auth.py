@@ -91,11 +91,37 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # Phase 5 Sprint 1 — present only when the request opted into the
+    # mobile body-mode (via the ``X-Client: ios`` header). Web clients
+    # leave the cookie path alone and this field stays unset; mobile
+    # clients store it in the iOS Keychain and submit it on /refresh
+    # via ``MobileRefreshRequest``. The default ``None`` keeps existing
+    # callers (web SPA + tests) byte-compatible.
+    refresh_token: str | None = None
 
 
 class Partial2FAResponse(BaseModel):
     requires_2fa: bool = True
     partial_token: str
+
+
+class MobileRefreshRequest(BaseModel):
+    """Phase 5 Sprint 1 — body-supplied refresh token for mobile clients.
+
+    Mobile clients send `X-Client: ios` on /refresh and put the token
+    they previously received in the body. The cookie path remains the
+    default for browser clients."""
+
+    refresh_token: str
+
+
+class MobileLogoutRequest(BaseModel):
+    """Phase 5 Sprint 1 — body-supplied refresh token for mobile logout.
+
+    Mobile clients send `X-Client: ios` on /logout and put the token
+    they previously received in the body so the server can revoke it."""
+
+    refresh_token: str
 
 
 # ---------------------------------------------------------------------------

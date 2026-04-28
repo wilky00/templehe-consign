@@ -154,6 +154,9 @@ class User(Base):
     known_devices: Mapped[list[KnownDevice]] = relationship(
         "KnownDevice", back_populates="user", cascade="all, delete-orphan"
     )
+    device_tokens: Mapped[list[DeviceToken]] = relationship(
+        "DeviceToken", back_populates="user", cascade="all, delete-orphan"
+    )
     consent_versions: Mapped[list[UserConsentVersion]] = relationship(
         "UserConsentVersion", back_populates="user", cascade="all, delete-orphan"
     )
@@ -237,6 +240,37 @@ class KnownDevice(Base):
     user: Mapped[User] = relationship("User", back_populates="known_devices")
 
     __table_args__ = (UniqueConstraint("user_id", "device_fingerprint"),)
+
+
+class DeviceToken(Base):
+    """APNs (and future FCM) push target — one row per (user, device).
+
+    Phase 5 Sprint 1 lands the table; Sprint 2's APNs dispatcher reads
+    `tokens_for_user(user, 'ios')` and fans out one push per active row.
+    Soft-delete via ``deleted_at``; permanent-failure on dispatch can
+    optionally hard-delete (Sprint 2 concern).
+    """
+
+    __tablename__ = "device_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    token: Mapped[str] = mapped_column(Text, nullable=False)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False)
+    registered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[User] = relationship("User", back_populates="device_tokens")
+
+    __table_args__ = (UniqueConstraint("user_id", "token", name="uq_device_tokens_user_token"),)
 
 
 class NotificationPreference(Base):
