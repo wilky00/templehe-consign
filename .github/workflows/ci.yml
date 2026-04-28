@@ -22,7 +22,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -78,7 +78,7 @@ jobs:
       TEST_DATABASE_URL: postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe_test
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -142,7 +142,7 @@ jobs:
       SMTP_PORT: "1025"
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -286,7 +286,7 @@ jobs:
     environment: staging
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
@@ -308,7 +308,7 @@ jobs:
     environment: production
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
