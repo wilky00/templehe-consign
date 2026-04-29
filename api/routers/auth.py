@@ -2,7 +2,7 @@
 # ABOUTME: Route handlers are thin; all business logic lives in services/auth_service.py.
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
@@ -27,6 +27,8 @@ from schemas.auth import (
     CurrentUser,
     LoginRequest,
     MessageResponse,
+    MobileLogoutRequest,
+    MobileRefreshRequest,
     Partial2FAResponse,
     PasswordResetConfirmRequest,
     PasswordResetRequestBody,
@@ -48,6 +50,37 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Cookie scoped to /api/v1/auth so it is only transmitted on auth endpoints.
 _REFRESH_COOKIE_NAME = "refresh_token"
 _REFRESH_COOKIE_PATH = "/api/v1/auth"
+
+# Phase 5 Sprint 1 — opt-in to body-mode refresh-token transport for
+# native iOS clients that can't reliably persist HttpOnly cookies and
+# want to store the refresh token in the iOS Keychain instead. The
+# header is examined on every token-issuing endpoint; when present,
+# the response body carries the refresh token and no Set-Cookie is
+# emitted. The web SPA never sets this header → its existing flow
+# (cookie + body access_token only) is byte-compatible.
+_X_CLIENT_HEADER = "X-Client"
+_X_CLIENT_MOBILE_VALUES = frozenset({"ios", "android"})
+
+
+def _is_mobile_client(request: Request) -> bool:
+    return request.headers.get(_X_CLIENT_HEADER, "").lower() in _X_CLIENT_MOBILE_VALUES
+
+
+def _build_token_response(
+    *,
+    access_token: str,
+    refresh_token: str,
+    response: Response,
+    is_mobile: bool,
+) -> TokenResponse:
+    """Branch on transport: web → set HttpOnly cookie + return body
+    without ``refresh_token``. Mobile → no cookie + return body with
+    ``refresh_token``. Single helper so all four token-issuing endpoints
+    stay consistent."""
+    if is_mobile:
+        return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    _set_refresh_cookie(response, refresh_token)
+    return TokenResponse(access_token=access_token)
 
 
 def _base_url(request: Request) -> str:
@@ -184,8 +217,12 @@ async def login(
     )
     if result.get("requires_2fa"):
         return Partial2FAResponse(partial_token=result["partial_token"])
-    _set_refresh_cookie(response, result["refresh_token"])
-    return TokenResponse(access_token=result["access_token"])
+    return _build_token_response(
+        access_token=result["access_token"],
+        refresh_token=result["refresh_token"],
+        response=response,
+        is_mobile=_is_mobile_client(request),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -197,10 +234,23 @@ async def login(
 async def refresh(
     request: Request,
     response: Response,
+    body: MobileRefreshRequest | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(refresh_ip_limiter),
 ) -> TokenResponse:
-    raw_token = request.cookies.get(_REFRESH_COOKIE_NAME)
+    """Mobile (X-Client header set) reads the refresh token from the
+    body; web reads from the HttpOnly cookie. Either way the response
+    rotates the token — mobile in the body, web in a fresh Set-Cookie."""
+    is_mobile = _is_mobile_client(request)
+    if is_mobile:
+        if body is None or not body.refresh_token:
+            raise HTTPException(
+                status_code=401,
+                detail="Refresh token is required in the request body for mobile clients.",
+            )
+        raw_token = body.refresh_token
+    else:
+        raw_token = request.cookies.get(_REFRESH_COOKIE_NAME) or ""
     if not raw_token:
         raise HTTPException(status_code=401, detail="Refresh token is required.")
     result = await auth_service.refresh_access_token(
@@ -209,8 +259,12 @@ async def refresh(
         ip_address=get_client_ip(request),
         user_agent=request.headers.get("User-Agent"),
     )
-    _set_refresh_cookie(response, result["refresh_token"])
-    return TokenResponse(access_token=result["access_token"])
+    return _build_token_response(
+        access_token=result["access_token"],
+        refresh_token=result["refresh_token"],
+        response=response,
+        is_mobile=is_mobile,
+    )
 
 
 @router.post("/logout", response_model=MessageResponse)
@@ -218,12 +272,23 @@ async def logout(
     request: Request,
     response: Response,
     current_user: CurrentUserDep,
+    body: MobileLogoutRequest | None = Body(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    raw_token = request.cookies.get(_REFRESH_COOKIE_NAME)
+    """Mobile (X-Client header set) sends the refresh token to revoke
+    in the body; web reads it from the cookie. Both paths revoke the
+    token if found, but neither requires it — the access token alone
+    is sufficient to consider the user logged out client-side."""
+    is_mobile = _is_mobile_client(request)
+    raw_token: str | None = None
+    if is_mobile:
+        raw_token = body.refresh_token if body else None
+    else:
+        raw_token = request.cookies.get(_REFRESH_COOKIE_NAME)
     if raw_token:
         await auth_service.logout(raw_token, db)
-    _clear_refresh_cookie(response)
+    if not is_mobile:
+        _clear_refresh_cookie(response)
     return MessageResponse(message="Logged out successfully.")
 
 
@@ -326,19 +391,25 @@ async def confirm_2fa(
 @router.post("/2fa/verify", response_model=TokenResponse)
 async def verify_2fa(
     body: TwoFAVerifyRequest,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
     _rl_ip: None = Depends(totp_ip_limiter),
     _rl_token: None = Depends(totp_partial_token_limiter),
 ) -> TokenResponse:
     result = await auth_service.verify_2fa(body.partial_token, body.totp_code, db)
-    _set_refresh_cookie(response, result["refresh_token"])
-    return TokenResponse(access_token=result["access_token"])
+    return _build_token_response(
+        access_token=result["access_token"],
+        refresh_token=result["refresh_token"],
+        response=response,
+        is_mobile=_is_mobile_client(request),
+    )
 
 
 @router.post("/2fa/recovery", response_model=TokenResponse)
 async def recover_2fa(
     body: TwoFARecoveryRequest,
+    request: Request,
     response: Response,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
@@ -348,8 +419,12 @@ async def recover_2fa(
     result = await auth_service.recover_2fa(
         body.partial_token, body.recovery_code, db, background_tasks=background_tasks
     )
-    _set_refresh_cookie(response, result["refresh_token"])
-    return TokenResponse(access_token=result["access_token"])
+    return _build_token_response(
+        access_token=result["access_token"],
+        refresh_token=result["refresh_token"],
+        response=response,
+        is_mobile=_is_mobile_client(request),
+    )
 
 
 @router.post("/2fa/disable", response_model=MessageResponse)

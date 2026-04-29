@@ -1219,6 +1219,58 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 ---
 
-## Phase 5 Sprints 1–7 — Not yet started
+### Sprint 1 — Epic 5.1: App Foundation + Auth + Device Token — IN PROGRESS
+
+**Backend (8 files):**
+- Migration `022_phase5_device_tokens.py` (NEW) — `device_tokens` table with platform/environment CHECKs, partial index on active rows.
+- `api/database/models.py` — `DeviceToken` ORM class.
+- `api/services/device_token_service.py` (NEW) — register-as-upsert, revoke, tokens_for_user, revoke_all_for_user.
+- `api/routers/me_device_tokens.py` (NEW) — POST/DELETE/GET `/api/v1/me/device-token`. Roles: appraiser/admin/sales/sales_manager (mirrors `/ios/config`'s gate, not the plan's narrower appraiser/admin).
+- `api/schemas/device_token.py` (NEW) — request/response shapes; full token never echoed back, only `token_preview` (last 8 chars) for UI distinction.
+- `api/main.py` — register router; add `X-Client` to CORS allow_headers.
+- `api/schemas/auth.py` — extend `TokenResponse` with optional `refresh_token` for mobile body-mode; add `MobileRefreshRequest` + `MobileLogoutRequest`.
+- `api/routers/auth.py` — header-driven mobile path (`X-Client: ios`) on `/login`, `/refresh`, `/2fa/verify`, `/2fa/recovery`, `/logout`. Default web flow byte-compatible.
+
+**iOS (10 files NEW):**
+- `App/Storage/KeychainStore.swift` — `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` for access + refresh tokens.
+- `App/Networking/Endpoints.swift` — typed endpoint paths + Codable shapes (LoginRequest/Response, TokenResponse, RefreshRequest, LogoutRequest, DeviceToken*).
+- `App/Networking/TempleHEClient.swift` — actor-based URLSession wrapper; X-Client header on every request; serialized 401 refresh-then-retry so parallel requests don't double-rotate.
+- `App/Auth/AuthState.swift` — `@MainActor ObservableObject` state machine: `.loggedOut → .twoFactorPending(partialToken:) → .loggedIn`.
+- `App/Auth/LoginView.swift` — email + password form. NO Google sign-in (D2 deferred until workspace domain is configured).
+- `App/Auth/TwoFactorView.swift` — 6-digit TOTP entry + recovery-code fallback.
+- `App/Auth/BiometricLoginView.swift` — Face ID/Touch ID via `LocalAuthentication`; local-only gate that unlocks Keychain-cached session (never sends biometric assertion to backend).
+- `App/Push/PushRegistrar.swift` — `UNUserNotificationCenter.requestAuthorization` → register for remote notifications → POST device token to `/me/device-token`. Best-effort; permission denial is not a login blocker.
+- `AppDelegate.swift` — UIApplicationDelegate bridging APNs callbacks to NotificationCenter (consumed by PushRegistrar).
+- `AppRouter.swift` — top-level state-machine view that gates `RootView` behind `.loggedIn`.
+- `App.swift` — wires `@UIApplicationDelegateAdaptor`, `TempleHEClient`, `AuthState` into the SwiftUI environment.
+
+**Tests (6 files: 2 backend NEW, 4 iOS NEW):**
+- `api/tests/integration/test_device_tokens.py` (NEW, 13 tests) — register/upsert/revive-soft-deleted/revoke/cross-user-blocked/list-isolation/RBAC (customer denied, four field roles allowed)/validation/persistence.
+- `api/tests/integration/test_auth_mobile_refresh.py` (NEW, 6 tests) — mobile login returns body+no cookie; web login unchanged; refresh from body rotates; mobile refresh-without-body 401; logout invalidates body token; 2FA verify honors `X-Client`.
+- `ios/TempleHEAppraiserTests/Storage/KeychainStoreTests.swift` (NEW, 6 tests) — round-trip access+refresh, overwrite, set-nil-deletes, clearAll, missing-key returns nil.
+- `ios/TempleHEAppraiserTests/Networking/TempleHEClientTests.swift` (NEW, 4 tests + MockURLProtocol) — X-Client header on every request, Bearer threading, 401-refresh-and-retry, refresh-failure-bubbles-as-unauthorized.
+- `ios/TempleHEAppraiserTests/Auth/AuthFlowTests.swift` (NEW, 6 tests) — initial-phase, preloaded-token-boots-loggedIn, happy-path, 2FA-pending → verify, 2FA recovery, wrong-password error, force-logout.
+- `ios/TempleHEAppraiserUITests/LoginFlow.swift` (NEW, 3 tests) — launch shows login screen, form has expected accessibility identifiers, submit disabled when fields empty.
+
+**Backend:** 555/555 tests green (was 534; +21 new). Lint + format clean.
+**Web:** lint clean, typecheck clean (auth.ts TokenResponse interface remains source-of-truth — additive `refresh_token: null` on web responses is invisible to the SPA).
+**iOS:** lint not yet run (no automated swift-format gate today); manual `xcodebuild test` is Jim's responsibility per ADR-021 cost analysis (no macOS GHA runners).
+
+**Decisions confirmed:**
+- D1 (mobile body-mode refresh) — `X-Client: ios` header opts in; refresh token returned in body, no Set-Cookie. Default web flow unchanged.
+- D2 (Google sign-in deferred) — LoginView ships without the button. Workspace domain still in CLAUDE.md "Open Decisions" table.
+- D3 (`/me/device-token` path) — landed under existing `/me/*` convention rather than the plan's `/appraisers/me/*`.
+- D4 (broader RBAC) — gated on appraiser/admin/sales/sales_manager (mirrors `/ios/config`).
+- The `device_tokens.UNIQUE (user_id, token)` semantic accepts the rare reinstall+re-login-as-someone-else case where the same APNs token reaches multiple users; APNs's permanent-failure response in Sprint 2 reaps stale rows. Simpler than `UNIQUE (token)` with cross-user steal-on-conflict logic.
+- Token preview in API responses is last-8-chars only — full token never echoed back. Defense against accidental log leaks; the client already has the raw token if it needs to dispatch a revoke.
+- Biometric unlock is local-only — never sends the biometric assertion anywhere. Just gates reading from Keychain; the `forceLogout()` fallback always goes through password.
+
+**Carry-forwards into the next sprint:**
+- Sprint 2: APNs *dispatch* (Apple AuthKey, JWT signing, `apns_dispatch_service.py`, notification_service routing). The Sprint 1 device-token registration is the input side; Sprint 2 reads `tokens_for_user(user, 'ios')` and fans out.
+- Manual ops still pending: Apple Developer Program enrollment + APNs AuthKey vault entry (Outline §15) — needed before Sprint 2 push dispatch ships.
+
+---
+
+## Phase 5 Sprints 2–7 — Not yet started
 
 ## Phase 6–8 — Not started
