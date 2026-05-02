@@ -141,6 +141,137 @@ struct ValuationSearchResponse: Decodable {
     let used_sources: [String]
 }
 
+// MARK: - iOS Config
+
+struct IOSConfigCategory: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let slug: String
+    let display_order: Int
+}
+
+struct IOSConfigComponent: Decodable, Identifiable {
+    let id: String
+    let category_id: String
+    let name: String
+    let weight_pct: String
+    let display_order: Int
+
+    var weightDouble: Double { Double(weight_pct) ?? 0 }
+}
+
+struct IOSConfigPrompt: Decodable, Identifiable {
+    let id: String
+    let category_id: String
+    let label: String
+    let response_type: String  // yes_no_na | text | scale_1_5
+    let required: Bool
+    let display_order: Int
+    let version: Int
+}
+
+struct IOSConfigRedFlagRule: Decodable, Identifiable {
+    let id: String
+    let category_id: String
+    let label: String
+    let condition_field: String
+    let condition_operator: String
+    let condition_value: String?
+    let version: Int
+}
+
+struct IOSConfig: Decodable {
+    let config_version: String
+    let categories: [IOSConfigCategory]
+    let components: [IOSConfigComponent]
+    let inspection_prompts: [IOSConfigPrompt]
+    let red_flag_rules: [IOSConfigRedFlagRule]
+
+    func components(for categoryId: String) -> [IOSConfigComponent] {
+        components.filter { $0.category_id == categoryId }
+                  .sorted { $0.display_order < $1.display_order }
+    }
+
+    func prompts(for categoryId: String) -> [IOSConfigPrompt] {
+        inspection_prompts.filter { $0.category_id == categoryId }
+                          .sorted { $0.display_order < $1.display_order }
+    }
+}
+
+// MARK: - Appraisal Submissions
+
+struct SubmissionCreateRequest: Encodable {
+    let equipment_record_id: String
+}
+
+struct InspectionAnswerIn: Encodable {
+    let prompt_id: String
+    let prompt_version: Int
+    // Serialized as string; server accepts string for all response types
+    let value: String?
+}
+
+struct ComponentScoreIn: Encodable {
+    let component_id: String
+    let score: Double
+    let notes: String?
+}
+
+struct SubmissionUpdateRequest: Encodable {
+    var category_id: String?
+    var make: String?
+    var model: String?
+    var year: Int?
+    var hours_condition: String?
+    var running_status: String?
+    var serial_number: String?
+    var title_status: String?
+    var field_values: [InspectionAnswerIn]?
+    var component_scores: [ComponentScoreIn]?
+    var marketability_rating: String?
+    var transport_notes: String?
+    var listing_notes: String?
+}
+
+struct ComponentScoreOut: Decodable, Identifiable {
+    let id: String
+    let component_id: String
+    let component_name: String
+    let raw_score: Double
+    let weight_at_time_of_scoring: Double
+    let notes: String?
+}
+
+struct SubmissionOut: Decodable, Identifiable {
+    let id: String
+    let equipment_record_id: String
+    let appraiser_id: String?
+    let status: String
+    let category_id: String?
+    let category_version: Int?
+    let make: String?
+    let model: String?
+    let year: Int?
+    let hours_condition: String?
+    let running_status: String?
+    let serial_number: String?
+    let title_status: String?
+    let overall_score: Double?
+    let score_band: String?
+    let marketability_rating: String?
+    let transport_notes: String?
+    let listing_notes: String?
+    let component_scores: [ComponentScoreOut]
+    let submitted_at: String?
+    let created_at: String
+    let updated_at: String
+}
+
+struct SubmissionListResponse: Decodable {
+    let submissions: [SubmissionOut]
+    let total: Int
+}
+
 // MARK: - Endpoint paths
 
 enum Endpoint {
@@ -154,4 +285,11 @@ enum Endpoint {
     static let meAppointments = "/api/v1/me/appointments"
     static let iosConfig = "/api/v1/ios/config"
     static let valuationSearch = "/api/v1/valuation/search"
+    static let appraisalSubmissions = "/api/v1/appraisal-submissions"
+    static func appraisalSubmission(_ id: String) -> String {
+        "/api/v1/appraisal-submissions/\(id)"
+    }
+    static func submitSubmission(_ id: String) -> String {
+        "/api/v1/appraisal-submissions/\(id)/submit"
+    }
 }
