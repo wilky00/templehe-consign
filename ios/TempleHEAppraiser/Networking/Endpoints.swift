@@ -73,6 +73,39 @@ struct DeviceTokenListResponse: Decodable {
     let tokens: [DeviceTokenOut]
 }
 
+// MARK: - Appointments
+
+struct AppointmentDetail: Decodable, Identifiable {
+    let calendar_event_id: String
+    let equipment_record_id: String
+    let reference_number: String?
+    let scheduled_at: String
+    let duration_minutes: Int
+    let site_address: String?
+    let record_status: String
+    let customer_make: String?
+    let customer_model: String?
+    let customer_year: Int?
+    let customer_name: String?
+    let customer_phone: String?
+    let sales_rep_name: String?
+    let sales_rep_phone: String?
+    let sales_rep_email: String?
+
+    var id: String { calendar_event_id }
+
+    var makeModelYear: String {
+        [customer_make, customer_model, customer_year.map { String($0) }]
+            .compactMap { $0 }
+            .joined(separator: " ")
+    }
+}
+
+struct AppointmentListResponse: Decodable {
+    let appointments: [AppointmentDetail]
+    let days_ahead: Int
+}
+
 // MARK: - Endpoint paths
 
 enum Endpoint {
@@ -83,5 +116,6 @@ enum Endpoint {
     static let auth2FARecovery = "/api/v1/auth/2fa/recovery"
     static let authMe = "/api/v1/auth/me"
     static let meDeviceToken = "/api/v1/me/device-token"
+    static let meAppointments = "/api/v1/me/appointments"
     static let iosConfig = "/api/v1/ios/config"
 }

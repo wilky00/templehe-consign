@@ -27,6 +27,7 @@ from routers import equipment as equipment_router
 from routers import health as health_router
 from routers import ios_config as ios_config_router
 from routers import legal as legal_router
+from routers import me_appointments as me_appointments_router
 from routers import me_device_tokens as me_device_tokens_router
 from routers import me_notifications as me_notifications_router
 from routers import record_locks as record_locks_router
@@ -80,6 +81,7 @@ app.include_router(equipment_router.router, prefix="/api/v1")
 app.include_router(health_router.router, prefix="/api/v1")
 app.include_router(ios_config_router.router, prefix="/api/v1")
 app.include_router(legal_router.router, prefix="/api/v1")
+app.include_router(me_appointments_router.router, prefix="/api/v1")
 app.include_router(me_device_tokens_router.router, prefix="/api/v1")
 app.include_router(me_notifications_router.router, prefix="/api/v1")
 app.include_router(record_locks_router.router, prefix="/api/v1")
