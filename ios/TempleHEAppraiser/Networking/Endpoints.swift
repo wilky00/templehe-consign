@@ -106,6 +106,41 @@ struct AppointmentListResponse: Decodable {
     let days_ahead: Int
 }
 
+// MARK: - Valuation
+
+struct ComparableSaleOut: Decodable, Identifiable {
+    let id: String
+    let make: String?
+    let model: String?
+    let year: Int?
+    let hours: Int?
+    let sale_price: Double?
+    let sale_date: String?
+    let source: String?
+    let source_url: String?
+    let notes: String?
+    let category_id: String?
+
+    var makeModelYear: String {
+        [make, model, year.map { String($0) }]
+            .compactMap { $0 }
+            .joined(separator: " ")
+    }
+}
+
+struct ValuationSearchRequest: Encodable {
+    let make: String?
+    let model: String?
+    let year: Int?
+    let hours: Int?
+    let category_id: String?
+}
+
+struct ValuationSearchResponse: Decodable {
+    let results: [ComparableSaleOut]
+    let used_sources: [String]
+}
+
 // MARK: - Endpoint paths
 
 enum Endpoint {
@@ -118,4 +153,5 @@ enum Endpoint {
     static let meDeviceToken = "/api/v1/me/device-token"
     static let meAppointments = "/api/v1/me/appointments"
     static let iosConfig = "/api/v1/ios/config"
+    static let valuationSearch = "/api/v1/valuation/search"
 }

@@ -476,6 +476,68 @@ NOTIFICATION_PREFERENCES_READ_ONLY_ROLES = register(
 )
 
 
+# ---------------------------------------------------------------------------
+# Phase 5 Sprint 3 — Valuation search config.
+# ---------------------------------------------------------------------------
+
+
+def _validate_bool(v: Any) -> None:
+    if not isinstance(v, bool):
+        raise ValueError("must be true or false")
+
+
+ENABLE_PLAYWRIGHT_VALUATION_SCRAPER = register(
+    KeySpec(
+        name="enable_playwright_valuation_scraper",
+        category="valuation",
+        field_type="boolean",
+        description=(
+            "When true, valuation_service.search() enqueues a background "
+            "Playwright scrape job in addition to internal + stubbed-external "
+            "lookups. Deferred to Phase 5.5; safe to leave false."
+        ),
+        default=False,
+        parser=_parse_dict_field("enabled"),
+        serializer=_serialize_dict_field("enabled"),
+        validator=_validate_bool,
+    )
+)
+
+VALUATION_YEAR_RANGE = register(
+    KeySpec(
+        name="valuation_year_range",
+        category="valuation",
+        field_type="int",
+        description=(
+            "±years window around the target year used by the valuation "
+            "comparable search. Default 3 — search includes equipment from "
+            "year-3 through year+3."
+        ),
+        default=3,
+        parser=_parse_dict_field("years"),
+        serializer=_serialize_dict_field("years"),
+        validator=_validate_int_at_least(1),
+    )
+)
+
+VALUATION_HOURS_RANGE = register(
+    KeySpec(
+        name="valuation_hours_range",
+        category="valuation",
+        field_type="int",
+        description=(
+            "±hours window around the target hours used by the valuation "
+            "comparable search. Default 500 — includes equipment from "
+            "hours-500 through hours+500."
+        ),
+        default=500,
+        parser=_parse_dict_field("hours"),
+        serializer=_serialize_dict_field("hours"),
+        validator=_validate_int_at_least(1),
+    )
+)
+
+
 # Operations — overdue threshold for the admin operations dashboard.
 # Sprint 1 hard-coded 7 days in admin_operations_service; lifting to
 # AppConfig lets admin tune the highlight without a deploy.
