@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from database.models import (
     AppraisalSubmission,
@@ -123,7 +124,7 @@ async def update_draft(
         submission.score_band = result.band
 
     await db.flush()
-    return submission
+    return await _fetch(db, submission_id=submission_id)
 
 
 async def get(
@@ -143,9 +144,17 @@ async def list_mine(
     appraiser: User,
     status_filter: str | None = None,
 ) -> list[AppraisalSubmission]:
-    stmt = select(AppraisalSubmission).where(
-        AppraisalSubmission.appraiser_id == appraiser.id,
-        AppraisalSubmission.deleted_at.is_(None),
+    stmt = (
+        select(AppraisalSubmission)
+        .options(
+            selectinload(AppraisalSubmission.component_scores).selectinload(
+                ComponentScore.component
+            )
+        )
+        .where(
+            AppraisalSubmission.appraiser_id == appraiser.id,
+            AppraisalSubmission.deleted_at.is_(None),
+        )
     )
     if status_filter:
         if status_filter not in _VALID_STATUSES:
@@ -195,7 +204,7 @@ async def submit(
         submission_id=str(submission_id),
         appraiser_id=str(appraiser.id),
     )
-    return submission
+    return await _fetch(db, submission_id=submission_id)
 
 
 # --------------------------------------------------------------------------- #
@@ -295,7 +304,13 @@ async def _fetch(
     submission_id: uuid.UUID,
 ) -> AppraisalSubmission:
     result = await db.execute(
-        select(AppraisalSubmission).where(
+        select(AppraisalSubmission)
+        .options(
+            selectinload(AppraisalSubmission.component_scores).selectinload(
+                ComponentScore.component
+            )
+        )
+        .where(
             AppraisalSubmission.id == submission_id,
             AppraisalSubmission.deleted_at.is_(None),
         )
