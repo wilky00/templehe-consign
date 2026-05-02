@@ -32,6 +32,7 @@ from routers import me_device_tokens as me_device_tokens_router
 from routers import me_notifications as me_notifications_router
 from routers import record_locks as record_locks_router
 from routers import sales as sales_router
+from routers import valuation as valuation_router
 
 logger = structlog.get_logger(__name__)
 
@@ -86,3 +87,4 @@ app.include_router(me_device_tokens_router.router, prefix="/api/v1")
 app.include_router(me_notifications_router.router, prefix="/api/v1")
 app.include_router(record_locks_router.router, prefix="/api/v1")
 app.include_router(sales_router.router, prefix="/api/v1")
+app.include_router(valuation_router.router, prefix="/api/v1")

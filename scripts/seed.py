@@ -141,6 +141,9 @@ async def seed(session: AsyncSession) -> None:
             },
         )
 
+    print("Seeding comparable_sales baseline rows...")
+    await _seed_comparable_sales(session)
+
     admin_email = os.environ.get("SEED_ADMIN_EMAIL", "").strip()
     admin_password = os.environ.get("SEED_ADMIN_PASSWORD", "").strip()
 
@@ -188,6 +191,119 @@ async def seed(session: AsyncSession) -> None:
 
     await session.commit()
     print("Seed complete.")
+
+
+# ---------------------------------------------------------------------------
+# Comparable sales seed data — ~50 internal rows for the valuation lookup.
+# Mix of CAT, Komatsu, John Deere, Volvo, Hitachi across the categories
+# seeded above (excavators, wheel-loaders, dozers, backhoe-loaders, etc.).
+# ---------------------------------------------------------------------------
+
+_COMPARABLE_SALES = [
+    # Excavators
+    {"make": "Caterpillar", "model": "320", "year": 2019, "hours": 4200, "sale_price": "185000.00", "sale_date": "2024-09-15", "slug": "excavators"},
+    {"make": "Caterpillar", "model": "320", "year": 2020, "hours": 3100, "sale_price": "215000.00", "sale_date": "2024-11-02", "slug": "excavators"},
+    {"make": "Caterpillar", "model": "336", "year": 2018, "hours": 6800, "sale_price": "245000.00", "sale_date": "2024-07-18", "slug": "excavators"},
+    {"make": "Caterpillar", "model": "336", "year": 2021, "hours": 2400, "sale_price": "340000.00", "sale_date": "2025-01-10", "slug": "excavators"},
+    {"make": "Komatsu", "model": "PC360LC-11", "year": 2019, "hours": 5100, "sale_price": "228000.00", "sale_date": "2024-08-22", "slug": "excavators"},
+    {"make": "Komatsu", "model": "PC210LC-11", "year": 2020, "hours": 3800, "sale_price": "197000.00", "sale_date": "2024-10-05", "slug": "excavators"},
+    {"make": "Komatsu", "model": "PC360LC-11", "year": 2017, "hours": 8900, "sale_price": "162000.00", "sale_date": "2024-06-14", "slug": "excavators"},
+    {"make": "Hitachi", "model": "ZX350LC-6", "year": 2018, "hours": 6200, "sale_price": "218000.00", "sale_date": "2024-09-30", "slug": "excavators"},
+    {"make": "Hitachi", "model": "ZX210LC-6", "year": 2020, "hours": 2900, "sale_price": "195000.00", "sale_date": "2025-02-08", "slug": "excavators"},
+    {"make": "John Deere", "model": "350G LC", "year": 2019, "hours": 4700, "sale_price": "231000.00", "sale_date": "2024-12-01", "slug": "excavators"},
+    # Dozers (Crawler Dozers)
+    {"make": "Caterpillar", "model": "D6T", "year": 2019, "hours": 3900, "sale_price": "278000.00", "sale_date": "2024-10-20", "slug": "crawler-dozers"},
+    {"make": "Caterpillar", "model": "D6T", "year": 2021, "hours": 1800, "sale_price": "345000.00", "sale_date": "2025-01-25", "slug": "crawler-dozers"},
+    {"make": "Caterpillar", "model": "D8T", "year": 2018, "hours": 7200, "sale_price": "312000.00", "sale_date": "2024-07-09", "slug": "crawler-dozers"},
+    {"make": "Komatsu", "model": "D61PX-24", "year": 2020, "hours": 2700, "sale_price": "265000.00", "sale_date": "2024-11-14", "slug": "crawler-dozers"},
+    {"make": "Komatsu", "model": "D85EX-18", "year": 2019, "hours": 5400, "sale_price": "287000.00", "sale_date": "2024-08-05", "slug": "crawler-dozers"},
+    {"make": "John Deere", "model": "1050K", "year": 2018, "hours": 6100, "sale_price": "295000.00", "sale_date": "2024-09-03", "slug": "crawler-dozers"},
+    {"make": "Liebherr", "model": "PR 736", "year": 2020, "hours": 3200, "sale_price": "310000.00", "sale_date": "2024-12-19", "slug": "crawler-dozers"},
+    # Backhoe Loaders
+    {"make": "Caterpillar", "model": "420F2", "year": 2019, "hours": 3400, "sale_price": "68000.00", "sale_date": "2024-10-08", "slug": "backhoe-loaders"},
+    {"make": "Caterpillar", "model": "420F2", "year": 2021, "hours": 1600, "sale_price": "88000.00", "sale_date": "2025-01-17", "slug": "backhoe-loaders"},
+    {"make": "John Deere", "model": "310SL", "year": 2020, "hours": 2800, "sale_price": "74000.00", "sale_date": "2024-11-22", "slug": "backhoe-loaders"},
+    {"make": "John Deere", "model": "310SL", "year": 2018, "hours": 5200, "sale_price": "52000.00", "sale_date": "2024-06-28", "slug": "backhoe-loaders"},
+    {"make": "Komatsu", "model": "WB146-6", "year": 2019, "hours": 4100, "sale_price": "61000.00", "sale_date": "2024-09-11", "slug": "backhoe-loaders"},
+    {"make": "Volvo", "model": "BL71B", "year": 2020, "hours": 2100, "sale_price": "72000.00", "sale_date": "2025-02-04", "slug": "backhoe-loaders"},
+    # Wheel Loaders
+    {"make": "Caterpillar", "model": "950M", "year": 2019, "hours": 4600, "sale_price": "198000.00", "sale_date": "2024-10-15", "slug": "wheel-loaders"},
+    {"make": "Caterpillar", "model": "950M", "year": 2021, "hours": 2200, "sale_price": "248000.00", "sale_date": "2025-01-08", "slug": "wheel-loaders"},
+    {"make": "Caterpillar", "model": "972M XE", "year": 2020, "hours": 3300, "sale_price": "315000.00", "sale_date": "2024-11-30", "slug": "wheel-loaders"},
+    {"make": "Komatsu", "model": "WA380-8", "year": 2019, "hours": 5000, "sale_price": "188000.00", "sale_date": "2024-08-16", "slug": "wheel-loaders"},
+    {"make": "Komatsu", "model": "WA470-8", "year": 2018, "hours": 7100, "sale_price": "172000.00", "sale_date": "2024-07-24", "slug": "wheel-loaders"},
+    {"make": "Volvo", "model": "L110H", "year": 2020, "hours": 2900, "sale_price": "205000.00", "sale_date": "2024-12-10", "slug": "wheel-loaders"},
+    {"make": "Liebherr", "model": "L 546", "year": 2019, "hours": 4400, "sale_price": "212000.00", "sale_date": "2024-09-25", "slug": "wheel-loaders"},
+    # Motor Graders
+    {"make": "Caterpillar", "model": "140M3", "year": 2019, "hours": 4800, "sale_price": "262000.00", "sale_date": "2024-10-29", "slug": "motor-graders"},
+    {"make": "Caterpillar", "model": "140M3", "year": 2021, "hours": 2100, "sale_price": "318000.00", "sale_date": "2025-01-21", "slug": "motor-graders"},
+    {"make": "John Deere", "model": "872GP", "year": 2020, "hours": 3600, "sale_price": "278000.00", "sale_date": "2024-11-07", "slug": "motor-graders"},
+    {"make": "Komatsu", "model": "GD655-5", "year": 2018, "hours": 6500, "sale_price": "225000.00", "sale_date": "2024-07-31", "slug": "motor-graders"},
+    # Articulated Dump Trucks
+    {"make": "Caterpillar", "model": "740 GC", "year": 2019, "hours": 5300, "sale_price": "385000.00", "sale_date": "2024-10-03", "slug": "articulated-dump-trucks"},
+    {"make": "Caterpillar", "model": "745", "year": 2020, "hours": 3700, "sale_price": "445000.00", "sale_date": "2024-12-05", "slug": "articulated-dump-trucks"},
+    {"make": "Volvo", "model": "A40G", "year": 2019, "hours": 6100, "sale_price": "368000.00", "sale_date": "2024-09-08", "slug": "articulated-dump-trucks"},
+    {"make": "Komatsu", "model": "HM400-5", "year": 2018, "hours": 7800, "sale_price": "312000.00", "sale_date": "2024-06-19", "slug": "articulated-dump-trucks"},
+    {"make": "Bell", "model": "B40E", "year": 2020, "hours": 4200, "sale_price": "392000.00", "sale_date": "2025-01-14", "slug": "articulated-dump-trucks"},
+    # Compactors
+    {"make": "Caterpillar", "model": "CS11 GC", "year": 2020, "hours": 1800, "sale_price": "92000.00", "sale_date": "2024-11-18", "slug": "compactors"},
+    {"make": "Caterpillar", "model": "CS11 GC", "year": 2018, "hours": 4400, "sale_price": "68000.00", "sale_date": "2024-08-12", "slug": "compactors"},
+    {"make": "Bomag", "model": "BW 213 D-5", "year": 2019, "hours": 3100, "sale_price": "79000.00", "sale_date": "2024-10-24", "slug": "compactors"},
+    # Skid Steers
+    {"make": "Caterpillar", "model": "272D2", "year": 2020, "hours": 1400, "sale_price": "62000.00", "sale_date": "2024-12-03", "slug": "skid-steers"},
+    {"make": "Caterpillar", "model": "272D2", "year": 2018, "hours": 3800, "sale_price": "44000.00", "sale_date": "2024-09-18", "slug": "skid-steers"},
+    {"make": "Bobcat", "model": "S770", "year": 2020, "hours": 1700, "sale_price": "57000.00", "sale_date": "2024-11-26", "slug": "skid-steers"},
+    # Cranes
+    {"make": "Manitowoc", "model": "MLC100", "year": 2018, "hours": 5200, "sale_price": "780000.00", "sale_date": "2024-08-27", "slug": "cranes"},
+    {"make": "Liebherr", "model": "LTM 1070-4.2", "year": 2019, "hours": 4100, "sale_price": "890000.00", "sale_date": "2024-10-11", "slug": "cranes"},
+    # Forklifts
+    {"make": "Toyota", "model": "8FGU25", "year": 2020, "hours": 2200, "sale_price": "24000.00", "sale_date": "2024-11-05", "slug": "forklifts"},
+    {"make": "Caterpillar", "model": "GP25N", "year": 2019, "hours": 3600, "sale_price": "19000.00", "sale_date": "2024-09-22", "slug": "forklifts"},
+]
+
+
+async def _seed_comparable_sales(session: AsyncSession) -> None:
+    existing = (await session.execute(text("SELECT COUNT(*) FROM comparable_sales"))).scalar()
+    if existing:
+        print(f"  skipping — {existing} rows already present.")
+        return
+
+    # Fetch all seeded category slugs at once.
+    slug_rows = await session.execute(
+        text(
+            "SELECT slug, id FROM equipment_categories "
+            "WHERE replaced_at IS NULL AND deleted_at IS NULL"
+        )
+    )
+    slug_to_id = {row.slug: row.id for row in slug_rows}
+
+    inserted = 0
+    for sale in _COMPARABLE_SALES:
+        cat_id = slug_to_id.get(sale["slug"])
+        if cat_id is None:
+            continue  # category not yet seeded — skip gracefully
+        await session.execute(
+            text(
+                "INSERT INTO comparable_sales "
+                "(id, make, model, year, hours, sale_price, sale_date, source, category_id) "
+                "VALUES (:id, :make, :model, :year, :hours, "
+                "        CAST(:sale_price AS NUMERIC(12,2)), "
+                "        CAST(:sale_date AS TIMESTAMPTZ), "
+                "        'internal', :category_id)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "make": sale["make"],
+                "model": sale["model"],
+                "year": sale["year"],
+                "hours": sale["hours"],
+                "sale_price": sale["sale_price"],
+                "sale_date": sale["sale_date"],
+                "category_id": str(cat_id),
+            },
+        )
+        inserted += 1
+    print(f"  {inserted} rows inserted.")
 
 
 async def main() -> None:
