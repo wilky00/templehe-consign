@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import sqlalchemy as sa
@@ -716,9 +716,21 @@ class AppraisalSubmission(Base):
     equipment_record_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("equipment_records.id"), nullable=False
     )
+    # Sprint 4: appraiser who owns this submission
+    appraiser_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    # Sprint 4: lifecycle status; CHECK constraint + partial-unique draft index in migration 025
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     category_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("equipment_categories.id"), nullable=True
     )
+    # Sprint 4: version of the category snapshot captured at submit time
+    category_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Sprint 4: {prompt_id: version} snapshot captured at submit time
+    prompt_version_set: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Sprint 4: {rule_id: version} snapshot captured at submit time
+    rule_version_set: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     make: Mapped[str | None] = mapped_column(String(100), nullable=True)
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -731,6 +743,9 @@ class AppraisalSubmission(Base):
     management_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     hold_for_title_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     marketability_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Sprint 4: narrative fields for the summary section
+    transport_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    listing_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_purchase_offer: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     suggested_consignment_price: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
@@ -751,6 +766,14 @@ class AppraisalSubmission(Base):
     # use the new shape exclusively.
     field_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Sprint 4: soft-delete + timestamps (migration 025)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     equipment_record: Mapped[EquipmentRecord] = relationship(
         "EquipmentRecord", back_populates="appraisal_submissions"
