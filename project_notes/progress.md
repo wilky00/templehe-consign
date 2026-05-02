@@ -1327,6 +1327,21 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 **Tests:** 6 unit + 9 integration (587 total, 0 regressions); iOS `PinnedCompsTests` (8 XCTest cases)
 
-## Phase 5 Sprints 4–7 — Not yet started
+### Sprint 4 — Epic 5.5: Dynamic Form — IN PROGRESS (PR #50, 2026-05-02)
+
+**What shipped:**
+- **Migration 025** — ALTER TABLE `appraisal_submissions` adds `appraiser_id` (FK→users), `status` VARCHAR(20) + CHECK constraint ('draft'/'submitted'/'under_review'/'approved'/'rejected'), `category_version`, `prompt_version_set` JSONB, `rule_version_set` JSONB, `transport_notes`, `listing_notes`, `deleted_at`, `created_at`, `updated_at`; partial unique index one-draft-per-record; compound index on (appraiser_id, status); updated_at trigger
+- **`AppraisalSubmission` ORM** extended with 9 new mapped columns
+- **`scoring_service.calculate_overall()`** — pure weighted-average function; band labels (excellent ≥4.5, good ≥3.5, fair ≥2.5, poor ≥1.5, salvage); weight-normalization flag when weights ≠ 100±0.5
+- **`appraisal_submission_service`** — `create_draft` (409 if draft exists), `update_draft` (upserts component scores + recalculates overall), `get` (RBAC: appraiser sees own, admin sees all), `list_mine`, `submit` (SELECT FOR UPDATE + version snapshot of category/prompt/rule versions in same transaction)
+- **`POST /api/v1/appraisal-submissions`** (201 draft), **`GET /api/v1/appraisal-submissions`** (list-mine + status filter), **`GET /{id}`**, **`PATCH /{id}`**, **`POST /{id}/submit`**
+- **iOS `CoreDataStack`** — programmatic NSManagedObjectModel with CDAppraisalSubmission + CDConfig; config cache save/load
+- **iOS `AutoSave`** — Combine 10s debounce; NWPathMonitor online/offline split; PATCH backend when online, Core Data when offline
+- **iOS Form**: `DraftSubmission` @MainActor ObservableObject; `DynamicFormView`, `SiteAndAssetSection`, `DynamicCategorySection` (segmented 0–5 scores + yes/no/NA prompts from IOSConfig), `ScoringDisplay` (live recalc + weight warning), `SummaryAndMarketabilitySection`, `PreviewSubmissionView`
+- **iOS `Endpoints.swift`** extended with IOSConfig types + SubmissionOut + new Endpoint paths
+
+**Tests:** 13 scoring unit (13/13 green locally) + 14 integration; iOS DynamicFormViewModelTests (9) + AutoSaveTests (4)
+
+## Phase 5 Sprints 5–7 — Not yet started
 
 ## Phase 6–8 — Not started
