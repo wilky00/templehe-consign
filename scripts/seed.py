@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 import uuid
+from datetime import date as _date
 
 # Allow running from project root or scripts/ directly
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
@@ -288,8 +289,7 @@ async def _seed_comparable_sales(session: AsyncSession) -> None:
                 "(id, make, model, year, hours, sale_price, sale_date, source, category_id) "
                 "VALUES (:id, :make, :model, :year, :hours, "
                 "        CAST(:sale_price AS NUMERIC(12,2)), "
-                "        CAST(:sale_date AS TIMESTAMPTZ), "
-                "        'internal', :category_id)"
+                "        :sale_date, 'internal', :category_id)"
             ),
             {
                 "id": str(uuid.uuid4()),
@@ -298,7 +298,7 @@ async def _seed_comparable_sales(session: AsyncSession) -> None:
                 "year": sale["year"],
                 "hours": sale["hours"],
                 "sale_price": sale["sale_price"],
-                "sale_date": sale["sale_date"],
+                "sale_date": _date.fromisoformat(sale["sale_date"]),
                 "category_id": str(cat_id),
             },
         )
