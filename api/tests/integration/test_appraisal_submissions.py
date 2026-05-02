@@ -110,7 +110,7 @@ async def _make_record(db: AsyncSession, category: EquipmentCategory) -> Equipme
 
 
 async def _make_component(
-    db: AsyncSession, category: EquipmentCategory, weight: float = 100.0
+    db: AsyncSession, category: EquipmentCategory, weight: float = 50.0
 ) -> CategoryComponent:
     comp = CategoryComponent(
         category_id=category.id,
