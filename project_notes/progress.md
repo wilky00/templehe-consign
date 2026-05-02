@@ -1271,6 +1271,49 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 ---
 
-## Phase 5 Sprints 2–7 — Not yet started
+---
+
+### Sprint 2 — Epic 5.2 (Dashboard) + Epic 5.3 (Maps) + APNs Dispatch — COMPLETE
+
+**Backend (9 files):**
+- Migration `023_phase5_widen_notification_channel_apns.py` (NEW) — widened `chk_notification_channel` to add `'apns'`.
+- `api/services/apns_dispatch_service.py` (NEW) — JWT-based APNs dispatch (ES256, PyJWT); HTTP/2 via httpx; credential from vault under `apns`; graceful `skipped` when unconfigured; permanent failure (400 BadDeviceToken / 410 Unregistered) soft-deletes device_token; 5xx raises `TransientAPNsError` for retry.
+- `api/services/device_token_service.py` (extend) — added `revoke_by_id(db, *, token_id)` used by APNs permanent-failure cleanup.
+- `api/services/notification_templates.py` (extend) — `register()` + `_render()` now support `channel="apns"` (requires subject_template); added `record_assigned_apns`, `appointment_reminder_apns`, `sync_confirmation_apns` templates.
+- `api/services/notification_service.py` (extend) — `enqueue()` accepts `"apns"` channel; `process_job()` routes to `_dispatch_apns()`.
+- `api/services/equipment_service.py` (extend) — `enqueue_assignment_notification()` fans out to APNs jobs per device token after the email job.
+- `api/services/appraiser_appointments_service.py` (NEW) — `list_for_appraiser()` joins CalendarEvent → EquipmentRecord → Customer; batch-loads sales reps; excludes cancelled events + soft-deleted records.
+- `api/schemas/appraiser.py` (NEW) — `AppointmentDetail` + `AppointmentListResponse`.
+- `api/routers/me_appointments.py` (NEW) — `GET /api/v1/me/appointments?days=30`; roles: appraiser/admin.
+- `api/main.py` (extend) — register `me_appointments` router.
+- `api/pyproject.toml` (extend) — added `httpx[http2]>=0.27` to production deps.
+
+**iOS (4 files):**
+- `ios/TempleHEAppraiser/Maps/MapsLauncher.swift` (NEW) — `navigate(to:)` tries Apple Maps URL scheme first, falls back to Google Maps universal URL.
+- `ios/TempleHEAppraiser/Dashboard/AssignmentCard.swift` (NEW) — card view with make/model/year, status badge, address, call-rep/call-customer/navigate/copy-address actions.
+- `ios/TempleHEAppraiser/Dashboard/DashboardView.swift` (NEW) — `DashboardViewModel` (@MainActor ObservableObject); 4 sections (Today / Upcoming / Drafts / Recent); pull-to-refresh.
+- `ios/TempleHEAppraiser/Push/NotificationDeepLink.swift` (NEW) — `DeepLinkDestination` enum + `destination(from:)` that routes tapped APNs notifications to `.assignmentDetail(recordID:)` or `.dashboardRoot`.
+- `ios/TempleHEAppraiser/Networking/Endpoints.swift` (extend) — added `AppointmentDetail`, `AppointmentListResponse`, `meAppointments` endpoint.
+
+**Tests (3 files, 17 tests):**
+- `api/tests/integration/test_apns_dispatch.py` (NEW, 7 tests) — success/delivered, 400 BadDeviceToken → failed + token soft-deleted, 410 Unregistered → failed + token soft-deleted, 5xx → TransientAPNsError, unconfigured → skipped, JWT kid/alg headers, production host routing.
+- `api/tests/integration/test_appraiser_appointments.py` (NEW, 7 tests) — happy path, cancelled excluded, days filter, sort order, cross-appraiser isolation, soft-deleted record excluded, customer role blocked (403).
+- `api/tests/integration/test_notification_apns_routing.py` (NEW, 3 tests) — assignment fans out email + apns per token, no tokens = email only, idempotent (same trigger = 1 APNs job).
+- `ios/TempleHEAppraiserTests/Dashboard/DashboardViewModelTests.swift` (NEW, 7 tests) — today/upcoming split, pull-to-refresh, empty-state, load failure.
+
+**Results:** 572/572 tests green (was 555; +17 new Sprint 2 tests). Lint + format clean. Full regression suite clean.
+
+**Decisions:**
+- APNs credential format: `{private_key, key_id, team_id}` JSON blob in vault under `apns`.
+- Graceful stub when unconfigured: `send()` returns `"skipped"`; dispatcher sets `last_error = "apns_skipped_not_configured"`. Sprint 2 dispatch ships even without the vault entry — sprint-unblocking.
+- Per-token notification_job rows: one row per device token, idempotency key includes `dt.id`. Correct retry semantics.
+- Dashboard sections: Today / Upcoming / Drafts (empty until Sprint 4 Core Data) / Recent (empty until Sprint 4). Empty-state placeholders shown now.
+
+**Manual ops (Outline §15):**
+- APNs AuthKey downloaded by Jim (Key Name: TempleHE APNs Key, Environment: Both, Team Scoped). To activate dispatch: vault entry via `/admin/integrations` with `{private_key, key_id, team_id}` JSON.
+
+---
+
+## Phase 5 Sprints 3–7 — Not yet started
 
 ## Phase 6–8 — Not started

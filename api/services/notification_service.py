@@ -61,7 +61,7 @@ async def enqueue(
     claim query on the same clock — Python-on-host vs Postgres-in-Docker
     can drift by hundreds of milliseconds, which otherwise races the worker.
     """
-    if channel not in ("email", "sms", "slack"):
+    if channel not in ("email", "sms", "slack", "apns"):
         raise ValueError(f"Unknown notification channel: {channel}")
     values: dict = {
         "idempotency_key": idempotency_key,
@@ -167,6 +167,8 @@ async def process_job(db: AsyncSession, job: NotificationJob) -> str:
             new_status = await _dispatch_sms(job)
         elif job.channel == "slack":
             new_status = await _dispatch_slack(db, job)
+        elif job.channel == "apns":
+            new_status = await _dispatch_apns(db, job)
         else:
             new_status = "failed"
             job.last_error = f"unknown channel: {job.channel}"
@@ -261,6 +263,56 @@ async def _dispatch_sms(job: NotificationJob) -> str:
         body=body,
     )
     return "delivered"
+
+
+async def _dispatch_apns(db: AsyncSession, job: NotificationJob) -> str:
+    """Dispatch via :mod:`services.apns_dispatch_service`.
+
+    Payload keys: ``token``, ``device_environment``, ``title``, ``body``,
+    ``device_token_id`` (UUID str), ``data`` (optional dict).
+
+    Permanent failures (BadDeviceToken / Unregistered) → ``failed`` and the
+    device_token row is soft-deleted so it won't be targeted again.
+    Transient failures (5xx / connection) → re-raise so process_job's
+    except flips status to ``retry`` with backoff."""
+    from services import apns_dispatch_service
+
+    payload = job.payload or {}
+    token = payload.get("token")
+    device_environment = payload.get("device_environment", "development")
+    title = payload.get("title", "")
+    body = payload.get("body", "")
+
+    if not token:
+        job.last_error = "apns payload missing token"
+        return "failed"
+
+    raw_token_id = payload.get("device_token_id")
+    device_token_id = None
+    if raw_token_id:
+        try:
+            import uuid as _uuid
+
+            device_token_id = _uuid.UUID(raw_token_id)
+        except (ValueError, AttributeError):
+            pass
+
+    try:
+        status = await apns_dispatch_service.send(
+            db,
+            token=token,
+            device_environment=device_environment,
+            title=title,
+            body=body,
+            data=payload.get("data"),
+            device_token_id=device_token_id,
+        )
+    except apns_dispatch_service.TransientAPNsError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+    if status == "skipped":
+        job.last_error = "apns_skipped_not_configured"
+    return status
 
 
 async def _dispatch_slack(db: AsyncSession, job: NotificationJob) -> str:

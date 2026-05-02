@@ -280,6 +280,35 @@ async def enqueue_assignment_notification(
         },
     )
 
+    # APNs fan-out — one job per active iOS device token for this user.
+    # Idempotency key includes the token id so per-device jobs don't
+    # collide with each other or with a re-assignment of the same record.
+    from services import device_token_service
+
+    ios_tokens = await device_token_service.tokens_for_user(
+        db, user_id=assigned_user_id, platform="ios"
+    )
+    for dt in ios_tokens:
+        await notification_service.enqueue(
+            db,
+            idempotency_key=f"record_assigned_apns:{record.id}:{dt.id}:{trigger}",
+            user_id=assigned_user_id,
+            channel="apns",
+            template="record_assigned_apns",
+            payload={
+                "token": dt.token,
+                "device_token_id": str(dt.id),
+                "device_environment": dt.environment,
+                "title": "New Assignment",
+                "body": f"You've been assigned {descriptor}.",
+                "data": {
+                    "type": "assignment",
+                    "record_id": str(record.id),
+                    "reference_number": ref,
+                },
+            },
+        )
+
 
 async def _enqueue_confirmation(
     db: AsyncSession,

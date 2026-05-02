@@ -96,9 +96,9 @@ def register(spec: Template) -> Template:
             f"Notification template '{spec.name}' already registered with a different "
             "spec; rename or deduplicate."
         )
-    if spec.channel == "email" and spec.subject_template is None:
-        raise RuntimeError(f"email template '{spec.name}' requires a subject_template")
-    if spec.channel not in ("email", "sms"):
+    if spec.channel in ("email", "apns") and spec.subject_template is None:
+        raise RuntimeError(f"'{spec.channel}' template '{spec.name}' requires a subject_template")
+    if spec.channel not in ("email", "sms", "apns"):
         raise RuntimeError(f"template '{spec.name}' has invalid channel '{spec.channel}'")
     _REGISTRY[spec.name] = spec
     return spec
@@ -150,11 +150,12 @@ def _render(
     subject_override: str | None,
     body_override: str | None,
 ) -> RenderedTemplate:
+    # apns uses plain-text env (no HTML autoescape) same as sms.
     env = _ENV if spec.channel == "email" else _SMS_ENV
     body_src = body_override if body_override is not None else spec.body_template
     body = env.from_string(body_src).render(**variables).strip()
     subject = None
-    if spec.channel == "email":
+    if spec.channel in ("email", "apns"):
         subject_src = subject_override if subject_override is not None else spec.subject_template
         subject = env.from_string(subject_src or "").render(**variables).strip()
     return RenderedTemplate(subject=subject, body=body)
@@ -368,5 +369,52 @@ SERVICE_HEALTH_RED_ALERT_SLACK = register(
             ":rotating_light: TempleHE health alert: *{{ service_name }}* "
             "is red as of {{ checked_at }}. Detail: {{ error_detail }}"
         ),
+    )
+)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 Sprint 2 — APNs push notification templates.
+# The dispatcher reads title/body from job.payload directly (same pattern
+# as email templates above). These registry entries exist for admin
+# visibility and future template-override support.
+# ---------------------------------------------------------------------------
+
+
+ASSIGNMENT_NOTIFICATION_APNS = register(
+    Template(
+        name="record_assigned_apns",
+        channel="apns",
+        category="appraiser",
+        variables=("descriptor",),
+        description="iOS push sent to an appraiser when they are assigned an equipment record.",
+        subject_template="New Assignment",
+        body_template="You've been assigned {{ descriptor }}.",
+    )
+)
+
+
+APPOINTMENT_REMINDER_APNS = register(
+    Template(
+        name="appointment_reminder_apns",
+        channel="apns",
+        category="appraiser",
+        variables=("descriptor", "scheduled_time"),
+        description="iOS push reminder sent to an appraiser before a scheduled appointment.",
+        subject_template="Upcoming Appointment",
+        body_template="{{ descriptor }} is scheduled for {{ scheduled_time }}.",
+    )
+)
+
+
+SYNC_CONFIRMATION_APNS = register(
+    Template(
+        name="sync_confirmation_apns",
+        channel="apns",
+        category="appraiser",
+        variables=("reference_number",),
+        description="Silent iOS push after a successful appraisal sync to prompt a data refresh.",
+        subject_template="Sync Complete",
+        body_template="Appraisal {{ reference_number }} synced successfully.",
     )
 )

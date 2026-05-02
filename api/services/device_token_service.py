@@ -152,6 +152,22 @@ async def tokens_for_user(
     return list(result.scalars().all())
 
 
+async def revoke_by_id(db: AsyncSession, *, token_id: uuid.UUID) -> None:
+    """Soft-delete a device token by its primary key.
+
+    Used by the APNs dispatcher when Apple returns a permanent failure
+    (BadDeviceToken / Unregistered) — the token is dead and will never
+    work again, so we remove it from the active set immediately.
+    """
+    await db.execute(
+        update(DeviceToken)
+        .where(DeviceToken.id == token_id, DeviceToken.deleted_at.is_(None))
+        .values(deleted_at=datetime.now(UTC))
+    )
+    await db.flush()
+    logger.info("device_token_revoked_by_id", token_id=str(token_id))
+
+
 async def revoke_all_for_user(db: AsyncSession, *, user: User) -> int:
     """Soft-delete every active device token for a user.
 
