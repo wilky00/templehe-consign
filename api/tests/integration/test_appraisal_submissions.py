@@ -92,9 +92,8 @@ async def _make_category(db: AsyncSession) -> EquipmentCategory:
 
 async def _make_record(db: AsyncSession, category: EquipmentCategory) -> EquipmentRecord:
     customer = Customer(
-        first_name="Test",
-        last_name="Owner",
-        email=f"owner-{_tag()}@example.com",
+        submitter_name="Test Owner",
+        invite_email=f"owner-{_tag()}@example.com",
     )
     db.add(customer)
     await db.flush()
