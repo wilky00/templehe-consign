@@ -1314,6 +1314,19 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 ---
 
-## Phase 5 Sprints 3–7 — Not yet started
+### Sprint 3 — Epic 5.4: Valuation Lookup — COMPLETE (PR #49, 2026-05-02)
+
+**What shipped:**
+- **Migration 024** — ALTER TABLE `comparable_sales` to add `source_url`, `notes`, `created_by` (FK→users), `deleted_at`; CHECK(source IN ('internal','external','scraped')); composite index on (category_id, year, hours) + partial index for active rows
+- **`ComparableSale` ORM** extended to match new columns
+- **`valuation_service.search()`** — internal comparable_sales query (make ILIKE, model ILIKE, ±year_range, ±hours_range, category_id filter, soft-delete excluded); stubbed external provider (returns []); feature-flagged Playwright scraper stub
+- **3 AppConfig keys**: `enable_playwright_valuation_scraper` (bool, default false), `valuation_year_range` (int, default 3), `valuation_hours_range` (int, default 500)
+- **`POST /api/v1/valuation/search`** — appraiser/admin role; body `{make, model, year, hours, category_id}`; returns `{results, used_sources}`
+- **~50 seed rows** in `comparable_sales` across 10 equipment categories (CAT, Komatsu, JD, Volvo, Hitachi, Liebherr, Bell, Bomag, Manitowoc, Toyota); seed is idempotent (skip if rows exist)
+- **iOS**: `ValuationLookupView` (search UI with pinned section), `ComparableSaleRow` (price + source badge + pin button), `PinnedComps` (max-5 in-memory manager, Core Data hook in Sprint 4); `Endpoints.swift` extended with valuation types + path
+
+**Tests:** 6 unit + 9 integration (587 total, 0 regressions); iOS `PinnedCompsTests` (8 XCTest cases)
+
+## Phase 5 Sprints 4–7 — Not yet started
 
 ## Phase 6–8 — Not started
