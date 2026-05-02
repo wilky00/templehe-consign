@@ -81,9 +81,7 @@ async def search(
         results.extend(external)
         used_sources.append("external")
 
-    scraper_enabled = await app_config_registry.get_typed(
-        db, "enable_playwright_valuation_scraper"
-    )
+    scraper_enabled = await app_config_registry.get_typed(db, "enable_playwright_valuation_scraper")
     if scraper_enabled:
         _enqueue_scraper_job(params)
 
@@ -119,13 +117,17 @@ async def _search_internal(
         filters.append(ComparableSale.category_id == params.category_id)
 
     rows = (
-        await db.execute(
-            select(ComparableSale)
-            .where(*filters)
-            .order_by(ComparableSale.sale_date.desc().nulls_last())
-            .limit(50)
+        (
+            await db.execute(
+                select(ComparableSale)
+                .where(*filters)
+                .order_by(ComparableSale.sale_date.desc().nulls_last())
+                .limit(50)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [ComparableSaleOut.model_validate(r) for r in rows]
 

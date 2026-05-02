@@ -56,9 +56,7 @@ def downgrade() -> None:
     op.execute(sa.text("DROP INDEX IF EXISTS ix_comparable_sales_active"))
     op.execute(sa.text("DROP INDEX IF EXISTS ix_comparable_sales_category_year_hours"))
     op.execute(
-        sa.text(
-            "ALTER TABLE comparable_sales DROP CONSTRAINT IF EXISTS chk_comparable_sale_source"
-        )
+        sa.text("ALTER TABLE comparable_sales DROP CONSTRAINT IF EXISTS chk_comparable_sale_source")
     )
     op.execute(sa.text("ALTER TABLE comparable_sales DROP COLUMN IF EXISTS deleted_at"))
     op.execute(sa.text("ALTER TABLE comparable_sales DROP COLUMN IF EXISTS created_by"))

@@ -82,8 +82,13 @@ async def test_empty_internal_returns_no_sources():
 async def test_stubbed_external_returns_empty():
     result = valuation_service._search_external(
         valuation_service._SearchParams(
-            make="CAT", model="320", year=2020, hours=3000,
-            category_id=None, year_range=3, hours_range=500,
+            make="CAT",
+            model="320",
+            year=2020,
+            hours=3000,
+            category_id=None,
+            year_range=3,
+            hours_range=500,
         )
     )
     assert result == []
@@ -131,8 +136,13 @@ async def test_scraper_not_enqueued_when_flag_disabled():
 def test_hours_lower_bound_clamps_to_zero():
     """Hours range must not go negative — clamp at 0."""
     params = valuation_service._SearchParams(
-        make=None, model=None, year=None, hours=100,
-        category_id=None, year_range=3, hours_range=500,
+        make=None,
+        model=None,
+        year=None,
+        hours=100,
+        category_id=None,
+        year_range=3,
+        hours_range=500,
     )
     # The internal search builds `max(0, hours - hours_range)` as the lower bound.
     # Verify the math: 100 - 500 = -400, clamped to 0.

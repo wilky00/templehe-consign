@@ -154,8 +154,8 @@ async def test_year_range_filter_includes_nearby(client: AsyncClient, db_session
     assert resp.status_code == 200
     data = resp.json()
     years = [r["year"] for r in data["results"]]
-    assert 2018 in years       # within ±3
-    assert 2025 not in years   # outside ±3
+    assert 2018 in years  # within ±3
+    assert 2025 not in years  # outside ±3
 
 
 @pytest.mark.asyncio
@@ -173,7 +173,7 @@ async def test_hours_range_filter_includes_nearby(client: AsyncClient, db_sessio
     assert resp.status_code == 200
     data = resp.json()
     hours_list = [r["hours"] for r in data["results"]]
-    assert 2600 in hours_list    # within ±500
+    assert 2600 in hours_list  # within ±500
     assert 5000 not in hours_list  # outside ±500
 
 
