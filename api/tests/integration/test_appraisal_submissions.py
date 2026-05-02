@@ -100,7 +100,7 @@ async def _make_record(db: AsyncSession, category: EquipmentCategory) -> Equipme
     record = EquipmentRecord(
         customer_id=customer.id,
         category_id=category.id,
-        status="pending_appraisal",
+        status="new_request",
         customer_make="CAT",
         customer_model="320",
     )
