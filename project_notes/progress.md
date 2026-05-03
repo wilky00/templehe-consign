@@ -1421,6 +1421,23 @@ Full spec: `dev_plan/06_phase6_approval_esign.md`
 **Integration test gate: PASSED — 497/497 green 2026-05-02**
 **Unit test gate: PASSED — 177/177 green 2026-05-02**
 
+### Sprint 2: Manager Approval Workflow — COMPLETE (verified green 2026-05-02)
+
+- [x] `api/alembic/versions/029_phase6_approval_workflow.py` (NEW) — add `rejection_notes`, `approved_by_id`, `approved_at` to `appraisal_submissions`
+- [x] `api/database/models.py` — 3 new nullable columns on `AppraisalSubmission`
+- [x] `api/services/appraisal_submission_service.py` — `submit()` now transitions `EquipmentRecord.status → "appraisal_complete"` via `record_transition()`; resolves customer user for notification
+- [x] `api/services/approval_service.py` (NEW) — `get_queue()`, `approve()`, `reject()` with `AuditLog` writes + structlog
+- [x] `api/schemas/approval.py` (NEW) — `ApprovalQueueItemOut`, `ApprovalQueueResponse`, `ApprovalDecisionRequest`, `RejectionDecisionRequest`
+- [x] `api/routers/manager_approvals.py` (NEW) — `GET /manager/approvals`, `GET /{id}`, `POST /{id}/approve`, `POST /{id}/reject` (sales_manager + admin only)
+- [x] `api/schemas/appraisal_submission.py` — `SubmissionOut` extended with `management_review_required`, `hold_for_title_review`, `review_notes`, `approved_purchase_offer`, `suggested_consignment_price`, `rejection_notes`, `approved_by_id`, `approved_at`
+- [x] `api/routers/appraisal_submissions.py` — `_submission_to_out()` updated for new `SubmissionOut` fields
+- [x] `api/main.py` — registered `manager_approvals` router
+- [x] `api/services/notification_templates.py` — `appraisal_rejected_sales_rep_email` + `appraisal_rejected_appraiser_email` templates
+- [x] `api/tests/integration/test_approval_workflow.py` (NEW) — 12 integration tests: queue, RBAC, approve (status transitions, audit log, title hold enforcement), reject (permanent + send-back, appraiser notification, audit log, 404)
+
+**Integration test gate: PASSED — 512/512 green 2026-05-02**
+**Unit test gate: PASSED — 177/177 green 2026-05-02**
+
 ---
 
 ## Phase 7–8 — Not started

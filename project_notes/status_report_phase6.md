@@ -48,3 +48,47 @@
 
 - `field_values` (JSONB, keyed by prompt UUID) is not yet extracted for red flag evaluation. Rules can only fire on the ~5 direct columns. Tracking in `known-issues.md`.
 
+
+---
+
+## Sprint 2: Manager Approval Workflow — COMPLETE (2026-05-02)
+
+### What was built
+
+| File | Action | Key change |
+|---|---|---|
+| `api/alembic/versions/029_phase6_approval_workflow.py` | NEW | `rejection_notes TEXT`, `approved_by_id UUID → users`, `approved_at TIMESTAMPTZ` on `appraisal_submissions` |
+| `api/database/models.py` | Modified | 3 new nullable columns on `AppraisalSubmission` |
+| `api/services/appraisal_submission_service.py` | Modified | `submit()` transitions `EquipmentRecord → "appraisal_complete"` via `record_transition()`; resolves customer user for notification |
+| `api/services/approval_service.py` | NEW | `get_queue()`, `approve()`, `reject()` + `AuditLog` writes |
+| `api/schemas/approval.py` | NEW | Queue item + decision request/response schemas |
+| `api/routers/manager_approvals.py` | NEW | 4 endpoints: GET queue, GET detail, POST approve, POST reject (sales_manager + admin) |
+| `api/schemas/appraisal_submission.py` | Modified | `SubmissionOut` extended with 8 new approval-related fields |
+| `api/routers/appraisal_submissions.py` | Modified | `_submission_to_out()` updated for new `SubmissionOut` fields |
+| `api/main.py` | Modified | Registered `manager_approvals` router |
+| `api/services/notification_templates.py` | Modified | `appraisal_rejected_sales_rep_email` + `appraisal_rejected_appraiser_email` templates |
+| `api/tests/integration/test_approval_workflow.py` | NEW | 12 integration tests |
+
+### Key decisions
+
+- `submit()` calls `equipment_status_service.record_transition()` to move the equipment record to `"appraisal_complete"`. Resolves the customer user for the customer notification email; walk-in customers with no user account have `customer_user=None` and the notification is silently skipped.
+- `approve()` uses `SELECT FOR UPDATE` lock on the submission before writing. The `record_transition()` call to `"approved_pending_esign"` fires the existing `sales_rep_approved_pending_esign` email+SMS via the status machine — no new templates needed for approval.
+- `hold_for_title_review` is enforced at the API layer: approving a flagged submission without `title_review_confirmed: true` returns 422.
+- `reject(send_back=True)` → `EquipmentRecord.status = "new_request"` + appraiser email; `send_back=False` → `"declined"` (terminal). The assigned sales rep is notified in both cases.
+- `AuditLog` is written inline in `approval_service.py` (consistent with `sales_service`, `calendar_service`).
+- No per-manager queue filtering — `sales_manager` sees all `"appraisal_complete"` records, consistent with the spec ("all records for admin role" implies the manager queue is also global).
+
+### Test results
+
+- Unit: 177/177 passed
+- Integration: 512/512 passed
+- Coverage: 88% (above 85% gate)
+
+### Bugs found and fixed during sprint
+
+1. `NotificationJob.recipient_user_id` doesn't exist — field is `user_id`. Fixed in `test_approval_workflow.py`.
+
+### Open issues
+
+- Frontend approval queue page (`/manager/approvals`) is deferred to Sprint 3.
+- `field_values` (JSONB, keyed by prompt UUID) is still not extracted for red flag evaluation. Carry-forward from Sprint 1.
