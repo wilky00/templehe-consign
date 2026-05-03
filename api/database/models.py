@@ -806,6 +806,13 @@ class AppraisalPhoto(Base):
     gps_missing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     gps_out_of_range: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    gps_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     submission: Mapped[AppraisalSubmission] = relationship(
         "AppraisalSubmission", back_populates="photos"
