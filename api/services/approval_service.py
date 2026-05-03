@@ -28,7 +28,12 @@ from database.models import (
     EquipmentRecord,
     User,
 )
-from services import equipment_status_service, esign_service, notification_service, user_roles_service
+from services import (
+    equipment_status_service,
+    esign_service,
+    notification_service,
+    user_roles_service,
+)
 from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)

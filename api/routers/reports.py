@@ -54,7 +54,8 @@ async def get_report_download(
     # Ownership check: customers can only access their own records
     from services import user_roles_service
     roles = await user_roles_service.role_slugs_for_user(db, user=current_user)
-    if "customer" in roles and "admin" not in roles and "sales" not in roles and "sales_manager" not in roles:
+    non_staff = "admin" not in roles and "sales" not in roles and "sales_manager" not in roles
+    if "customer" in roles and non_staff:
         customer_result = await db.execute(
             select(Customer).where(Customer.user_id == current_user.id)
         )
@@ -84,8 +85,11 @@ async def get_report_download(
 
     try:
         download_url, expires_at = pdf_generation_worker.generate_download_url(report.gcs_path)
-    except Exception:
+    except Exception as exc:
         logger.exception("report_presign_failed", record_id=str(record_id))
-        raise HTTPException(status_code=503, detail="Could not generate download link. Try again shortly.")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not generate download link. Try again shortly.",
+        ) from exc
 
     return ReportDownloadResponse(download_url=download_url, expires_at=expires_at)

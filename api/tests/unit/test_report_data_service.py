@@ -16,10 +16,7 @@ from services.report_data_service import (
     _build_component_rows,
     _build_red_flags,
     _decimal_or_none,
-    _photo_to_record,
-    _user_to_member,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures — lightweight ORM-like objects using MagicMock
@@ -296,7 +293,8 @@ def test_build_comparable_sales_empty():
 
 
 def test_build_red_flags_parses_label():
-    raw = [{"rule_id": str(uuid.uuid4()), "label": "Missing serial plate", "triggered_at": "2026-05-03"}]
+    raw = [{"rule_id": str(uuid.uuid4()), "label": "Missing serial plate",
+            "triggered_at": "2026-05-03"}]
     flags = _build_red_flags(raw)
     assert len(flags) == 1
     assert flags[0].label == "Missing serial plate"

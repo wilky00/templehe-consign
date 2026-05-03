@@ -22,13 +22,13 @@ from database.models import (
     User,
 )
 from middleware.rbac import require_roles
+from schemas.appraisal_submission import SubmissionOut
 from schemas.approval import (
     ApprovalDecisionRequest,
     ApprovalQueueItemOut,
     ApprovalQueueResponse,
     RejectionDecisionRequest,
 )
-from schemas.appraisal_submission import SubmissionOut
 from services import approval_service, pdf_generation_worker
 
 logger = structlog.get_logger(__name__)

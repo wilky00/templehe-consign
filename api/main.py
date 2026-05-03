@@ -22,21 +22,21 @@ from routers import admin_routing as admin_routing_router
 from routers import admin_templates as admin_templates_router
 from routers import appraisal_photos as appraisal_photos_router
 from routers import appraisal_submissions as appraisal_submissions_router
-from routers import esign as esign_router
-from routers import manager_approvals as manager_approvals_router
 from routers import auth as auth_router
 from routers import calendar as calendar_router
 from routers import customers as customers_router
 from routers import equipment as equipment_router
+from routers import esign as esign_router
 from routers import health as health_router
 from routers import ios_config as ios_config_router
 from routers import legal as legal_router
+from routers import manager_approvals as manager_approvals_router
 from routers import me_appointments as me_appointments_router
 from routers import me_device_tokens as me_device_tokens_router
 from routers import me_notifications as me_notifications_router
 from routers import record_locks as record_locks_router
-from routers import sales as sales_router
 from routers import reports as reports_router
+from routers import sales as sales_router
 from routers import valuation as valuation_router
 
 logger = structlog.get_logger(__name__)

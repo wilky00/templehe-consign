@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import textwrap
-import uuid
 from datetime import UTC, datetime
 
 import structlog
@@ -27,10 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from database.base import get_db
 from database.models import AuditLog, ConsignmentContract, EquipmentRecord
-from services import notification_service
-from services.equipment_status_machine import Status
 from services import equipment_status_service
-from services.signing_service import EnvelopeStatus, get_signing_service
+from services.equipment_status_machine import Status
+from services.signing_service import get_signing_service
 
 logger = structlog.get_logger(__name__)
 
@@ -43,8 +41,10 @@ _STUB_PAGE_TEMPLATE = textwrap.dedent("""\
       <meta charset="UTF-8">
       <title>Consignment Agreement — Temple Heavy Equipment</title>
       <style>
-        body {{ font-family: system-ui, sans-serif; max-width: 640px; margin: 4rem auto; padding: 0 1rem; }}
-        .notice {{ background: #fef9c3; border: 1px solid #fde047; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; }}
+        body {{ font-family: system-ui, sans-serif; max-width: 640px;
+                margin: 4rem auto; padding: 0 1rem; }}
+        .notice {{ background: #fef9c3; border: 1px solid #fde047;
+                   padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; }}
         button {{ background: #1d4ed8; color: #fff; border: none; padding: .75rem 2rem;
                   font-size: 1rem; border-radius: 6px; cursor: pointer; }}
         button:hover {{ background: #1e40af; }}

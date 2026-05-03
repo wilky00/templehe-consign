@@ -1,5 +1,5 @@
 # ABOUTME: Phase 7 — Pydantic models for the appraisal PDF report data assembly.
-# ABOUTME: ReportData + section models are the contract between ReportDataService and the template layer.
+# ABOUTME: ReportData + section models are the contract between ReportDataService and the template.
 from __future__ import annotations
 
 import uuid

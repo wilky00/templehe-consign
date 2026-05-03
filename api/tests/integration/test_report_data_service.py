@@ -141,9 +141,11 @@ async def _seed_approved_submission(
         approved_by_id=sales_rep.id,
         approved_at=datetime(2026, 5, 3, 12, 0, tzinfo=UTC),
         submitted_at=datetime(2026, 5, 2, 9, 0, tzinfo=UTC),
-        comparable_sales_data=[{"sale_price": "38000", "make": "Komatsu", "model": "PC210", "year": 2017}]
-        if with_comparable_sales
-        else [],
+        comparable_sales_data=(
+            [{"sale_price": "38000", "make": "Komatsu", "model": "PC210", "year": 2017}]
+            if with_comparable_sales
+            else []
+        ),
     )
     db.add(sub)
     await db.flush()

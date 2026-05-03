@@ -1,5 +1,5 @@
 # ABOUTME: Phase 7 — assembles all data required for a PDF appraisal report.
-# ABOUTME: ReportDataService.build_report_data() is the single entry point; raises ReportDataIncompleteError if required data is missing.
+# ABOUTME: build_report_data() is the entry point; raises ReportDataIncompleteError on missing data.
 """Report data assembly service.
 
 Pure data-assembly layer: loads the approved AppraisalSubmission and related
@@ -115,7 +115,9 @@ def _assemble(
     page_size: str,
 ) -> ReportData:
     """Pure assembly function — no DB calls. Unit-testable with fixture objects."""
-    if submission.approved_purchase_offer is None and submission.suggested_consignment_price is None:
+    no_offer = submission.approved_purchase_offer is None
+    no_price = submission.suggested_consignment_price is None
+    if no_offer and no_price:
         raise ReportDataIncompleteError(
             f"Submission {submission.id} has no approval data "
             "(approved_purchase_offer and suggested_consignment_price are both null). "

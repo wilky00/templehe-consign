@@ -1,5 +1,5 @@
 # ABOUTME: Phase 7 — orchestrates PDF generation: data assembly → render → R2 upload → DB row.
-# ABOUTME: generate_and_store() is called as a background asyncio.create_task() from approval_service.approve().
+# ABOUTME: generate_and_store() is triggered via FastAPI BackgroundTasks on appraisal approval.
 """PDF generation worker.
 
 Called from :func:`approval_service.approve` as a best-effort
@@ -31,7 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from database.models import AppraisalReport, AppraisalSubmission, AuditLog
+from database.models import AppraisalReport, AuditLog
 from services import pdf_render_service, report_data_service
 from services.report_data_service import ReportDataIncompleteError
 

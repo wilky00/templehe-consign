@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -16,7 +16,6 @@ from database.models import (
     AppraisalPhoto,
     AppraisalReport,
     AppraisalSubmission,
-    AuditLog,
     Customer,
     EquipmentCategory,
     EquipmentRecord,
@@ -154,9 +153,15 @@ async def test_generate_and_store_happy_path(
 ) -> None:
     """generate_and_store inserts an AppraisalReport row when rendering succeeds."""
     t = _tag()
-    appraiser = await _create_active_user(client, db_session, email=f"app-pdf1-{t}@example.com", role_slug="appraiser")
-    sales_rep = await _create_active_user(client, db_session, email=f"sales-pdf1-{t}@example.com", role_slug="sales")
-    sub, record = await _seed_approved_submission(db_session, appraiser=appraiser, sales_rep=sales_rep)
+    appraiser = await _create_active_user(
+        client, db_session, email=f"app-pdf1-{t}@example.com", role_slug="appraiser"
+    )
+    sales_rep = await _create_active_user(
+        client, db_session, email=f"sales-pdf1-{t}@example.com", role_slug="sales"
+    )
+    sub, record = await _seed_approved_submission(
+        db_session, appraiser=appraiser, sales_rep=sales_rep
+    )
 
     with patch("services.pdf_render_service.render_pdf", return_value=b"%PDF-1.4 fake"), \
          patch("services.pdf_generation_worker._upload_pdf"):
@@ -176,9 +181,15 @@ async def test_generate_and_store_idempotent_overwrites_existing(
 ) -> None:
     """Calling generate_and_store twice updates the existing AppraisalReport row."""
     t = _tag()
-    appraiser = await _create_active_user(client, db_session, email=f"app-pdf2-{t}@example.com", role_slug="appraiser")
-    sales_rep = await _create_active_user(client, db_session, email=f"sales-pdf2-{t}@example.com", role_slug="sales")
-    sub, record = await _seed_approved_submission(db_session, appraiser=appraiser, sales_rep=sales_rep)
+    appraiser = await _create_active_user(
+        client, db_session, email=f"app-pdf2-{t}@example.com", role_slug="appraiser"
+    )
+    sales_rep = await _create_active_user(
+        client, db_session, email=f"sales-pdf2-{t}@example.com", role_slug="sales"
+    )
+    sub, record = await _seed_approved_submission(
+        db_session, appraiser=appraiser, sales_rep=sales_rep
+    )
 
     with patch("services.pdf_render_service.render_pdf", return_value=b"%PDF-1.4 v1"), \
          patch("services.pdf_generation_worker._upload_pdf"):
@@ -204,8 +215,12 @@ async def test_generate_and_store_raises_when_no_approval_data(
     setup_test_db,
 ) -> None:
     t = _tag()
-    appraiser = await _create_active_user(client, db_session, email=f"app-pdf3-{t}@example.com", role_slug="appraiser")
-    sales_rep = await _create_active_user(client, db_session, email=f"sales-pdf3-{t}@example.com", role_slug="sales")
+    appraiser = await _create_active_user(
+        client, db_session, email=f"app-pdf3-{t}@example.com", role_slug="appraiser"
+    )
+    sales_rep = await _create_active_user(
+        client, db_session, email=f"sales-pdf3-{t}@example.com", role_slug="sales"
+    )
     sub, _ = await _seed_approved_submission(
         db_session, appraiser=appraiser, sales_rep=sales_rep, has_approval=False
     )
@@ -226,8 +241,12 @@ async def test_download_endpoint_returns_202_when_no_report(
     setup_test_db,
 ) -> None:
     t = _tag()
-    appraiser = await _create_active_user(client, db_session, email=f"app-pdf4-{t}@example.com", role_slug="appraiser")
-    sales_rep = await _create_active_user(client, db_session, email=f"sales-pdf4-{t}@example.com", role_slug="sales")
+    appraiser = await _create_active_user(
+        client, db_session, email=f"app-pdf4-{t}@example.com", role_slug="appraiser"
+    )
+    sales_rep = await _create_active_user(
+        client, db_session, email=f"sales-pdf4-{t}@example.com", role_slug="sales"
+    )
     _, record = await _seed_approved_submission(
         db_session, appraiser=appraiser, sales_rep=sales_rep
     )
@@ -251,8 +270,12 @@ async def test_download_endpoint_returns_url_when_report_exists(
     setup_test_db,
 ) -> None:
     t = _tag()
-    appraiser = await _create_active_user(client, db_session, email=f"app-pdf5-{t}@example.com", role_slug="appraiser")
-    sales_rep = await _create_active_user(client, db_session, email=f"sales-pdf5-{t}@example.com", role_slug="sales")
+    appraiser = await _create_active_user(
+        client, db_session, email=f"app-pdf5-{t}@example.com", role_slug="appraiser"
+    )
+    sales_rep = await _create_active_user(
+        client, db_session, email=f"sales-pdf5-{t}@example.com", role_slug="sales"
+    )
     sub, record = await _seed_approved_submission(
         db_session, appraiser=appraiser, sales_rep=sales_rep
     )
@@ -273,12 +296,14 @@ async def test_download_endpoint_returns_url_when_report_exists(
         )
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
+    expires = datetime(2026, 5, 3, 13, 0, tzinfo=UTC)
     with patch("routers.reports.settings") as mock_settings, \
          patch("services.pdf_generation_worker.generate_download_url",
-               return_value=("https://r2.example.com/signed-url", datetime(2026, 5, 3, 13, 0, tzinfo=UTC))):
+               return_value=("https://r2.example.com/signed-url", expires)):
         mock_settings.r2_access_key_id = "test-key"
         mock_settings.r2_secret_access_key = "test-secret"
-        resp = await client.get(f"/api/v1/equipment-records/{record.id}/report/pdf", headers=headers)
+        url = f"/api/v1/equipment-records/{record.id}/report/pdf"
+        resp = await client.get(url, headers=headers)
 
     assert resp.status_code == 200
     body = resp.json()
@@ -293,8 +318,12 @@ async def test_download_endpoint_customer_own_record_allowed(
     setup_test_db,
 ) -> None:
     t = _tag()
-    appraiser = await _create_active_user(client, db_session, email=f"app-pdf6-{t}@example.com", role_slug="appraiser")
-    sales_rep = await _create_active_user(client, db_session, email=f"sales-pdf6-{t}@example.com", role_slug="sales")
+    appraiser = await _create_active_user(
+        client, db_session, email=f"app-pdf6-{t}@example.com", role_slug="appraiser"
+    )
+    sales_rep = await _create_active_user(
+        client, db_session, email=f"sales-pdf6-{t}@example.com", role_slug="sales"
+    )
     sub, record = await _seed_approved_submission(
         db_session, appraiser=appraiser, sales_rep=sales_rep
     )
@@ -325,7 +354,9 @@ async def test_download_endpoint_customer_own_record_allowed(
     db_session.add(customer_obj)
     await db_session.flush()
     from services import user_roles_service
-    await user_roles_service.grant(db_session, user=cust_user, role_slug="customer", granted_by=None)
+    await user_roles_service.grant(
+        db_session, user=cust_user, role_slug="customer", granted_by=None
+    )
 
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         login = await client.post(
@@ -346,14 +377,18 @@ async def test_download_endpoint_customer_other_record_forbidden(
     setup_test_db,
 ) -> None:
     t = _tag()
-    appraiser = await _create_active_user(client, db_session, email=f"app-pdf7-{t}@example.com", role_slug="appraiser")
-    sales_rep = await _create_active_user(client, db_session, email=f"sales-pdf7-{t}@example.com", role_slug="sales")
+    appraiser = await _create_active_user(
+        client, db_session, email=f"app-pdf7-{t}@example.com", role_slug="appraiser"
+    )
+    sales_rep = await _create_active_user(
+        client, db_session, email=f"sales-pdf7-{t}@example.com", role_slug="sales"
+    )
     _, record = await _seed_approved_submission(
         db_session, appraiser=appraiser, sales_rep=sales_rep
     )
 
     # A different customer (no profile linkage to this record)
-    different_customer = await _create_active_user(
+    await _create_active_user(
         client, db_session, email=f"diffcust-{t}@example.com", role_slug="customer"
     )
     with patch("services.email_service.send_email", new_callable=AsyncMock):
@@ -374,7 +409,9 @@ async def test_download_endpoint_record_not_found_returns_404(
     setup_test_db,
 ) -> None:
     t = _tag()
-    sales_rep = await _create_active_user(client, db_session, email=f"sales-pdf8-{t}@example.com", role_slug="sales")
+    sales_rep = await _create_active_user(
+        client, db_session, email=f"sales-pdf8-{t}@example.com", role_slug="sales"
+    )
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         login = await client.post(
             "/api/v1/auth/login",
