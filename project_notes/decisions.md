@@ -736,3 +736,62 @@ Eight sprints landed sprint-by-sprint via PRs #34, #35, #38, #39, #40, #42, #43,
 - Implementation: ~80 files across `api/services/`, `api/routers/`, `api/schemas/`, `api/database/models.py`, `api/alembic/versions/016–020`, `api/services/integration_testers/`, `api/services/notification_templates.py`, `api/services/credentials_vault.py`, `api/services/lock_registry.py`, `api/services/health_check_service.py`, `api/services/slack_dispatch_service.py`, `api/services/lead_routing_service.py`, `api/services/category_versioning_service.py`, `api/services/admin_*_service.py`, `web/src/pages/Admin*.tsx`, `web/src/components/admin/*.tsx`, `web/src/api/admin.ts`, `web/lighthouserc.cjs`, `web/lighthouse-auth.cjs`, `scripts/seed_e2e_phase4.py`, `scripts/health_poller.py`.
 - Tests: 100+ new unit + integration tests across the 8 sprints (final backend gate **523/523** passing); `web/e2e/phase4_admin.spec.ts` (7 acceptance scenarios) + `web/e2e/phase4_accessibility.spec.ts` (axe-core sweep across all 9 admin routes).
 - Phase 4 plan flips every Architectural Debt item to "Resolved" in `dev_plan/04_phase4_admin_panel.md`'s closing section.
+
+---
+
+## ADR-021: Phase 5 — iOS Appraiser App
+
+**Date:** 2026-05-02
+**Status:** Accepted
+**Deciders:** Jim Wilen
+
+### Context
+
+Phase 5 ships the native iOS Appraiser App (`dev_plan/05_phase5_ios_app.md`, Epics 5.1–5.7). Seven epics across 8 sprints; outcome is appraisers in the field using an iPad/iPhone that authenticates with the existing TempleHE backend, fetches assignments via APNs push, drives a dynamic appraisal form sourced from `/ios/config`, captures GPS/EXIF-validated camera-only photos, and syncs offline submissions on reconnect.
+
+### Decisions
+
+1. **APNs direct — no Firebase.** The backend signs JWTs with the Apple AuthKey and delivers to `api.push.apple.com`. No Firebase SDK in the iOS app; no FCM token round-trip on login. APNs routes through the existing `notification_jobs` queue and retry/backoff infrastructure (`_dispatch_apns` + `apns_dispatch_service.send`). Permanent failures (BadDeviceToken / Unregistered) soft-delete the `device_tokens` row so the token is never targeted again.
+
+2. **TOTP MultiFernet key rotation mirrors credentials_vault.** `config.py` replaced `totp_encryption_key: str` (single) with `totp_encryption_keys: str` (comma-separated; first key encrypts, all keys attempt decryption). `auth_service._fernet()` returns a `MultiFernet`. Migration 021 is a no-op DDL marker — existing ciphertext decrypts unchanged with the original key.
+
+3. **New appraiser photo endpoint — not reusing the customer intake endpoint.** `POST /api/v1/appraisal-photos/upload-url` + `/finalize` is scoped to `appraiser/admin` and writes to the `appraisal-photos/{submission_id}/{uuid}.{ext}` storage namespace. The customer intake endpoint at `/me/equipment/photos` writes to `photos/{record_id}/{uuid}.{ext}`. Separate namespaces, separate services, no role overlap.
+
+4. **HeadObject validation skipped on finalize.** The iOS client is internal (not adversarial) and finalize always happens when the device is online anyway. sha256 is recorded for audit without server-side re-verification. Matches the customer intake service behavior from Phase 2.
+
+5. **Valuation: internal DB + stubbed external.** `valuation_service.search()` queries the `comparable_sales` table internally and returns `[]` from the stubbed external provider. The `enable_playwright_valuation_scraper` AppConfig flag gates a future scraper stub (no real scraper code in Phase 5). Real provider (IronPlanet vs EquipmentWatch) deferred to Phase 5.5 mini-sprint after contract is signed.
+
+6. **Version snapshot atomicity at submit.** `appraisal_submission_service.submit()` issues `SELECT ... FOR UPDATE` on the submission row, then reads `current_inspection_prompts`, `current_red_flag_rules`, and `category.version` in the same transaction. Any admin supersede landing mid-submit reads consistently. Validated by `test_appraisal_submission_finalize.py`.
+
+7. **Required photo validation at submit time.** `submit()` calls `_validate_required_photos()` which checks that every `CategoryPhotoSlot` with `required=True, active=True` for the submission's category has at least one non-deleted `AppraisalPhoto`. Raises `ValueError` (→ 422) listing the missing slot labels if any are absent.
+
+8. **Sentry over Crashlytics.** Phase 5 ships `CrashReporter.swift` as a Sentry iOS SDK integration point — same DSN family as the API's Sentry project. No Firebase/Crashlytics dependency; avoids a second third-party signup. If Jim wants Crashlytics later, swap the SDK in a Phase 5.5 ops item. `CrashReporter.start()` is a documented stub until the Sentry SPM dependency is added.
+
+9. **BGTaskScheduler + DebugForceSync for XCUITest.** `BGTaskScheduler` doesn't fire reliably in the iOS simulator. `DebugForceSync.swift` (compiled `#if DEBUG` only) exposes a `force-sync-button` accessibility identifier that XCUITest can tap to trigger `SyncService.runNow()` deterministically. Production builds have no debug button.
+
+10. **Core Data for offline storage.** `CoreDataStack.swift` defines `CDAppraisalSubmission` + `CDConfig` in a programmatic `NSManagedObjectModel`. `AutoSave.swift` uses a Combine 10s debounce timer + `NWPathMonitor` to PATCH the backend when online and write to Core Data when offline. Submissions with `status=pending_sync` are uploaded by `SyncService` on the next connectivity restoration.
+
+11. **iOS CI deferred (manual builds + TestFlight).** macOS GitHub Actions runners cost ~10× ubuntu runners. Phase 5 keeps iOS testing local (`xcodebuild test` on Jim's machine) with TestFlight distribution via Fastlane `beta` lane. A macOS CI lane is a Phase 5.5 / Phase 6 pickup when distribution scale justifies the spend.
+
+12. **`apns` channel widened in `notification_jobs.chk_notification_channel`.** Migration 023 dropped and recreated the CHECK constraint to allow `'apns'` alongside `'email'`, `'sms'`, `'slack'`. `notification_service.enqueue()` validates channel client-side too; both checks must stay in sync.
+
+### Open / deferred items
+
+- **Apple Developer enrollment + APNs AuthKey provisioning.** Enrollment can take 24–48h. APNs AuthKey must be added to the integration credentials vault under `apns` before Sprint 2 dispatch fires live pushes. Tracked in Outline §15.
+- **Real valuation provider.** Internal DB ships with ~50 seed rows; external is stubbed. Contract decision (IronPlanet vs EquipmentWatch) tracked in the Open Decisions table in `CLAUDE.md`.
+- **App Store submission timing.** TestFlight from Sprint 7 onward; full App Store review submission after the first month of TestFlight feedback.
+- **BGTaskScheduler simulator unreliability.** Documented in `project_notes/known-issues.md`. DebugForceSync is the mitigation for XCUITest; the underlying limitation is an Apple platform constraint.
+- **Sentry iOS SDK SPM dependency not yet added.** `CrashReporter.swift` is a documented stub. Add `https://github.com/getsentry/sentry-cocoa` via SPM once the DSN is provisioned.
+
+### Consequences
+
+- `device_tokens` table + `/api/v1/appraisers/me/device-token` endpoints are the only path for registering iOS push tokens. No manual token management.
+- `appraisal_submissions` with `status=submitted` + populated `red_flags` JSONB are the Phase 6 input surface for the manager approval queue.
+- `comparable_sales` table + `valuation_service.search()` are the Phase 8 listing-page "pricing context" data source.
+- Notification template registry now covers four channels: `email`, `sms`, `slack`, `apns`. All future channels must register here.
+
+### References
+
+- PRs: #46 (Sprint 0), #47 (Sprint 1), #48 (Sprint 2), #49 (Sprint 3), #50 (Sprint 4), #51 (Sprint 5), #52 (Sprint 6), Sprint 7 PR.
+- Implementation: `api/alembic/versions/021–027`, `api/services/apns_dispatch_service.py`, `api/services/device_token_service.py`, `api/services/appraisal_submission_service.py`, `api/services/appraisal_photo_service.py`, `api/services/valuation_service.py`, `api/services/scoring_service.py`, `api/services/notification_service.py` (enqueue_sync_*), `api/services/notification_templates.py` (apns templates), `api/routers/me_device_tokens.py`, `api/routers/me_appointments.py`, `api/routers/appraisal_submissions.py`, `api/routers/appraisal_photos.py`, `api/routers/valuation.py`, `ios/TempleHEAppraiser/**` (Auth, Dashboard, Form, Photo, Sync, Crash, Networking, Storage, Maps, Push, Valuation).
+- Tests: ~65 new backend tests (final gate **652/652** passing); iOS XCTest + XCUITest suites across all 8 sprints; Phase5Gate.swift covers all 9 acceptance scenarios.

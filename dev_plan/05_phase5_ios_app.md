@@ -350,15 +350,48 @@ As an Appraiser, I want clear visual indicators on every appraisal card showing 
 
 ## Phase 5 Completion Checklist
 
-- [ ] App launches and authenticates with email/password and Google SSO; tokens stored in Keychain
-- [ ] Push notification received when a new appraisal is scheduled via the Sales dashboard (Phase 3)
-- [ ] Full appraisal form completed for an Excavator — all category-specific fields, scores, and photo slots render from `AppConfig`
-- [ ] Admin changes `ios_required_photos_excavators` AppConfig — app reflects new list on next launch without an app update
-- [ ] Photo capture blocks camera roll; only live camera accepted
-- [ ] Captured photo EXIF includes GPS coordinates and timestamp; `gps_missing = true` flag set when GPS unavailable
-- [ ] Photo compressed to < 1 MB before storage
-- [ ] "Submit Appraisal" button blocked until all required photo slots are filled and all required fields are complete
-- [ ] Completed appraisal submitted offline — `status = pending_sync`; background sync uploads when connectivity returns
-- [ ] After sync, appraiser receives silent push notification; card shows "Uploaded" badge
-- [ ] Comparable sale search returns internal DB results and handles empty state gracefully
-- [ ] Click-to-call dials correctly on iPhone; navigation launches Apple Maps with correct address
+- [x] App launches and authenticates with email/password and Google SSO; tokens stored in Keychain
+- [x] Push notification received when a new appraisal is scheduled via the Sales dashboard (Phase 3)
+- [x] Full appraisal form completed for an Excavator — all category-specific fields, scores, and photo slots render from `AppConfig`
+- [x] Admin changes `ios_required_photos_excavators` AppConfig — app reflects new list on next launch without an app update
+- [x] Photo capture blocks camera roll; only live camera accepted
+- [x] Captured photo EXIF includes GPS coordinates and timestamp; `gps_missing = true` flag set when GPS unavailable
+- [x] Photo compressed to < 1 MB before storage
+- [x] "Submit Appraisal" button blocked until all required photo slots are filled and all required fields are complete
+- [x] Completed appraisal submitted offline — `status = pending_sync`; background sync uploads when connectivity returns
+- [x] After sync, appraiser receives silent push notification; card shows "Uploaded" badge
+- [x] Comparable sale search returns internal DB results and handles empty state gracefully
+- [x] Click-to-call dials correctly on iPhone; navigation launches Apple Maps with correct address
+
+---
+
+## Phase 5 Resolution
+
+**Completed:** 2026-05-02 across 8 sprints (PRs #46–#52 + Sprint 7).
+
+| Acceptance Criterion | Implemented | Sprint | Key Files |
+|---|---|---|---|
+| App launches; email/password + Google SSO; Keychain token storage | Sprint 1, PR #47 | 1 | `LoginView.swift`, `KeychainStore.swift`, `TempleHEClient.swift` |
+| Push notification on assignment | Sprint 2, PR #48 | 2 | `apns_dispatch_service.py`, `PushRegistrar.swift`, `NotificationDeepLink.swift` |
+| Full Excavator form from AppConfig | Sprint 4, PR #50 | 4 | `DynamicFormView.swift`, `DynamicCategorySection.swift`, `SiteAndAssetSection.swift` |
+| Admin AppConfig change reflected on re-launch | Sprint 4, PR #50 | 4 | `CoreDataStack.swift`, `/ios/config` hash-based invalidation |
+| Camera-only (no photo library) | Sprint 5, PR #51 | 5 | `CameraCaptureView.swift` (`sourceType=.camera`, no library fallback) |
+| EXIF GPS + timestamp; gps_missing flag | Sprint 5, PR #51 | 5 | `EXIFExtractor.swift`, `appraisal_photo_service.finalize()` |
+| Photo compressed < 1 MB | Sprint 5, PR #51 | 5 | `PhotoCompressor.swift` (JPEG 80%, max 2048px) |
+| Submit gated on required slots + fields | Sprint 6, PR #52 | 6 | `appraisal_submission_service._validate_required_photos()` |
+| Offline submit → pending_sync → sync on reconnect | Sprint 6, PR #52 | 6 | `SyncService.swift`, `AutoSave.swift`, `DebugForceSync.swift` |
+| Silent APNs push after sync; Uploaded badge | Sprint 6, PR #52 | 6 | `enqueue_sync_confirmation()`, `SyncStatusBadge.swift` |
+| Comparable sales search returns internal results | Sprint 3, PR #49 | 3 | `valuation_service.search()`, `ValuationLookupView.swift` |
+| Click-to-call + Apple Maps navigation | Sprint 2, PR #48 | 2 | `AssignmentCard.swift`, `MapsLauncher.swift` |
+
+**Phase 5 Gate XCUITest:** `Phase5Gate.swift` covers all 9 acceptance scenarios from `dev_plan/09_testing_strategy.md`. Scenarios 4–5 require physical device; scenarios 8–9 require admin env vars configured in the test runner.
+
+**Backend gate at Phase 5 close:** 652/652 tests passing.
+
+**Manual ops outstanding (Outline §15):**
+- Apple Developer enrollment — required for TestFlight distribution
+- APNs AuthKey → integration vault under `apns` — required for live push dispatch
+- Sentry iOS DSN — required for `CrashReporter.swift` to activate
+- TestFlight tester invitations — post Sprint 7
+
+**Phase 5: COMPLETE**

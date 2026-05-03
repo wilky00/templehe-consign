@@ -1327,7 +1327,7 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 **Tests:** 6 unit + 9 integration (587 total, 0 regressions); iOS `PinnedCompsTests` (8 XCTest cases)
 
-### Sprint 4 — Epic 5.5: Dynamic Form — IN PROGRESS (PR #50, 2026-05-02)
+### Sprint 4 — Epic 5.5: Dynamic Form — COMPLETE (PR #50, 2026-05-02)
 
 **What shipped:**
 - **Migration 025** — ALTER TABLE `appraisal_submissions` adds `appraiser_id` (FK→users), `status` VARCHAR(20) + CHECK constraint ('draft'/'submitted'/'under_review'/'approved'/'rejected'), `category_version`, `prompt_version_set` JSONB, `rule_version_set` JSONB, `transport_notes`, `listing_notes`, `deleted_at`, `created_at`, `updated_at`; partial unique index one-draft-per-record; compound index on (appraiser_id, status); updated_at trigger
@@ -1342,6 +1342,62 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 **Tests:** 13 scoring unit (13/13 green locally) + 14 integration; iOS DynamicFormViewModelTests (9) + AutoSaveTests (4)
 
-## Phase 5 Sprints 5–7 — Not yet started
+---
+
+### Sprint 5 — Epic 5.6: Photo Capture — COMPLETE (PR #51, 2026-05-02)
+
+**What shipped:**
+- **Migration 026** — ALTER TABLE `appraisal_photos` adds `sha256`, `content_type`, `gps_timestamp`, `created_at`, `deleted_at`; composite index on (submission_id, slot_label) WHERE deleted_at IS NULL; unique index on gcs_path
+- **Migration 027** — seeds `photo_gps_radius_tolerance_meters = {"meters": 5000}` + `ios_required_photos_{slug}` per active category from `category_photo_slots` rows
+- **`appraisal_photo_service`** — `generate_upload_intent` (presigned R2 PUT URL under `appraisal-photos/{submission_id}/` namespace), `finalize` (soft-deletes prior slot photo on retake, persists EXIF + GPS fields)
+- **`POST /api/v1/appraisal-photos/upload-url`** + **`POST /api/v1/appraisal-photos/finalize`** — appraiser/admin, must own parent submission
+- **`photo_gps_radius_tolerance_meters` AppConfig key** registered in `app_config_registry`
+- **iOS Photo module**: `CameraCaptureView`, `EXIFExtractor`, `GPSRadiusValidator`, `PhotoCompressor`, `PhotoChecklistView`, `PhotoUploader`
+
+**Tests:** 12 integration tests; all green. Backend gate 624/624.
+
+**Key decision:** HeadObject validation skipped on finalize — iOS client is internal, finalize always online, sha256 recorded for audit. Matches customer intake service behavior.
+
+---
+
+### Sprint 6 — Epic 5.7: Offline Sync + Submission Finalize — COMPLETE (PR #52, 2026-05-02)
+
+**What shipped:**
+- **`appraisal_submission_service.submit()` extended** — calls `_validate_required_photos()` before transitioning to submitted; 422 with missing slot labels if any required `CategoryPhotoSlot` has no non-deleted `AppraisalPhoto`
+- **`enqueue_sync_confirmation(db, *, submission)`** — silent APNs push (content-available: 1) per iOS device token for the appraiser; idempotency key `sync_confirmation:{submission_id}:{token_id}`
+- **`enqueue_sync_failed(db, *, submission, reason)`** — visible APNs push with error reason; idempotency key `sync_failed:{submission_id}:{token_id}`
+- **`sync_failed_apns` notification template** registered in `notification_templates.py`
+
+**Tests:** 8 integration tests covering required-slot validation, sync notification enqueue, no-token no-op. Backend gate 652/652.
+
+---
+
+### Sprint 7 — Phase 5 Gate: Close-out — COMPLETE (2026-05-02)
+
+**What shipped:**
+
+**iOS (7 files):**
+- `ios/TempleHEAppraiser/Crash/CrashReporter.swift` — Sentry iOS SDK stub; PII-filtering `addBreadcrumb`; no-op when `SENTRY_DSN` build setting absent; documented upgrade path for when SPM dep is added
+- `ios/TempleHEAppraiser/Sync/SyncStatusBadge.swift` — 5-state badge (`draft` / `pendingSync` / `uploading` / `uploaded` / `syncFailed`) + `PendingSyncBanner`
+- `ios/TempleHEAppraiser/Sync/ManualRetryView.swift` — error detail sheet with Retry Upload button
+- `ios/TempleHEAppraiser/Sync/DebugForceSync.swift` — `#if DEBUG` force-sync button (`force-sync-button` identifier for XCUITest)
+- `ios/TempleHEAppraiserUITests/Phase5Gate.swift` — 9 acceptance scenarios (scenarios 4–5 auto-skip on simulator, scenarios 8–9 skip without admin env vars)
+- `ios/TempleHEAppraiserUITests/DashboardActions.swift` — card tap, navigate, copy-address, call-rep button assertions
+- `ios/TempleHEAppraiserUITests/OfflineSubmit.swift` — offline submit → pending_sync → DebugForceSync → uploaded flow; pending-sync banner; no-banner-when-uploaded
+
+**Infrastructure (1 file):**
+- `ios/Fastfile` — Fastlane `beta` lane: match → increment build number → archive → TestFlight upload
+
+**Documentation:**
+- `project_notes/decisions.md` — ADR-021 (iOS Appraiser App: 12 locked decisions)
+- `project_notes/progress.md` — Phase 5 complete; all sprint summaries
+- `project_notes/known-issues.md` — Sprint 0 carry-forwards closed; new known issues added
+- `dev_plan/05_phase5_ios_app.md` — Phase 5 Resolution section; all ACs flipped to Implemented
+- `dev_plan/06_phase6_approval_esign.md` — note on appraisal_submissions readiness for Phase 6
+- `dev_plan/13_hosting_migration_plan.md` — note on presigned-URL-based APNs + photo upload paths
+
+## Phase 5 — COMPLETE (2026-05-02)
+
+All 7 epics shipped across 8 sprints. Backend gate 652/652. Phase 6 (Approval + eSign) is the next phase.
 
 ## Phase 6–8 — Not started

@@ -233,3 +233,33 @@ fly machine run . --app temple-sweeper \
 **Impact:** Same class of TZ-fragility as the calendar e2e `isInThisWeek` workaround from Phase 4 pre-work. Test passed locally + on most CI runs but failed when CI fired near UTC midnight (PR #39 CI ran at 23:04 UTC, hit the boundary).
 **Fix:** Widen the lookup window to ±24 h around `proposed_start` instead of bucketing to a calendar day. Same lock cost (still bounded by appraiser + small time range), correct under midnight crossings.
 **Pattern to watch for:** any time-window query that buckets to a calendar day will miss events that straddle the boundary. Always compose time windows around the proposed event, not the proposed event's day.
+
+## OPEN — BGTaskScheduler doesn't fire reliably in iOS simulator (Phase 5)
+**Status:** Open; by design (Apple platform limitation).
+**Impact:** XCUITest scenarios that depend on background sync can't use `BGTaskScheduler` in the simulator. Mitigation: `DebugForceSync.swift` (`#if DEBUG`) exposes `force-sync-button` so XCUITest drives the sync flow deterministically via `Phase5Gate.swift` scenario 7.
+**Fix:** No fix available — this is an Apple constraint. DebugForceSync is the permanent mitigation for XCUITest. Real device testing via TestFlight validates true background-task behavior.
+**Tracked for:** ongoing — document in Outline Manual Tasks §15 for any new engineer.
+
+## OPEN — Sentry iOS SDK SPM dependency not yet added (Phase 5 Sprint 7)
+**Status:** Open; `CrashReporter.swift` is a documented stub.
+**Impact:** No crash reporting from the iOS app until the SPM dep is added and `SENTRY_DSN` build setting is configured.
+**Fix:** Add `https://github.com/getsentry/sentry-cocoa` via Xcode SPM, set `SENTRY_DSN` in the Release scheme build settings, uncomment the `SentrySDK.start { }` block in `CrashReporter.swift`. Provision the DSN via App Store Connect → Sentry project.
+**Tracked for:** Sprint 8 ops / manual tasks item.
+
+## OPEN — Apple Developer enrollment + APNs AuthKey (Phase 5)
+**Status:** Manual ops — tracked in Outline §15.
+**Impact:** APNs dispatch silently skips (status = "skipped") until the AuthKey JSON blob `{private_key, key_id, team_id}` is added to the integration credentials vault under `apns`.
+**Fix:** Download AuthKey from developer.apple.com → Keys → APNs; add via `/admin/integrations` in the SPA.
+
+## OPEN — iOS CI macOS runner cost (Phase 5 Sprint 7)
+**Status:** Deferred per plan; manual `xcodebuild test` + TestFlight upload via Fastlane.
+**Impact:** iOS tests don't run in CI. Backend + web CI green on every push; iOS is manual-only.
+**Fix:** Add macOS GitHub Actions runner ($0.08/min vs $0.008/min ubuntu). Revisit in Phase 6 when distribution scale justifies it.
+
+## FIXED — Phase 4 carry-forwards (closed Sprint 0, 2026-04-28)
+All five Sprint 0 carry-forwards are closed:
+- Slack staging-channel guard — closed (PR #46)
+- Twilio + SendGrid test-message UI inputs — closed (PR #46)
+- `_EXPECTED_MIGRATION_HEAD` derive-from-alembic — closed (PR #46)
+- Node 20 GHA deprecation — closed (PR #46, bumped to @v5/@v6)
+- lhci Chrome installation — closed (PR #46, `apt-get install google-chrome-stable` step added)

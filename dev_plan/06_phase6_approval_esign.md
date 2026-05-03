@@ -5,6 +5,8 @@
 > **Estimated scope:** 3–4 weeks
 > **Deliverable:** Weighted scoring engine, red flag detection, manager approval workflow, eSign stub with interface, consignment price change re-approval, manual publish gate
 
+> **Phase 5 handoff note (2026-05-02):** Phase 5 shipped `appraisal_submissions` with `status='submitted'` as the input surface for Phase 6. The `red_flags` JSONB column is already populated at submit time by `appraisal_submission_service.submit()` from the version-snapshotted red flag rules. `scores` JSONB and `inspections` JSONB are written by `update_draft()` on every auto-save. Phase 6's manager approval queue can filter directly on `status='submitted'` — no schema changes needed to start reading Phase 5 submissions. The `ScoringService` (`scoring_service.py`) that Phase 6 referenced in its epic spec was pre-built in Phase 5 Sprint 4; Phase 6 inherits it and extends it rather than rebuilding.
+
 ---
 
 ## Epic 6.1 — Scoring Engine
