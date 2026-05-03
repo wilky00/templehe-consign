@@ -201,7 +201,7 @@ def _validate_storage_key(storage_key: str, submission_id: uuid.UUID) -> None:
             status_code=422,
             detail="storage_key does not belong to this submission.",
         )
-    remainder = storage_key[len(expected_prefix):]
+    remainder = storage_key[len(expected_prefix) :]
     parts = remainder.split(".")
     if len(parts) != 2 or parts[1].lower() not in _ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=422, detail="storage_key format is invalid.")

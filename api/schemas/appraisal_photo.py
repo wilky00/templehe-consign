@@ -37,9 +37,7 @@ class FinalizePhotoRequest(BaseModel):
     @field_validator("sha256")
     @classmethod
     def validate_sha256(cls, v: str | None) -> str | None:
-        if v is not None and (
-            len(v) != 64 or not all(c in "0123456789abcdef" for c in v.lower())
-        ):
+        if v is not None and (len(v) != 64 or not all(c in "0123456789abcdef" for c in v.lower())):
             raise ValueError("sha256 must be 64 lowercase hex characters")
         return v
 

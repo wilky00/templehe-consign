@@ -56,9 +56,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text("DELETE FROM app_config WHERE key = 'photo_gps_radius_tolerance_meters'")
-    )
-    op.execute(
-        sa.text("DELETE FROM app_config WHERE key LIKE 'ios_required_photos_%'")
-    )
+    op.execute(sa.text("DELETE FROM app_config WHERE key = 'photo_gps_radius_tolerance_meters'"))
+    op.execute(sa.text("DELETE FROM app_config WHERE key LIKE 'ios_required_photos_%'"))

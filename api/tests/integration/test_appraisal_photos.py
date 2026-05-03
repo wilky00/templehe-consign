@@ -321,9 +321,7 @@ async def test_finalize_gps_out_of_range_flagged(client: AsyncClient, db_session
 
 
 @pytest.mark.asyncio
-async def test_finalize_retake_soft_deletes_previous(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_finalize_retake_soft_deletes_previous(client: AsyncClient, db_session: AsyncSession):
     auth, submission, _ = await _setup(client, db_session)
     first_key = _valid_storage_key(submission.id)
     second_key = _valid_storage_key(submission.id)
@@ -353,22 +351,24 @@ async def test_finalize_retake_soft_deletes_previous(
 
     # Only one active photo remains for this slot
     active = (
-        await db_session.execute(
-            select(AppraisalPhoto).where(
-                AppraisalPhoto.appraisal_submission_id == submission.id,
-                AppraisalPhoto.slot_label == "Front View",
-                AppraisalPhoto.deleted_at.is_(None),
+        (
+            await db_session.execute(
+                select(AppraisalPhoto).where(
+                    AppraisalPhoto.appraisal_submission_id == submission.id,
+                    AppraisalPhoto.slot_label == "Front View",
+                    AppraisalPhoto.deleted_at.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(active) == 1
     assert active[0].gcs_path == second_key
 
     # First photo is soft-deleted
     deleted = (
-        await db_session.execute(
-            select(AppraisalPhoto).where(AppraisalPhoto.gcs_path == first_key)
-        )
+        await db_session.execute(select(AppraisalPhoto).where(AppraisalPhoto.gcs_path == first_key))
     ).scalar_one()
     assert deleted.deleted_at is not None
 
