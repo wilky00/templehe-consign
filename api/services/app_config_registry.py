@@ -538,6 +538,30 @@ VALUATION_HOURS_RANGE = register(
 )
 
 
+# ---------------------------------------------------------------------------
+# Phase 5 Sprint 5 — Photo capture config.
+# ---------------------------------------------------------------------------
+
+
+PHOTO_GPS_RADIUS_TOLERANCE_METERS = register(
+    KeySpec(
+        name="photo_gps_radius_tolerance_meters",
+        category="photos",
+        field_type="int",
+        description=(
+            "Radius in meters around the appraisal site within which a photo's "
+            "GPS coordinates are considered on-site. iOS computes this check "
+            "locally using the AppConfig value and sends gps_out_of_range=true "
+            "when the capture falls outside the radius. Default 5000 m (5 km)."
+        ),
+        default=5000,
+        parser=_parse_dict_field("meters"),
+        serializer=_serialize_dict_field("meters"),
+        validator=_validate_int_at_least(1),
+    )
+)
+
+
 # Operations — overdue threshold for the admin operations dashboard.
 # Sprint 1 hard-coded 7 days in admin_operations_service; lifting to
 # AppConfig lets admin tune the highlight without a deploy.
