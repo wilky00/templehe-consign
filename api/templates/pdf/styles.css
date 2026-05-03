@@ -1,0 +1,333 @@
+/* Phase 7 — PDF report stylesheet for WeasyPrint */
+
+@page {
+    size: {{ page_size }};
+    margin: 20mm 15mm 25mm 15mm;
+
+    @bottom-center {
+        content: "Temple Heavy Equipment  —  Confidential  —  Generated {{ generated_date }}  —  Page " counter(page) " of " counter(pages);
+        font-size: 8pt;
+        color: #6B7280;
+        font-family: {{ font_family }};
+    }
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: {{ font_family }};
+    font-size: 10pt;
+    color: #111827;
+    line-height: 1.5;
+}
+
+/* ---------- Header ---------- */
+
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid {{ brand_color }};
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.report-header .logo img {
+    max-height: 50px;
+    max-width: 180px;
+}
+
+.report-header .logo-text {
+    font-size: 18pt;
+    font-weight: 700;
+    color: {{ brand_color }};
+}
+
+.report-header .report-title {
+    font-size: 14pt;
+    font-weight: 600;
+    color: #374151;
+    text-align: center;
+}
+
+.report-header .report-meta {
+    font-size: 8pt;
+    color: #6B7280;
+    text-align: right;
+}
+
+/* ---------- Title page ---------- */
+
+.title-block {
+    background: {{ brand_color }};
+    color: white;
+    padding: 20px;
+    border-radius: 4px;
+    margin-bottom: 24px;
+}
+
+.title-block .record-id {
+    font-size: 22pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.title-block .equipment-summary {
+    font-size: 13pt;
+    margin-top: 6px;
+    opacity: 0.9;
+}
+
+.title-block .appraisal-date {
+    font-size: 9pt;
+    margin-top: 4px;
+    opacity: 0.75;
+}
+
+/* ---------- Section headings ---------- */
+
+.section {
+    margin-bottom: 28px;
+    page-break-inside: avoid;
+}
+
+.section-heading {
+    font-size: 12pt;
+    font-weight: 700;
+    color: {{ brand_color }};
+    border-bottom: 2px solid {{ brand_color }};
+    padding-bottom: 4px;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ---------- Equipment details ---------- */
+
+.field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 20px;
+}
+
+.field-row {
+    display: flex;
+    flex-direction: column;
+}
+
+.field-label {
+    font-size: 7.5pt;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.field-value {
+    font-size: 10pt;
+    color: #111827;
+    font-weight: 500;
+}
+
+.field-value.empty {
+    color: #9CA3AF;
+    font-style: italic;
+}
+
+/* ---------- Valuation & Pricing ---------- */
+
+.price-cards {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.price-card {
+    flex: 1;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    padding: 12px;
+    text-align: center;
+}
+
+.price-card .price-label {
+    font-size: 8pt;
+    color: #6B7280;
+    text-transform: uppercase;
+}
+
+.price-card .price-value {
+    font-size: 16pt;
+    font-weight: 700;
+    color: {{ brand_color }};
+    margin-top: 4px;
+}
+
+.score-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.score-badge {
+    background: {{ brand_color }};
+    color: white;
+    font-size: 18pt;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 4px;
+    min-width: 70px;
+    text-align: center;
+}
+
+.score-band-label {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #374151;
+}
+
+.marketability-label {
+    font-size: 9pt;
+    color: #6B7280;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+}
+
+th {
+    background: #F3F4F6;
+    color: #374151;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #D1D5DB;
+}
+
+td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #E5E7EB;
+    vertical-align: top;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+.alert-box {
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    border-left: 4px solid #F59E0B;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+}
+
+.alert-box .alert-title {
+    font-weight: 700;
+    font-size: 10pt;
+    color: #92400E;
+    margin-bottom: 4px;
+}
+
+.alert-box .alert-body {
+    font-size: 9pt;
+    color: #78350F;
+}
+
+/* ---------- Photo gallery ---------- */
+
+.photo-grid-a4 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.photo-grid-letter {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.photo-cell {
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    overflow: hidden;
+    page-break-inside: avoid;
+}
+
+.photo-cell img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    display: block;
+}
+
+.photo-cell .photo-meta {
+    padding: 6px 8px;
+    font-size: 7.5pt;
+    color: #374151;
+}
+
+.photo-cell .photo-slot {
+    font-weight: 600;
+    font-size: 8.5pt;
+}
+
+.photo-cell .photo-detail {
+    color: #6B7280;
+    margin-top: 2px;
+}
+
+.warning-tag {
+    display: inline-block;
+    background: #FEE2E2;
+    color: #991B1B;
+    font-size: 7pt;
+    padding: 1px 5px;
+    border-radius: 2px;
+    margin-top: 3px;
+}
+
+/* ---------- Personnel ---------- */
+
+.personnel-cards {
+    display: flex;
+    gap: 16px;
+}
+
+.personnel-card {
+    flex: 1;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    padding: 12px;
+}
+
+.personnel-card .person-name {
+    font-size: 11pt;
+    font-weight: 700;
+    color: {{ brand_color }};
+}
+
+.personnel-card .person-role {
+    font-size: 8.5pt;
+    color: #6B7280;
+    margin-top: 2px;
+}
+
+.personnel-card .person-contact {
+    font-size: 9pt;
+    margin-top: 8px;
+}
+
+.no-personnel {
+    color: #6B7280;
+    font-style: italic;
+    font-size: 9pt;
+}

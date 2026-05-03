@@ -7,13 +7,13 @@ from datetime import datetime
 from decimal import Decimal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from database.base import get_db
+from database.base import AsyncSessionLocal, get_db
 from database.models import (
     AppraisalSubmission,
     ChangeRequest,
@@ -29,11 +29,24 @@ from schemas.approval import (
     RejectionDecisionRequest,
 )
 from schemas.appraisal_submission import SubmissionOut
-from services import approval_service
+from services import approval_service, pdf_generation_worker
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/manager/approvals", tags=["manager"])
+
+
+async def _pdf_background(submission_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+    """Run PDF generation in its own DB session — called as a FastAPI BackgroundTask."""
+    async with AsyncSessionLocal() as db:
+        try:
+            await pdf_generation_worker.generate_and_store_best_effort(
+                db, submission_id=submission_id, actor_id=actor_id
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.exception("pdf_background_task_failed", submission_id=str(submission_id))
 
 _require_manager = require_roles("sales_manager", "admin")
 
@@ -232,6 +245,7 @@ async def get_approval_detail(
 async def approve_submission(
     submission_id: uuid.UUID,
     body: ApprovalDecisionRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(_require_manager),
     db: AsyncSession = Depends(get_db),
 ) -> SubmissionOut:
@@ -256,6 +270,9 @@ async def approve_submission(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    background_tasks.add_task(_pdf_background, submission_id, current_user.id)
+
     return _submission_to_out(submission)
 
 
