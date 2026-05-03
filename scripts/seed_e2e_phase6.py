@@ -198,7 +198,6 @@ async def _create_submission(
     suggested_consignment_price: float | None = None,
 ) -> str:
     sub_id = str(uuid.uuid4())
-    now = datetime.now(UTC).isoformat()
     await session.execute(
         text(
             """
@@ -264,7 +263,7 @@ async def _create_contract(
     signed: bool = False,
 ) -> str:
     contract_id = str(uuid.uuid4())
-    signed_at = datetime.now(UTC).isoformat() if signed else None
+    signed_at = datetime.now(UTC) if signed else None
     await session.execute(
         text(
             """
