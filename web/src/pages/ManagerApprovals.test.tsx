@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { ManagerApprovalsPage } from "./ManagerApprovals";
 import { renderWithProviders } from "../test/render";
 import { server } from "../test/server";
-import { TEST_QUEUE_ITEM, TEST_PRICE_CHANGE_ITEM } from "../test/handlers";
+import { TEST_QUEUE_ITEM } from "../test/handlers";
 
 describe("ManagerApprovalsPage", () => {
   it("renders the page heading", () => {

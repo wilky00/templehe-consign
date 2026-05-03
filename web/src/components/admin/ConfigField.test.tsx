@@ -2,7 +2,6 @@
 // ABOUTME: Uses fireEvent.change for controlled inputs since userEvent.type re-renders on each keystroke.
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { ConfigField } from "./ConfigField";
 import type { AppConfigItem } from "../../api/types";
 
