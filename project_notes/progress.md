@@ -1400,4 +1400,27 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 All 7 epics shipped across 8 sprints. Backend gate 652/652. Phase 6 (Approval + eSign) is the next phase.
 
-## Phase 6–8 — Not started
+## Phase 6 — Approval & eSign (In Progress, started 2026-05-02)
+
+Full spec: `dev_plan/06_phase6_approval_esign.md`
+
+### Sprint 1: Scoring Engine + Red Flag Detection — COMPLETE (verified green 2026-05-02)
+
+- [x] `api/alembic/versions/028_phase6_approval_columns.py` — widen `score_band` VARCHAR(20→100), add `review_notes TEXT`
+- [x] `api/database/models.py` — `score_band` String(100), `review_notes` mapped column
+- [x] `api/services/scoring_service.py` — Phase 6 score band labels (6 bands, new thresholds)
+- [x] `api/services/red_flag_service.py` (NEW) — pure `evaluate_rules()` + async `evaluate()` + `make_rule()` factory; supports `equals`/`is_true`/`is_false` operators; all action types
+- [x] `api/services/notification_templates.py` — `management_review_flagged_email` + `management_review_flagged_sms` templates
+- [x] `api/services/appraisal_submission_service.py` — `submit()` extended: red flag evaluation, manager notification on `management_review_required`
+- [x] `api/tests/unit/test_scoring_service.py` — updated for Phase 6 band labels + boundary tests
+- [x] `api/tests/unit/test_red_flag_service.py` (NEW) — 22 pure unit tests (no DB)
+- [x] `api/tests/integration/test_scoring_engine.py` (NEW) — 5 integration tests
+- [x] `api/tests/integration/test_red_flags.py` (NEW) — 10 integration tests
+- [x] `api/tests/integration/test_appraisal_submissions.py` — updated band label assertion
+
+**Integration test gate: PASSED — 497/497 green 2026-05-02**
+**Unit test gate: PASSED — 177/177 green 2026-05-02**
+
+---
+
+## Phase 7–8 — Not started

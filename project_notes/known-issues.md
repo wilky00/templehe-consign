@@ -251,6 +251,15 @@ fly machine run . --app temple-sweeper \
 **Impact:** APNs dispatch silently skips (status = "skipped") until the AuthKey JSON blob `{private_key, key_id, team_id}` is added to the integration credentials vault under `apns`.
 **Fix:** Download AuthKey from developer.apple.com → Keys → APNs; add via `/admin/integrations` in the SPA.
 
+## OPEN — iOS min-version kill switch not shipped (security baseline §9, Feature 5.1.4)
+**Status:** Open; pre-production blocker per `11_security_baseline.md`.
+**Impact:** Backend has no `min_supported_ios_version` AppConfig key; `/api/v1/ios/config` does not return a minimum version; iOS app does not check version on launch and cannot be remotely killed. Without this, a critical bug in a shipped build has no kill-switch — all users would need to update voluntarily.
+**Fix:**
+- `api/services/app_config_registry.py` — register `min_supported_ios_version` key (string, default "1.0.0")
+- `api/routers/ios_config.py` — include `min_supported_ios_version` in the `/ios/config` response payload
+- iOS `App.swift` or `AppRouter.swift` — on config load, compare `Bundle.main.infoDictionary["CFBundleShortVersionString"]` against the config value; show a blocking `ForceUpdateView` if current version < min
+**Tracked for:** Phase 5.5 / Phase 6 carry-forward. Required before App Store submission.
+
 ## OPEN — iOS CI macOS runner cost (Phase 5 Sprint 7)
 **Status:** Deferred per plan; manual `xcodebuild test` + TestFlight upload via Fastlane.
 **Impact:** iOS tests don't run in CI. Backend + web CI green on every push; iOS is manual-only.

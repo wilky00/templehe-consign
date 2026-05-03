@@ -34,10 +34,13 @@ from database.models import (
     CategoryRedFlagRule,
     ComponentScore,
     EquipmentCategory,
+    EquipmentRecord,
+    NotificationPreference,
+    Role,
     User,
 )
 from schemas.appraisal_submission import ComponentScoreIn, SubmissionUpdateRequest
-from services import scoring_service, user_roles_service
+from services import notification_service, red_flag_service, scoring_service, user_roles_service
 
 logger = structlog.get_logger(__name__)
 
@@ -199,6 +202,15 @@ async def submit(
         await _snapshot_versions(db, submission=submission)
         await _validate_required_photos(db, submission=submission)
 
+    # Server-side red flag evaluation — runs regardless of iOS client flags.
+    red_flags = await red_flag_service.evaluate(db, submission)
+    submission.management_review_required = red_flags.management_review_required
+    submission.hold_for_title_review = red_flags.hold_for_title_review
+    if red_flags.marketability_rating is not None:
+        submission.marketability_rating = red_flags.marketability_rating
+    if red_flags.review_notes is not None:
+        submission.review_notes = red_flags.review_notes
+
     submission.status = "submitted"
     submission.submitted_at = datetime.now(UTC)
     await db.flush()
@@ -206,7 +218,12 @@ async def submit(
         "appraisal_submitted",
         submission_id=str(submission_id),
         appraiser_id=str(appraiser.id),
+        management_review_required=red_flags.management_review_required,
     )
+
+    if red_flags.management_review_required:
+        await _notify_managers_review_required(db, submission=submission)
+
     return await _fetch(db, submission_id=submission_id)
 
 
@@ -376,3 +393,50 @@ async def _check_access(
         return
     if submission.appraiser_id != user.id:
         raise PermissionError("Access denied to submission")
+
+
+async def _notify_managers_review_required(
+    db: AsyncSession,
+    *,
+    submission: AppraisalSubmission,
+) -> None:
+    """Enqueue a management-review notification to every active sales_manager user."""
+    # Look up the equipment record for display info.
+    record = await db.get(EquipmentRecord, submission.equipment_record_id)
+    reference_number = record.reference_number if record else str(submission.equipment_record_id)
+    make = submission.make or "Unknown"
+    model = submission.model or "equipment"
+    red_flag_summary = (
+        "; ".join(str(r) for r in (submission.red_flags or []))
+        or "See management approval queue for details"
+    )
+
+    managers = (
+        await db.execute(
+            select(User)
+            .join(Role, Role.id == User.role_id)
+            .where(
+                Role.slug == "sales_manager",
+                User.status == "active",
+            )
+        )
+    ).scalars().all()
+
+    payload = {
+        "reference_number": reference_number,
+        "make": make,
+        "model": model,
+        "red_flag_summary": red_flag_summary,
+    }
+
+    for manager in managers:
+        # Use email channel as default; the notification worker will respect
+        # the manager's per-channel preferences via unified_notification_prefs_service.
+        await notification_service.enqueue(
+            db,
+            idempotency_key=f"mgmt-review-{submission.id}-{manager.id}",
+            user_id=manager.id,
+            channel="email",
+            template="management_review_flagged_email",
+            payload=payload,
+        )

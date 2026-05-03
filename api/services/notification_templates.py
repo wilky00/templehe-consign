@@ -431,3 +431,45 @@ SYNC_FAILED_APNS = register(
         body_template="Appraisal {{ reference_number }} could not be synced: {{ error_reason }}.",
     )
 )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 Sprint 1 — Manager approval workflow notifications.
+# ---------------------------------------------------------------------------
+
+MANAGEMENT_REVIEW_FLAGGED_EMAIL = register(
+    Template(
+        name="management_review_flagged_email",
+        channel="email",
+        category="approval",
+        variables=("reference_number", "make", "model", "red_flag_summary"),
+        description=(
+            "Sent to all Sales Managers when an appraisal submission is flagged "
+            "for management review (structural damage, active leak, non-running, etc.)."
+        ),
+        subject_template="Management Review Required: {{ reference_number }}",
+        body_template=(
+            "<p>An appraisal submission requires your review.</p>"
+            "<p><strong>{{ make }} {{ model }}</strong> ({{ reference_number }})</p>"
+            "<p><strong>Flagged conditions:</strong><br>{{ red_flag_summary }}</p>"
+            "<p>Please log in to the manager approval queue to review and approve or reject.</p>"
+        ),
+    )
+)
+
+MANAGEMENT_REVIEW_FLAGGED_SMS = register(
+    Template(
+        name="management_review_flagged_sms",
+        channel="sms",
+        category="approval",
+        variables=("reference_number", "make", "model", "red_flag_summary"),
+        description=(
+            "SMS variant of management_review_flagged_email. "
+            "Sent to Sales Managers who prefer SMS notifications."
+        ),
+        body_template=(
+            "TempleHE: Management review required for {{ make }} {{ model }} "
+            "({{ reference_number }}). Flags: {{ red_flag_summary }}"
+        ),
+    )
+)
