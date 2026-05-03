@@ -527,7 +527,9 @@ CUSTOMER_ESIGN_READY = register(
         category="customer",
         variables=("first_name", "reference_number", "make_model", "envelope_id"),
         description="Sent to the customer when the consignment agreement is ready to sign.",
-        subject_template="Action Required: Sign Your Consignment Agreement for {{ reference_number }}",
+        subject_template=(
+            "Action Required: Sign Your Consignment Agreement for {{ reference_number }}"
+        ),
         body_template=(
             "<p>Hi {{ first_name }},</p>"
             "<p>Your consignment agreement for <strong>{{ make_model }}</strong> "
@@ -545,16 +547,23 @@ MANAGER_PRICE_CHANGE_REAPPROVAL = register(
         name="manager_price_change_reapproval",
         channel="email",
         category="approval",
-        variables=("reference_number", "make_model", "approved_price", "proposed_price", "change_pct"),
-        description="Sent to managers when a customer's proposed price change exceeds the re-approval threshold.",
+        variables=(
+            "reference_number", "make_model", "approved_price", "proposed_price", "change_pct"
+        ),
+        description=(
+            "Sent to managers when a customer's proposed price change exceeds the"
+            " re-approval threshold."
+        ),
         subject_template="Re-Approval Required: Price Change on {{ reference_number }}",
         body_template=(
-            "<p>A customer has requested a consignment price change that requires your approval.</p>"
+            "<p>A customer has requested a consignment price change that requires your"
+            " approval.</p>"
             "<p>Record: <strong>{{ reference_number }}</strong> ({{ make_model }})</p>"
             "<p>Approved price: ${{ approved_price }}<br>"
             "Proposed price: ${{ proposed_price }}<br>"
             "Change: {{ change_pct }}%</p>"
-            "<p>Log in to the manager approval queue to review and approve or reject this change.</p>"
+            "<p>Log in to the manager approval queue to review and approve or reject this"
+            " change.</p>"
         ),
     )
 )

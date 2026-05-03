@@ -1,5 +1,5 @@
 # ABOUTME: eSign service interface and stub implementation for Phase 6.
-# ABOUTME: Real provider (DocuSign, Dropbox Sign) swaps in by implementing SigningService and updating esign_provider AppConfig.
+# ABOUTME: Real provider swaps in by implementing SigningService; see esign_provider AppConfig key.
 """Signing service — abstract interface + stub implementation.
 
 The active implementation is selected by the ``esign_provider`` AppConfig key

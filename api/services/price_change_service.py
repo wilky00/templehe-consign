@@ -1,5 +1,5 @@
-# ABOUTME: Phase 6 Sprint 3 — evaluates customer price change requests against the manager re-approval threshold.
-# ABOUTME: Sets requires_manager_reapproval on ChangeRequest and notifies active sales_managers when triggered.
+# ABOUTME: Phase 6 Sprint 3 — evaluates customer price changes against re-approval threshold.
+# ABOUTME: Sets requires_manager_reapproval on ChangeRequest; notifies active sales_managers.
 """Price change re-approval service.
 
 When a customer submits an ``update_consignment_price`` change request with a

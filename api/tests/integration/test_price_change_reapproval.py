@@ -75,7 +75,9 @@ async def _make_approved_record(
     db.add(cat)
     await db.flush()
 
-    customer = Customer(submitter_name="Price Customer", invite_email=f"pr-cust-{_tag()}@example.com")
+    customer = Customer(
+        submitter_name="Price Customer", invite_email=f"pr-cust-{_tag()}@example.com"
+    )
     db.add(customer)
     await db.flush()
 
@@ -160,7 +162,7 @@ async def test_price_change_above_threshold_notifies_managers(
     db_session: AsyncSession,
 ) -> None:
     """When re-approval is triggered, active sales managers receive a notification."""
-    manager_tokens = await _create_user(
+    await _create_user(
         client,
         db_session,
         email=f"mgr-pr-{_tag()}@example.com",
@@ -243,7 +245,8 @@ async def test_price_change_queue_shows_flagged_requests(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """GET /manager/approvals/price-changes lists ChangeRequests with requires_manager_reapproval."""
+    """GET /manager/approvals/price-changes lists ChangeRequests
+    with requires_manager_reapproval."""
     manager_tokens = await _create_user(
         client,
         db_session,

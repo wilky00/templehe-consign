@@ -1,5 +1,5 @@
-# ABOUTME: Phase 6 Sprint 1 — integration tests for scoring engine (scoring_service via submission update).
-# ABOUTME: Verifies score calculation, band labels, and score persistence through the submission service.
+# ABOUTME: Phase 6 Sprint 1 — integration tests for scoring engine via submission update.
+# ABOUTME: Verifies score calculation, band labels, and score persistence via submission service.
 from __future__ import annotations
 
 import uuid
@@ -114,7 +114,9 @@ async def test_component_scores_calculate_weighted_average(
 ) -> None:
     """Updating component scores persists the weighted average on the submission."""
     tokens = await _create_appraiser(client, db_session, f"scorer1-{_tag()}@example.com")
-    cat, comp_a, comp_b = await _make_category_with_components(db_session, weight_a=60.0, weight_b=40.0)
+    cat, comp_a, comp_b = await _make_category_with_components(
+        db_session, weight_a=60.0, weight_b=40.0
+    )
     record = await _make_record(db_session, category=cat)
 
     headers = {"Authorization": f"Bearer {tokens['access_token']}"}
@@ -210,7 +212,9 @@ async def test_score_recalculates_on_each_update(
 ) -> None:
     """Re-patching component scores updates the stored overall_score each time."""
     tokens = await _create_appraiser(client, db_session, f"scorer4-{_tag()}@example.com")
-    cat, comp_a, comp_b = await _make_category_with_components(db_session, weight_a=50.0, weight_b=50.0)
+    cat, comp_a, comp_b = await _make_category_with_components(
+        db_session, weight_a=50.0, weight_b=50.0
+    )
     record = await _make_record(db_session, category=cat)
 
     headers = {"Authorization": f"Bearer {tokens['access_token']}"}
@@ -257,7 +261,9 @@ async def test_mismatched_weights_normalize_silently(
 ) -> None:
     """Weights summing to 60 instead of 100 still produce a correct 0–5 result."""
     tokens = await _create_appraiser(client, db_session, f"scorer5-{_tag()}@example.com")
-    cat, comp_a, comp_b = await _make_category_with_components(db_session, weight_a=30.0, weight_b=30.0)
+    cat, comp_a, comp_b = await _make_category_with_components(
+        db_session, weight_a=30.0, weight_b=30.0
+    )
     record = await _make_record(db_session, category=cat)
 
     headers = {"Authorization": f"Bearer {tokens['access_token']}"}
