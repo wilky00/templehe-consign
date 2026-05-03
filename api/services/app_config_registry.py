@@ -581,3 +581,79 @@ EQUIPMENT_RECORD_OVERDUE_THRESHOLD_DAYS = register(
         validator=_validate_int_at_least(1),
     )
 )
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 — PDF report branding and layout config.
+# ---------------------------------------------------------------------------
+
+
+def _validate_page_size(v: Any) -> None:
+    allowed = {"A4", "Letter"}
+    if v not in allowed:
+        raise ValueError(f"must be one of {sorted(allowed)}")
+
+
+PDF_PAGE_SIZE = register(
+    KeySpec(
+        name="pdf_page_size",
+        category="pdf",
+        field_type="string",
+        description=(
+            "Page size for generated PDF appraisal reports. "
+            "Accepted values: 'A4' or 'Letter'. "
+            "The photo gallery grid changes from 3 columns (A4) to 2 columns (Letter)."
+        ),
+        default="A4",
+        parser=_parse_dict_field("size"),
+        serializer=_serialize_dict_field("size"),
+        validator=_validate_page_size,
+    )
+)
+
+PDF_BRAND_PRIMARY_COLOR = register(
+    KeySpec(
+        name="pdf_brand_primary_color",
+        category="pdf",
+        field_type="string",
+        description=(
+            "Hex color code for the primary brand color used in PDF report headers, "
+            "score badges, and section dividers. Default is TempleHE blue (#1E3A5F)."
+        ),
+        default="#1E3A5F",
+        parser=_parse_dict_field("color"),
+        serializer=_serialize_dict_field("color"),
+    )
+)
+
+PDF_FONT_FAMILY = register(
+    KeySpec(
+        name="pdf_font_family",
+        category="pdf",
+        field_type="string",
+        description=(
+            "CSS font-family string for PDF report body text. "
+            "Must be a web-safe or system font available in WeasyPrint. "
+            "Default: 'Inter, sans-serif'."
+        ),
+        default="Inter, sans-serif",
+        parser=_parse_dict_field("font"),
+        serializer=_serialize_dict_field("font"),
+    )
+)
+
+COMPANY_LOGO_URL = register(
+    KeySpec(
+        name="company_logo_url",
+        category="pdf",
+        field_type="string",
+        description=(
+            "Public URL of the TempleHE company logo used in PDF report headers. "
+            "Leave blank to render a text-only header. "
+            "URL must be publicly accessible at PDF generation time (WeasyPrint fetches it)."
+        ),
+        default="",
+        parser=_parse_dict_field("url"),
+        serializer=_serialize_dict_field("url"),
+    )
+)

@@ -24,6 +24,8 @@ dependencies = [
     "twilio>=9.3",  # SMS dispatch via Messaging Service SID
     "jinja2>=3.1.6",
     "httpx[http2]>=0.27",  # APNs dispatch requires HTTP/2
+    "weasyprint>=68.1",
+    "pillow>=12.2.0",
 ]
 
 [dependency-groups]
