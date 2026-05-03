@@ -79,6 +79,7 @@ def generate_download_url(storage_key: str) -> tuple[str, datetime]:
     )
     expires_at = datetime.now(UTC).replace(microsecond=0)
     from datetime import timedelta
+
     expires_at = expires_at + timedelta(seconds=_PRESIGNED_EXPIRY)
     return url, expires_at
 
@@ -96,9 +97,7 @@ async def generate_and_store(
     """
     report_data = await report_data_service.build_report_data(db, submission_id=submission_id)
 
-    pdf_bytes = await asyncio.to_thread(
-        partial(pdf_render_service.render_pdf, report_data)
-    )
+    pdf_bytes = await asyncio.to_thread(partial(pdf_render_service.render_pdf, report_data))
 
     storage_key = _build_storage_key(
         report_data.equipment_record_id,
@@ -117,9 +116,7 @@ async def generate_and_store(
         logger.warning("pdf_r2_not_configured_skipping_upload", submission_id=str(submission_id))
 
     existing_result = await db.execute(
-        select(AppraisalReport).where(
-            AppraisalReport.appraisal_submission_id == submission_id
-        )
+        select(AppraisalReport).where(AppraisalReport.appraisal_submission_id == submission_id)
     )
     report_row = existing_result.scalar_one_or_none()
 

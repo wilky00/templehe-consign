@@ -63,6 +63,7 @@ async def _create_active_user(
     db.add(user)
     await db.flush()
     from services import user_roles_service
+
     await user_roles_service.grant(db, user=user, role_slug=role_slug, granted_by=None)
     return user
 
@@ -163,8 +164,10 @@ async def test_generate_and_store_happy_path(
         db_session, appraiser=appraiser, sales_rep=sales_rep
     )
 
-    with patch("services.pdf_render_service.render_pdf", return_value=b"%PDF-1.4 fake"), \
-         patch("services.pdf_generation_worker._upload_pdf"):
+    with (
+        patch("services.pdf_render_service.render_pdf", return_value=b"%PDF-1.4 fake"),
+        patch("services.pdf_generation_worker._upload_pdf"),
+    ):
         report_row = await generate_and_store(db_session, submission_id=sub.id)
 
     assert report_row.appraisal_submission_id == sub.id
@@ -191,19 +194,27 @@ async def test_generate_and_store_idempotent_overwrites_existing(
         db_session, appraiser=appraiser, sales_rep=sales_rep
     )
 
-    with patch("services.pdf_render_service.render_pdf", return_value=b"%PDF-1.4 v1"), \
-         patch("services.pdf_generation_worker._upload_pdf"):
+    with (
+        patch("services.pdf_render_service.render_pdf", return_value=b"%PDF-1.4 v1"),
+        patch("services.pdf_generation_worker._upload_pdf"),
+    ):
         await generate_and_store(db_session, submission_id=sub.id)
 
-    with patch("services.pdf_render_service.render_pdf", return_value=b"%PDF-1.4 v2"), \
-         patch("services.pdf_generation_worker._upload_pdf"):
+    with (
+        patch("services.pdf_render_service.render_pdf", return_value=b"%PDF-1.4 v2"),
+        patch("services.pdf_generation_worker._upload_pdf"),
+    ):
         report_row = await generate_and_store(db_session, submission_id=sub.id)
 
     all_reports = (
-        await db_session.execute(
-            select(AppraisalReport).where(AppraisalReport.appraisal_submission_id == sub.id)
+        (
+            await db_session.execute(
+                select(AppraisalReport).where(AppraisalReport.appraisal_submission_id == sub.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(all_reports) == 1
     assert all_reports[0].id == report_row.id
 
@@ -297,9 +308,13 @@ async def test_download_endpoint_returns_url_when_report_exists(
     headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
     expires = datetime(2026, 5, 3, 13, 0, tzinfo=UTC)
-    with patch("routers.reports.settings") as mock_settings, \
-         patch("services.pdf_generation_worker.generate_download_url",
-               return_value=("https://r2.example.com/signed-url", expires)):
+    with (
+        patch("routers.reports.settings") as mock_settings,
+        patch(
+            "services.pdf_generation_worker.generate_download_url",
+            return_value=("https://r2.example.com/signed-url", expires),
+        ),
+    ):
         mock_settings.r2_access_key_id = "test-key"
         mock_settings.r2_secret_access_key = "test-secret"
         url = f"/api/v1/equipment-records/{record.id}/report/pdf"
@@ -343,9 +358,9 @@ async def test_download_endpoint_customer_own_record_allowed(
                 "privacy_version": "1",
             },
         )
-    cust_user = (await db_session.execute(
-        select(User).where(User.email == f"cust-pdf6-{t}@example.com")
-    )).scalar_one()
+    cust_user = (
+        await db_session.execute(select(User).where(User.email == f"cust-pdf6-{t}@example.com"))
+    ).scalar_one()
     role = (await db_session.execute(select(Role).where(Role.slug == "customer"))).scalar_one()
     cust_user.status = "active"
     cust_user.role_id = role.id
@@ -354,6 +369,7 @@ async def test_download_endpoint_customer_own_record_allowed(
     db_session.add(customer_obj)
     await db_session.flush()
     from services import user_roles_service
+
     await user_roles_service.grant(
         db_session, user=cust_user, role_slug="customer", granted_by=None
     )

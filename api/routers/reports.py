@@ -53,6 +53,7 @@ async def get_report_download(
 
     # Ownership check: customers can only access their own records
     from services import user_roles_service
+
     roles = await user_roles_service.role_slugs_for_user(db, user=current_user)
     non_staff = "admin" not in roles and "sales" not in roles and "sales_manager" not in roles
     if "customer" in roles and non_staff:
@@ -64,14 +65,13 @@ async def get_report_download(
             raise HTTPException(status_code=403, detail="Access denied")
 
     report_result = await db.execute(
-        select(AppraisalReport).where(
-            AppraisalReport.equipment_record_id == record_id
-        )
+        select(AppraisalReport).where(AppraisalReport.equipment_record_id == record_id)
     )
     report = report_result.scalar_one_or_none()
 
     if report is None:
         from fastapi.responses import JSONResponse
+
         return JSONResponse(
             status_code=202,
             content=ReportGeneratingResponse().model_dump(),

@@ -548,7 +548,11 @@ MANAGER_PRICE_CHANGE_REAPPROVAL = register(
         channel="email",
         category="approval",
         variables=(
-            "reference_number", "make_model", "approved_price", "proposed_price", "change_pct"
+            "reference_number",
+            "make_model",
+            "approved_price",
+            "proposed_price",
+            "change_pct",
         ),
         description=(
             "Sent to managers when a customer's proposed price change exceeds the"

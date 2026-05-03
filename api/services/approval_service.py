@@ -73,9 +73,7 @@ async def get_queue(db: AsyncSession) -> list[dict]:
             "overall_score": row.AppraisalSubmission.overall_score,
             "score_band": row.AppraisalSubmission.score_band,
             "marketability_rating": row.AppraisalSubmission.marketability_rating,
-            "appraiser_name": (
-                f"{row.User.first_name} {row.User.last_name}" if row.User else None
-            ),
+            "appraiser_name": (f"{row.User.first_name} {row.User.last_name}" if row.User else None),
             "submitted_at": row.AppraisalSubmission.submitted_at,
             "management_review_required": row.AppraisalSubmission.management_review_required,
             "hold_for_title_review": row.AppraisalSubmission.hold_for_title_review,
@@ -308,9 +306,7 @@ async def approve_price_change(
     have ``requires_manager_reapproval`` set.
     """
     result = await db.execute(
-        select(ChangeRequest)
-        .where(ChangeRequest.id == change_request_id)
-        .with_for_update()
+        select(ChangeRequest).where(ChangeRequest.id == change_request_id).with_for_update()
     )
     change = result.scalar_one_or_none()
     if change is None:

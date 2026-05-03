@@ -435,15 +435,19 @@ async def _notify_managers_review_required(
     )
 
     managers = (
-        await db.execute(
-            select(User)
-            .join(Role, Role.id == User.role_id)
-            .where(
-                Role.slug == "sales_manager",
-                User.status == "active",
+        (
+            await db.execute(
+                select(User)
+                .join(Role, Role.id == User.role_id)
+                .where(
+                    Role.slug == "sales_manager",
+                    User.status == "active",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     payload = {
         "reference_number": reference_number,

@@ -185,12 +185,16 @@ async def test_price_change_above_threshold_notifies_managers(
     await db_session.flush()
 
     jobs = (
-        await db_session.execute(
-            select(NotificationJob).where(
-                NotificationJob.template == "manager_price_change_reapproval",
+        (
+            await db_session.execute(
+                select(NotificationJob).where(
+                    NotificationJob.template == "manager_price_change_reapproval",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(jobs) >= 1
     manager_job = next(
         (j for j in jobs if j.payload.get("to_email", "").endswith("@example.com")),

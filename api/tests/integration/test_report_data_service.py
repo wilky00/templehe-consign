@@ -63,6 +63,7 @@ async def _create_active_user(
     db.add(user)
     await db.flush()
     from services import user_roles_service
+
     await user_roles_service.grant(db, user=user, role_slug=role_slug, granted_by=None)
     return user
 

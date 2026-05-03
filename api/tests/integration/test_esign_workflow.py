@@ -152,9 +152,7 @@ async def test_approve_creates_consignment_contract(
     record, submission, _ = await _setup_approved_record(client, db_session)
 
     contract_result = await db_session.execute(
-        select(ConsignmentContract).where(
-            ConsignmentContract.equipment_record_id == record.id
-        )
+        select(ConsignmentContract).where(ConsignmentContract.equipment_record_id == record.id)
     )
     contract = contract_result.scalar_one_or_none()
     assert contract is not None
@@ -175,9 +173,7 @@ async def test_approve_idempotent_contract(
     record, _, _ = await _setup_approved_record(client, db_session)
 
     first = await db_session.execute(
-        select(ConsignmentContract).where(
-            ConsignmentContract.equipment_record_id == record.id
-        )
+        select(ConsignmentContract).where(ConsignmentContract.equipment_record_id == record.id)
     )
     first_contract = first.scalar_one_or_none()
     assert first_contract is not None
@@ -204,9 +200,7 @@ async def test_stub_preview_renders_html(
     record, _, _ = await _setup_approved_record(client, db_session)
 
     contract_result = await db_session.execute(
-        select(ConsignmentContract).where(
-            ConsignmentContract.equipment_record_id == record.id
-        )
+        select(ConsignmentContract).where(ConsignmentContract.equipment_record_id == record.id)
     )
     contract = contract_result.scalar_one()
     envelope_id = contract.envelope_id
@@ -230,9 +224,7 @@ async def test_stub_sign_completes_contract(
     await db_session.refresh(record)
 
     contract_result = await db_session.execute(
-        select(ConsignmentContract).where(
-            ConsignmentContract.equipment_record_id == record.id
-        )
+        select(ConsignmentContract).where(ConsignmentContract.equipment_record_id == record.id)
     )
     contract = contract_result.scalar_one()
     envelope_id = contract.envelope_id
@@ -265,9 +257,7 @@ async def test_webhook_envelope_completed(
 
     record, _, _ = await _setup_approved_record(client, db_session)
     contract_result = await db_session.execute(
-        select(ConsignmentContract).where(
-            ConsignmentContract.equipment_record_id == record.id
-        )
+        select(ConsignmentContract).where(ConsignmentContract.equipment_record_id == record.id)
     )
     contract = contract_result.scalar_one()
     envelope_id = contract.envelope_id
@@ -298,9 +288,7 @@ async def test_webhook_idempotent(
 
     record, _, _ = await _setup_approved_record(client, db_session)
     contract_result = await db_session.execute(
-        select(ConsignmentContract).where(
-            ConsignmentContract.equipment_record_id == record.id
-        )
+        select(ConsignmentContract).where(ConsignmentContract.equipment_record_id == record.id)
     )
     contract = contract_result.scalar_one()
     envelope_id = contract.envelope_id
@@ -334,9 +322,7 @@ async def test_webhook_envelope_declined(
 
     record, _, _ = await _setup_approved_record(client, db_session)
     contract_result = await db_session.execute(
-        select(ConsignmentContract).where(
-            ConsignmentContract.equipment_record_id == record.id
-        )
+        select(ConsignmentContract).where(ConsignmentContract.equipment_record_id == record.id)
     )
     contract = contract_result.scalar_one()
     envelope_id = contract.envelope_id
@@ -406,9 +392,7 @@ async def test_webhook_unknown_event_is_ignored(
     """Unknown event types are accepted without error."""
     record, _, _ = await _setup_approved_record(client, db_session)
     contract_result = await db_session.execute(
-        select(ConsignmentContract).where(
-            ConsignmentContract.equipment_record_id == record.id
-        )
+        select(ConsignmentContract).where(ConsignmentContract.equipment_record_id == record.id)
     )
     contract = contract_result.scalar_one()
 

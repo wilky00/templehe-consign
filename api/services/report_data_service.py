@@ -208,9 +208,7 @@ async def _load_submission(db: AsyncSession, submission_id: uuid.UUID) -> Apprai
     return submission
 
 
-async def _load_photos(
-    db: AsyncSession, submission_id: uuid.UUID
-) -> list[AppraisalPhoto]:
+async def _load_photos(db: AsyncSession, submission_id: uuid.UUID) -> list[AppraisalPhoto]:
     result = await db.execute(
         select(AppraisalPhoto)
         .where(

@@ -173,15 +173,11 @@ async def _submit_draft(
 
     await db.refresh(
         (
-            await db.execute(
-                select(AppraisalSubmission).where(AppraisalSubmission.id == sub_id)
-            )
+            await db.execute(select(AppraisalSubmission).where(AppraisalSubmission.id == sub_id))
         ).scalar_one()
     )
     return (
-        await db.execute(
-            select(AppraisalSubmission).where(AppraisalSubmission.id == sub_id)
-        )
+        await db.execute(select(AppraisalSubmission).where(AppraisalSubmission.id == sub_id))
     ).scalar_one()
 
 
@@ -410,9 +406,7 @@ async def test_manager_notification_enqueued_when_review_required(
         headers=headers,
     )
 
-    with patch(
-        "services.notification_service.enqueue", new_callable=AsyncMock
-    ) as mock_enqueue:
+    with patch("services.notification_service.enqueue", new_callable=AsyncMock) as mock_enqueue:
         submit_resp = await client.post(
             f"/api/v1/appraisal-submissions/{sub_id}/submit", headers=headers
         )
@@ -452,12 +446,8 @@ async def test_no_manager_notification_when_no_review_required(
         headers=headers,
     )
 
-    with patch(
-        "services.notification_service.enqueue", new_callable=AsyncMock
-    ) as mock_enqueue:
-        await client.post(
-            f"/api/v1/appraisal-submissions/{sub_id}/submit", headers=headers
-        )
+    with patch("services.notification_service.enqueue", new_callable=AsyncMock) as mock_enqueue:
+        await client.post(f"/api/v1/appraisal-submissions/{sub_id}/submit", headers=headers)
     mock_enqueue.assert_not_called()
 
 
@@ -480,9 +470,7 @@ async def test_inactive_rule_does_not_fire(
     )
     rule = (
         await db_session.execute(
-            select(CategoryRedFlagRule).where(
-                CategoryRedFlagRule.category_id == cat.id
-            )
+            select(CategoryRedFlagRule).where(CategoryRedFlagRule.category_id == cat.id)
         )
     ).scalar_one()
     rule.active = False

@@ -132,6 +132,7 @@ async def esign_webhook(
             raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
     import json  # noqa: PLC0415 — deferred to avoid import at module level for tests
+
     try:
         payload = json.loads(raw_body)
     except json.JSONDecodeError as exc:

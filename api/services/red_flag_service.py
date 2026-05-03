@@ -193,14 +193,18 @@ async def evaluate(
 
     if submission.category_id is not None:
         db_rules = (
-            await db.execute(
-                select(CategoryRedFlagRule).where(
-                    CategoryRedFlagRule.category_id == submission.category_id,
-                    CategoryRedFlagRule.replaced_at.is_(None),
-                    CategoryRedFlagRule.active.is_(True),
+            (
+                await db.execute(
+                    select(CategoryRedFlagRule).where(
+                        CategoryRedFlagRule.category_id == submission.category_id,
+                        CategoryRedFlagRule.replaced_at.is_(None),
+                        CategoryRedFlagRule.active.is_(True),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         rules = [
             RuleSpec(

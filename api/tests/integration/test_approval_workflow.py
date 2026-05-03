@@ -589,9 +589,7 @@ async def test_submit_transitions_equipment_record_to_appraisal_complete(
     cat = await _make_category(db_session)
     record = await _make_record(db_session, category=cat)
 
-    await _submit_appraisal(
-        client, db_session, appraiser_tokens=appraiser_tokens, record=record
-    )
+    await _submit_appraisal(client, db_session, appraiser_tokens=appraiser_tokens, record=record)
 
     await db_session.refresh(record)
     assert record.status == "appraisal_complete"

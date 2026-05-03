@@ -271,6 +271,14 @@ fly machine run . --app temple-sweeper \
 **Impact:** Red flag detection runs against score fields, marketability, and boolean flags only. Inspection prompt answers (stored as `field_values` JSONB keyed by prompt UUID in `appraisal_submissions.inspections`) are not checked against red flag rules that reference specific prompt IDs. Any red flag rule of type `prompt_answer` silently goes unevaluated.
 **Fix:** In `red_flag_service.evaluate()`, pass `field_values: dict[str, str]` (extracted from `submission.inspections`) alongside the existing field dict. Match `rule.field_name` against prompt UUID keys. Straightforward addition; blocked only by needing to align with the appraisal_submissions schema finalized in Phase 5.
 
+## OPEN — Phase 6: eSign webhook replay protection not fully implemented
+**Status:** Open, surfaced during Phase 6 close-out gate check (2026-05-03).
+**File:** `api/routers/esign.py` (esign_webhook handler)
+**Requirement:** `dev_plan/11_security_baseline.md` §8 Feature 6.3.4 requires (1) HMAC-SHA256 signature, (2) timestamp within 5 minutes (replay guard), and (3) `event_id` de-duplication via a `webhook_events_seen` table.
+**What ships in Phase 6:** HMAC verification is implemented (opt-in via `esign_webhook_secret`; skipped when empty). Idempotency is handled by checking `contract.status == "completed"` before transitioning. Timestamp replay guard and formal `event_id` de-duplication via a DB table are not implemented.
+**Impact:** Low for the stub provider (event IDs are synthetic and not replayed). Becomes a production concern when DocuSign or Dropbox Sign is wired in — a captured webhook payload could be replayed within the HMAC window. The idempotency check prevents double-transitions but not the repeated computation.
+**Fix:** In `esign_webhook`, after HMAC verification: (a) extract `payload["timestamp"]` and reject if `abs(now - ts) > 300s`; (b) check/insert `event_id` into a `webhook_events_seen (event_id PK, received_at)` table and return 200 immediately if already seen. The `temple-sweeper` already schedules daily cleanup of that table. Track as a Phase 7 carry-forward alongside the real eSign provider integration.
+
 ## FIXED — Phase 4 carry-forwards (closed Sprint 0, 2026-04-28)
 All five Sprint 0 carry-forwards are closed:
 - Slack staging-channel guard — closed (PR #46)

@@ -293,8 +293,13 @@ def test_build_comparable_sales_empty():
 
 
 def test_build_red_flags_parses_label():
-    raw = [{"rule_id": str(uuid.uuid4()), "label": "Missing serial plate",
-            "triggered_at": "2026-05-03"}]
+    raw = [
+        {
+            "rule_id": str(uuid.uuid4()),
+            "label": "Missing serial plate",
+            "triggered_at": "2026-05-03",
+        }
+    ]
     flags = _build_red_flags(raw)
     assert len(flags) == 1
     assert flags[0].label == "Missing serial plate"

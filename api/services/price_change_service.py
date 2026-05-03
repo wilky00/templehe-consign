@@ -114,9 +114,7 @@ async def _notify_managers(
     proposed_price: float,
     change_pct: float,
 ) -> None:
-    manager_role_result = await db.execute(
-        select(Role).where(Role.slug == "sales_manager")
-    )
+    manager_role_result = await db.execute(select(Role).where(Role.slug == "sales_manager"))
     manager_role = manager_role_result.scalar_one_or_none()
     if manager_role is None:
         return

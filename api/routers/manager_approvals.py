@@ -48,6 +48,7 @@ async def _pdf_background(submission_id: uuid.UUID, actor_id: uuid.UUID) -> None
             await db.rollback()
             logger.exception("pdf_background_task_failed", submission_id=str(submission_id))
 
+
 _require_manager = require_roles("sales_manager", "admin")
 
 
