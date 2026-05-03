@@ -100,6 +100,29 @@ describe("ManagerApprovalsPage", () => {
     });
   });
 
+  it("shows re-approve button for price change items", async () => {
+    renderWithProviders(<ManagerApprovalsPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /re-approve price change/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("re-approve button shows Approved after success", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ManagerApprovalsPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /re-approve price change/i }),
+      ).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /re-approve price change/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /re-approve price change/i })).toBeDisabled();
+    });
+  });
+
   it("navigates to detail on row click", async () => {
     const user = userEvent.setup();
     renderWithProviders(<ManagerApprovalsPage />, {

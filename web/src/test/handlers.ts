@@ -130,6 +130,17 @@ export const handlers = [
   ),
 
   http.post(
+    "http://localhost/api/v1/manager/approvals/price-changes/:id/approve",
+    () =>
+      HttpResponse.json({
+        change_request_id: "00000000-0000-0000-0000-000000000050",
+        status: "resolved",
+        resolved_at: "2026-05-03T00:00:00Z",
+        new_consignment_price: 50000,
+      }),
+  ),
+
+  http.post(
     "http://localhost/api/v1/admin/equipment/:id/transition",
     () =>
       HttpResponse.json({

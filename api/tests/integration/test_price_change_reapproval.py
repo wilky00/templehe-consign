@@ -285,3 +285,126 @@ async def test_price_change_queue_rbac(
     headers = {"Authorization": f"Bearer {customer_tokens['access_token']}"}
     resp = await client.get("/api/v1/manager/approvals/price-changes", headers=headers)
     assert resp.status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+# Price change re-approval endpoint
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_approve_price_change_happy_path(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """POST /manager/approvals/price-changes/{id}/approve resolves the change
+    and updates the submission's consignment price."""
+    manager_tokens = await _create_user(
+        client,
+        db_session,
+        email=f"mgr-apr-{_tag()}@example.com",
+        role_slug="sales_manager",
+    )
+    record = await _make_approved_record(db_session, approved_price=Decimal("60000.00"))
+
+    change = ChangeRequest(
+        equipment_record_id=record.id,
+        request_type="update_consignment_price",
+        status="pending",
+        proposed_consignment_price=Decimal("45000.00"),
+        requires_manager_reapproval=True,
+    )
+    db_session.add(change)
+    await db_session.flush()
+
+    from database.models import AuditLog
+
+    headers = {"Authorization": f"Bearer {manager_tokens['access_token']}"}
+    resp = await client.post(
+        f"/api/v1/manager/approvals/price-changes/{change.id}/approve",
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.json()
+    body = resp.json()
+    assert body["status"] == "resolved"
+    assert body["new_consignment_price"] == 45000.0
+
+    await db_session.refresh(change)
+    assert change.status == "resolved"
+    assert change.requires_manager_reapproval is False
+
+    # Submission price updated
+    sub = (
+        await db_session.execute(
+            select(AppraisalSubmission).where(
+                AppraisalSubmission.equipment_record_id == record.id,
+                AppraisalSubmission.status == "approved",
+            )
+        )
+    ).scalar_one()
+    assert sub.suggested_consignment_price == Decimal("45000.00")
+
+    # Audit log written
+    audit = (
+        await db_session.execute(
+            select(AuditLog).where(
+                AuditLog.event_type == "change_request.price_reapproved",
+                AuditLog.target_id == change.id,
+            )
+        )
+    ).scalar_one_or_none()
+    assert audit is not None
+
+
+@pytest.mark.asyncio
+async def test_approve_price_change_already_resolved_returns_422(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Cannot re-approve a change request that is already resolved."""
+    manager_tokens = await _create_user(
+        client,
+        db_session,
+        email=f"mgr-rres-{_tag()}@example.com",
+        role_slug="sales_manager",
+    )
+    record = await _make_approved_record(db_session)
+
+    change = ChangeRequest(
+        equipment_record_id=record.id,
+        request_type="update_consignment_price",
+        status="resolved",  # already resolved
+        proposed_consignment_price=Decimal("45000.00"),
+        requires_manager_reapproval=False,
+    )
+    db_session.add(change)
+    await db_session.flush()
+
+    headers = {"Authorization": f"Bearer {manager_tokens['access_token']}"}
+    resp = await client.post(
+        f"/api/v1/manager/approvals/price-changes/{change.id}/approve",
+        headers=headers,
+    )
+    assert resp.status_code == 422
+    assert "resolved" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_approve_price_change_rbac(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Customers and appraisers cannot call the re-approve endpoint."""
+    customer_tokens = await _create_user(
+        client,
+        db_session,
+        email=f"cust-rar-{_tag()}@example.com",
+        role_slug="customer",
+    )
+    change_id = uuid.uuid4()
+    headers = {"Authorization": f"Bearer {customer_tokens['access_token']}"}
+    resp = await client.post(
+        f"/api/v1/manager/approvals/price-changes/{change_id}/approve",
+        headers=headers,
+    )
+    assert resp.status_code == 403

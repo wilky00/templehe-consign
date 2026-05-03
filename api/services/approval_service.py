@@ -23,6 +23,7 @@ from sqlalchemy.orm import selectinload
 from database.models import (
     AppraisalSubmission,
     AuditLog,
+    ChangeRequest,
     ComponentScore,
     EquipmentRecord,
     User,
@@ -283,6 +284,92 @@ async def reject(
     )
 
     return await _fetch(db, submission_id=submission_id)
+
+
+async def approve_price_change(
+    db: AsyncSession,
+    *,
+    change_request_id: uuid.UUID,
+    approving_user: User,
+) -> ChangeRequest:
+    """Approve a manager-required price change re-approval.
+
+    Resolves the ChangeRequest, clears the re-approval flag, updates the
+    associated AppraisalSubmission's suggested_consignment_price to the
+    proposed price, and writes an audit log entry.
+
+    Raises :exc:`LookupError` if the change request is not found.
+    Raises :exc:`ValueError` if the change request is not pending or does not
+    have ``requires_manager_reapproval`` set.
+    """
+    result = await db.execute(
+        select(ChangeRequest)
+        .where(ChangeRequest.id == change_request_id)
+        .with_for_update()
+    )
+    change = result.scalar_one_or_none()
+    if change is None:
+        raise LookupError(f"Change request {change_request_id} not found")
+    if change.status != "pending":
+        raise ValueError(f"Cannot re-approve: change request status is '{change.status}'")
+    if not change.requires_manager_reapproval:
+        raise ValueError("This change request does not require manager re-approval.")
+
+    sub_result = await db.execute(
+        select(AppraisalSubmission).where(
+            AppraisalSubmission.equipment_record_id == change.equipment_record_id,
+            AppraisalSubmission.status == "approved",
+            AppraisalSubmission.deleted_at.is_(None),
+        )
+    )
+    submission = sub_result.scalar_one_or_none()
+
+    before = {
+        "change_status": change.status,
+        "approved_price": str(submission.suggested_consignment_price) if submission else None,
+    }
+
+    change.status = "resolved"
+    change.resolved_by = approving_user.id
+    change.resolved_at = datetime.now(UTC)
+    change.requires_manager_reapproval = False
+    if change.proposed_consignment_price is not None:
+        change.resolution_notes = (
+            f"Manager re-approved price change to ${change.proposed_consignment_price}"
+        )
+        if submission is not None:
+            submission.suggested_consignment_price = change.proposed_consignment_price
+
+    await db.flush()
+
+    actor_role = await _resolve_actor_role(db, approving_user)
+    db.add(
+        AuditLog(
+            event_type="change_request.price_reapproved",
+            actor_id=approving_user.id,
+            actor_role=actor_role,
+            target_type="change_request",
+            target_id=change.id,
+            before_state=before,
+            after_state={
+                "change_status": "resolved",
+                "new_price": (
+                    str(change.proposed_consignment_price)
+                    if change.proposed_consignment_price
+                    else None
+                ),
+            },
+        )
+    )
+    await db.flush()
+
+    logger.info(
+        "price_change_reapproved",
+        change_request_id=str(change_request_id),
+        approving_user_id=str(approving_user.id),
+    )
+
+    return change
 
 
 # --------------------------------------------------------------------------- #

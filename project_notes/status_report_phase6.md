@@ -144,3 +144,51 @@
 
 - `field_values` (JSONB, keyed by prompt UUID) is still not extracted for red flag evaluation. Carry-forward from Sprint 1.
 - eSign stub is used in all tests; real DocuSign/Dropbox Sign integration is deferred until the provider decision is made (tracked in `project_notes/decisions.md`).
+
+---
+
+## Sprint 4: Price Change Re-Approval + E2E Gate + Close-out — COMPLETE (2026-05-03)
+
+### What was built
+
+| File | Action | Key change |
+|---|---|---|
+| `api/services/approval_service.py` | Modified | Added `approve_price_change()`: FOR UPDATE lock, validates pending+reapproval-required, resolves change, updates `suggested_consignment_price`, writes audit log |
+| `api/routers/manager_approvals.py` | Modified | Added `PriceChangeApprovalOut` schema (`new_consignment_price: float`); added `POST /price-changes/{id}/approve` between `get_price_change_queue` and `get_approval_detail` |
+| `api/tests/integration/test_price_change_reapproval.py` | Extended | +3 tests: happy path, already-resolved → 422, RBAC → 403 |
+| `web/src/api/approvals.ts` | Modified | Added `PriceChangeApprovalOut` interface + `approvePriceChange()` |
+| `web/src/pages/ManagerApprovals.tsx` | Modified | Extracted `PriceChangeRow` with `useMutation`; "Re-approve" / "Approving…" / "Approved" states; error display; `aria-label` |
+| `web/src/test/handlers.ts` | Modified | MSW handler for `POST /manager/approvals/price-changes/:id/approve` |
+| `web/src/pages/ManagerApprovals.test.tsx` | Extended | +2 tests: re-approve button renders, shows Approved + disabled after success |
+| `scripts/seed_e2e_phase6.py` | New | 6-mode seeder; returns JSON via stdout |
+| `web/e2e/helpers/api.ts` | Modified | Added `seedPhase6()` |
+| `web/e2e/phase6_approval_esign.spec.ts` | New | 6 E2E scenarios + axe-core sweep |
+
+### Test results
+
+- Backend integration: **530/530 passed**
+- Backend unit: **177/177 passed**
+- Frontend: **128/128 passed**
+
+### Bugs found and fixed
+
+- `PriceChangeApprovalOut.new_consignment_price: Decimal` serialized as `"45000.00"` (string) rather than `45000.0` (number). Fixed by changing the field type to `float` in the Pydantic schema.
+
+### Open issues / carry-forwards
+
+- `field_values` prompt extraction for red flag evaluation: still not implemented. Phase 7 or Phase 8 polish.
+- Real eSign provider integration: deferred until provider contract is signed (DocuSign vs Dropbox Sign).
+- `appraisal_submissions` partial-unique constraint (`WHERE status='draft'`) used by Phase 5 iOS app — Phase 7 report generation relies on the same `status='approved'` + signed contract gate.
+
+---
+
+## Phase 6 Summary
+
+Phase 6 shipped in 4 sprints across 2026-05-02–2026-05-03:
+
+- **Sprint 1:** Scoring engine rework (6 score bands), red flag detection service, Phase 5 iOS appraisal submission integration
+- **Sprint 2:** Manager approval workflow (queue, detail, approve, reject with audit log, title hold enforcement, record locking)
+- **Sprint 3:** Frontend manager approval queue + detail pages, eSign stub router, price change detection + queue
+- **Sprint 4:** Price change re-approval action (backend + frontend), Phase 6 E2E gate spec (6 scenarios), close-out
+
+**Final gate: 530/530 backend integration, 177/177 unit, 128/128 frontend — all green 2026-05-03**

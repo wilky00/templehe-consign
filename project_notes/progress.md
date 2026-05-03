@@ -1400,7 +1400,7 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 All 7 epics shipped across 8 sprints. Backend gate 652/652. Phase 6 (Approval + eSign) is the next phase.
 
-## Phase 6 — Approval & eSign (In Progress, started 2026-05-02)
+## Phase 6 — Approval & eSign (COMPLETE 2026-05-03, started 2026-05-02)
 
 Full spec: `dev_plan/06_phase6_approval_esign.md`
 
@@ -1479,6 +1479,31 @@ Full spec: `dev_plan/06_phase6_approval_esign.md`
 **Integration test gate: PASSED — 528/528 green 2026-05-03**
 **Unit test gate: PASSED — 177/177 green 2026-05-03**
 **Frontend test gate: PASSED — 126/126 green 2026-05-03**
+
+### Sprint 4: Price Change Re-Approval Action + E2E Gate + Close-out — COMPLETE (verified green 2026-05-03)
+
+**Backend:**
+- [x] `api/services/approval_service.py` — added `approve_price_change()`: fetches `ChangeRequest` with `FOR UPDATE`, validates `status=pending` + `requires_manager_reapproval=True`, resolves the change, updates `AppraisalSubmission.suggested_consignment_price`, writes `AuditLog(event_type="change_request.price_reapproved")`
+- [x] `api/routers/manager_approvals.py` — added `PriceChangeApprovalOut` schema (changed `new_consignment_price` from `Decimal` to `float` for correct JSON serialization); added `POST /price-changes/{change_request_id}/approve` between `get_price_change_queue` and `get_approval_detail`
+- [x] `api/tests/integration/test_price_change_reapproval.py` — added 3 tests: happy path (resolves change, updates price, writes audit log), already-resolved → 422, RBAC blocks customers → 403
+
+**Frontend:**
+- [x] `web/src/api/approvals.ts` — added `PriceChangeApprovalOut` interface + `approvePriceChange()` function
+- [x] `web/src/pages/ManagerApprovals.tsx` — extracted `PriceChangeRow` component with `useMutation` for re-approval ("Re-approve" / "Approving…" / "Approved" states, error display, `aria-label`)
+- [x] `web/src/test/handlers.ts` — added MSW handler for `POST /manager/approvals/price-changes/:id/approve`
+- [x] `web/src/pages/ManagerApprovals.test.tsx` — added 2 tests: re-approve button renders, button shows Approved + disabled after success
+
+**E2E:**
+- [x] `scripts/seed_e2e_phase6.py` (NEW) — 6-mode seeder (default, red_flags, title_hold, esign, price_change, publish_ready); returns JSON with user credentials + record IDs via stdout
+- [x] `web/e2e/helpers/api.ts` — added `seedPhase6()` helper following the Phase 3/4 pattern
+- [x] `web/e2e/phase6_approval_esign.spec.ts` (NEW) — 6 acceptance scenarios (approval flow, red flags, title hold checkbox gate, eSign stub sign, sales rep publish, price change re-approval) + axe-core a11y sweep of queue + detail pages
+
+**Bugs fixed during sprint:**
+- `PriceChangeApprovalOut.new_consignment_price` typed as `Decimal` → serialized as string `"45000.00"` instead of number; fixed to `float`
+
+**Integration test gate: PASSED — 530/530 green 2026-05-03**
+**Unit test gate: PASSED — 177/177 green 2026-05-03**
+**Frontend test gate: PASSED — 128/128 green 2026-05-03**
 
 ---
 

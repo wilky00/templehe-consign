@@ -265,6 +265,12 @@ fly machine run . --app temple-sweeper \
 **Impact:** iOS tests don't run in CI. Backend + web CI green on every push; iOS is manual-only.
 **Fix:** Add macOS GitHub Actions runner ($0.08/min vs $0.008/min ubuntu). Revisit in Phase 6 when distribution scale justifies it.
 
+## OPEN — Phase 6: `field_values` prompt answers not extracted for red flag evaluation
+**Status:** Carry-forward from Phase 6 Sprint 1 (2026-05-02). Not fixed in Phase 6.
+**File:** `api/services/red_flag_service.py` (evaluate function)
+**Impact:** Red flag detection runs against score fields, marketability, and boolean flags only. Inspection prompt answers (stored as `field_values` JSONB keyed by prompt UUID in `appraisal_submissions.inspections`) are not checked against red flag rules that reference specific prompt IDs. Any red flag rule of type `prompt_answer` silently goes unevaluated.
+**Fix:** In `red_flag_service.evaluate()`, pass `field_values: dict[str, str]` (extracted from `submission.inspections`) alongside the existing field dict. Match `rule.field_name` against prompt UUID keys. Straightforward addition; blocked only by needing to align with the appraisal_submissions schema finalized in Phase 5.
+
 ## FIXED — Phase 4 carry-forwards (closed Sprint 0, 2026-04-28)
 All five Sprint 0 carry-forwards are closed:
 - Slack staging-channel guard — closed (PR #46)

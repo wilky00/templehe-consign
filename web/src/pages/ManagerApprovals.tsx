@@ -1,12 +1,20 @@
 // ABOUTME: Manager approval queue — lists submitted appraisals awaiting review, oldest-first.
 // ABOUTME: Shows score, score band, red flag badges; clicking a row navigates to the detail view.
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "../components/ui/Alert";
+import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
-import { getApprovalQueue, getPriceChangeQueue } from "../api/approvals";
+import { approvePriceChange, getApprovalQueue, getPriceChangeQueue } from "../api/approvals";
 import type { ApprovalQueueItem, PriceChangeQueueItem } from "../api/approvals";
+import { ApiError } from "../api/client";
+
+function apiErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) return err.detail;
+  if (err instanceof Error) return err.message;
+  return "Unexpected error";
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -102,6 +110,72 @@ function AppraisalQueueTable({ items }: { items: ApprovalQueueItem[] }) {
   );
 }
 
+function PriceChangeRow({ item }: { item: PriceChangeQueueItem }) {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: () => approvePriceChange(item.change_request_id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["manager-price-change-queue"] });
+    },
+  });
+
+  const changePct =
+    item.approved_price && item.proposed_price
+      ? (
+          ((item.proposed_price - item.approved_price) / item.approved_price) *
+          100
+        ).toFixed(1)
+      : null;
+
+  return (
+    <tr key={item.change_request_id}>
+      <td className="py-3 pr-4 font-mono text-xs text-gray-700">
+        {item.reference_number ?? "—"}
+      </td>
+      <td className="py-3 pr-4 text-gray-900">{item.make_model ?? "—"}</td>
+      <td className="py-3 pr-4 text-gray-700">
+        {item.approved_price != null ? `$${item.approved_price.toLocaleString()}` : "—"}
+      </td>
+      <td className="py-3 pr-4 text-gray-700">
+        {item.proposed_price != null ? `$${item.proposed_price.toLocaleString()}` : "—"}
+      </td>
+      <td className="py-3 pr-4">
+        {changePct !== null ? (
+          <span
+            className={
+              parseFloat(changePct) < 0
+                ? "text-red-600 font-medium"
+                : "text-green-600 font-medium"
+            }
+          >
+            {parseFloat(changePct) > 0 ? "+" : ""}
+            {changePct}%
+          </span>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td className="py-3 pr-4 text-gray-500">{item.customer_email ?? "—"}</td>
+      <td className="py-3 text-gray-500">{formatDate(item.submitted_at)}</td>
+      <td className="py-3">
+        {mutation.isError && (
+          <p className="mb-1 text-xs text-red-600" role="alert">
+            {apiErrorMessage(mutation.error)}
+          </p>
+        )}
+        <Button
+          size="sm"
+          onClick={() => mutation.mutate()}
+          disabled={mutation.isPending || mutation.isSuccess}
+          aria-label={`Re-approve price change for ${item.reference_number ?? item.change_request_id}`}
+        >
+          {mutation.isPending ? "Approving…" : mutation.isSuccess ? "Approved" : "Re-approve"}
+        </Button>
+      </td>
+    </tr>
+  );
+}
+
 function PriceChangeTable({ items }: { items: PriceChangeQueueItem[] }) {
   if (items.length === 0) {
     return <p className="text-sm text-gray-500">No price changes awaiting re-approval.</p>;
@@ -117,51 +191,14 @@ function PriceChangeTable({ items }: { items: PriceChangeQueueItem[] }) {
             <th className="py-3 pr-4">Proposed price</th>
             <th className="py-3 pr-4">Change</th>
             <th className="py-3 pr-4">Customer</th>
-            <th className="py-3">Submitted</th>
+            <th className="py-3 pr-4">Submitted</th>
+            <th className="py-3">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {items.map((item) => {
-            const changePct =
-              item.approved_price && item.proposed_price
-                ? (
-                    ((item.proposed_price - item.approved_price) / item.approved_price) *
-                    100
-                  ).toFixed(1)
-                : null;
-            return (
-              <tr key={item.change_request_id}>
-                <td className="py-3 pr-4 font-mono text-xs text-gray-700">
-                  {item.reference_number ?? "—"}
-                </td>
-                <td className="py-3 pr-4 text-gray-900">{item.make_model ?? "—"}</td>
-                <td className="py-3 pr-4 text-gray-700">
-                  {item.approved_price != null ? `$${item.approved_price.toLocaleString()}` : "—"}
-                </td>
-                <td className="py-3 pr-4 text-gray-700">
-                  {item.proposed_price != null ? `$${item.proposed_price.toLocaleString()}` : "—"}
-                </td>
-                <td className="py-3 pr-4">
-                  {changePct !== null ? (
-                    <span
-                      className={
-                        parseFloat(changePct) < 0
-                          ? "text-red-600 font-medium"
-                          : "text-green-600 font-medium"
-                      }
-                    >
-                      {parseFloat(changePct) > 0 ? "+" : ""}
-                      {changePct}%
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="py-3 pr-4 text-gray-500">{item.customer_email ?? "—"}</td>
-                <td className="py-3 text-gray-500">{formatDate(item.submitted_at)}</td>
-              </tr>
-            );
-          })}
+          {items.map((item) => (
+            <PriceChangeRow key={item.change_request_id} item={item} />
+          ))}
         </tbody>
       </table>
     </div>

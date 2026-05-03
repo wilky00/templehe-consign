@@ -127,3 +127,19 @@ export async function rejectSubmission(
 export async function getPriceChangeQueue(): Promise<PriceChangeQueueResponse> {
   return request<PriceChangeQueueResponse>("/manager/approvals/price-changes");
 }
+
+export interface PriceChangeApprovalOut {
+  change_request_id: UUID;
+  status: string;
+  resolved_at: ISODateTime | null;
+  new_consignment_price: number | null;
+}
+
+export async function approvePriceChange(
+  changeRequestId: UUID,
+): Promise<PriceChangeApprovalOut> {
+  return request<PriceChangeApprovalOut>(
+    `/manager/approvals/price-changes/${changeRequestId}/approve`,
+    { method: "POST" },
+  );
+}

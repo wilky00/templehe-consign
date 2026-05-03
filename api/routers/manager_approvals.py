@@ -107,6 +107,13 @@ class PriceChangeQueueResponse(BaseModel):
     total: int
 
 
+class PriceChangeApprovalOut(BaseModel):
+    change_request_id: uuid.UUID
+    status: str
+    resolved_at: datetime | None
+    new_consignment_price: float | None
+
+
 @router.get("", response_model=ApprovalQueueResponse)
 async def get_approval_queue(
     current_user: User = Depends(_require_manager),
@@ -173,6 +180,38 @@ async def get_price_change_queue(
         )
 
     return PriceChangeQueueResponse(items=items, total=len(items))
+
+
+@router.post(
+    "/price-changes/{change_request_id}/approve",
+    response_model=PriceChangeApprovalOut,
+)
+async def approve_price_change(
+    change_request_id: uuid.UUID,
+    current_user: User = Depends(_require_manager),
+    db: AsyncSession = Depends(get_db),
+) -> PriceChangeApprovalOut:
+    """Re-approve a price change that exceeded the manager-approval threshold.
+
+    Resolves the ChangeRequest, updates the submission's consignment price to
+    the proposed price, and writes an audit log entry.
+    """
+    try:
+        change = await approval_service.approve_price_change(
+            db,
+            change_request_id=change_request_id,
+            approving_user=current_user,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return PriceChangeApprovalOut(
+        change_request_id=change.id,
+        status=change.status,
+        resolved_at=change.resolved_at,
+        new_consignment_price=change.proposed_consignment_price,
+    )
 
 
 @router.get("/{submission_id}", response_model=SubmissionOut)
