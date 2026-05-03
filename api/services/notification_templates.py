@@ -418,3 +418,16 @@ SYNC_CONFIRMATION_APNS = register(
         body_template="Appraisal {{ reference_number }} synced successfully.",
     )
 )
+
+
+SYNC_FAILED_APNS = register(
+    Template(
+        name="sync_failed_apns",
+        channel="apns",
+        category="appraiser",
+        variables=("reference_number", "error_reason"),
+        description="iOS push sent when an appraisal submission sync fails after max retries.",
+        subject_template="Sync Failed",
+        body_template="Appraisal {{ reference_number }} could not be synced: {{ error_reason }}.",
+    )
+)

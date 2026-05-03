@@ -26,9 +26,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database.models import (
+    AppraisalPhoto,
     AppraisalSubmission,
     CategoryComponent,
     CategoryInspectionPrompt,
+    CategoryPhotoSlot,
     CategoryRedFlagRule,
     ComponentScore,
     EquipmentCategory,
@@ -195,6 +197,7 @@ async def submit(
 
     if submission.category_id:
         await _snapshot_versions(db, submission=submission)
+        await _validate_required_photos(db, submission=submission)
 
     submission.status = "submitted"
     submission.submitted_at = datetime.now(UTC)
@@ -296,6 +299,35 @@ async def _snapshot_versions(
         )
     )
     submission.rule_version_set = {str(r.id): r.version for r in rules_result.scalars().all()}
+
+
+async def _validate_required_photos(
+    db: AsyncSession,
+    *,
+    submission: AppraisalSubmission,
+) -> None:
+    """Raise ValueError if any required CategoryPhotoSlot is missing a finalized photo."""
+    required_result = await db.execute(
+        select(CategoryPhotoSlot.label).where(
+            CategoryPhotoSlot.category_id == submission.category_id,
+            CategoryPhotoSlot.required.is_(True),
+            CategoryPhotoSlot.active.is_(True),
+        )
+    )
+    required_labels = {row[0] for row in required_result.all()}
+    if not required_labels:
+        return
+
+    captured_result = await db.execute(
+        select(AppraisalPhoto.slot_label).where(
+            AppraisalPhoto.appraisal_submission_id == submission.id,
+            AppraisalPhoto.deleted_at.is_(None),
+        )
+    )
+    captured_labels = {row[0] for row in captured_result.all()}
+    missing = required_labels - captured_labels
+    if missing:
+        raise ValueError(f"Required photo slots not captured: {sorted(missing)}")
 
 
 async def _fetch(

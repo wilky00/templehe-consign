@@ -33,7 +33,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from database.models import NotificationJob
+from database.models import AppraisalSubmission, NotificationJob
 from services import email_service
 
 logger = structlog.get_logger(__name__)
@@ -342,3 +342,80 @@ async def _dispatch_slack(db: AsyncSession, job: NotificationJob) -> str:
         job.last_error = f"slack_permanent: {exc}"[:1000]
         return "failed"
     return "delivered"
+
+
+async def enqueue_sync_confirmation(
+    db: AsyncSession,
+    *,
+    submission: AppraisalSubmission,
+) -> None:
+    """Enqueue a silent APNs push for each of the appraiser's iOS device tokens.
+
+    Content-available: 1 signals iOS to wake the app and refresh submission
+    state without showing a visible alert. No-ops if the appraiser has no
+    registered device tokens."""
+    if submission.appraiser_id is None:
+        return
+    from services import device_token_service
+
+    tokens = await device_token_service.tokens_for_user(
+        db, user_id=submission.appraiser_id, platform="ios"
+    )
+    for token in tokens:
+        await enqueue(
+            db,
+            idempotency_key=f"sync_confirmation:{submission.id}:{token.id}",
+            user_id=submission.appraiser_id,
+            channel="apns",
+            template="sync_confirmation_apns",
+            payload={
+                "token": token.token,
+                "device_environment": token.environment,
+                "device_token_id": str(token.id),
+                "title": "",
+                "body": "",
+                "data": {
+                    "content-available": 1,
+                    "reference_number": str(submission.id),
+                },
+            },
+        )
+
+
+async def enqueue_sync_failed(
+    db: AsyncSession,
+    *,
+    submission: AppraisalSubmission,
+    reason: str,
+) -> None:
+    """Enqueue a visible APNs push for each of the appraiser's iOS device tokens.
+
+    Sent when the SyncService exhausts retries so the appraiser knows a
+    manual retry is needed. Idempotency key is per-submission per-device so
+    a single failure surfaces at most one alert per sync attempt."""
+    if submission.appraiser_id is None:
+        return
+    from services import device_token_service
+
+    tokens = await device_token_service.tokens_for_user(
+        db, user_id=submission.appraiser_id, platform="ios"
+    )
+    for token in tokens:
+        await enqueue(
+            db,
+            idempotency_key=f"sync_failed:{submission.id}:{token.id}",
+            user_id=submission.appraiser_id,
+            channel="apns",
+            template="sync_failed_apns",
+            payload={
+                "token": token.token,
+                "device_environment": token.environment,
+                "device_token_id": str(token.id),
+                "title": "Sync Failed",
+                "body": f"Appraisal could not be synced: {reason}",
+                "data": {
+                    "reference_number": str(submission.id),
+                    "error_reason": reason,
+                },
+            },
+        )
