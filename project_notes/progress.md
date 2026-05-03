@@ -1507,4 +1507,44 @@ Full spec: `dev_plan/06_phase6_approval_esign.md`
 
 ---
 
-## Phase 7–8 — Not started
+## Phase 7 — PDF Reports — COMPLETE (verified green 2026-05-03)
+
+Full spec: `dev_plan/07_phase7_pdf_reports.md`
+
+### Sprint 1: Data Assembly + Schemas — COMPLETE (verified green 2026-05-03)
+- [x] `api/schemas/report.py` — `ReportData`, `EquipmentDetailsSection`, `ValuationSection`, `PhotoGallerySection`, `PersonnelSection`, `BrandingSection`, `ReportDownloadResponse`, `ReportGeneratingResponse` Pydantic models
+- [x] `api/services/report_data_service.py` — `build_report_data()` (async, DB-backed) + `_assemble()` (pure function); raises `ReportDataIncompleteError` when approval pricing is missing
+- [x] `api/services/app_config_registry.py` — added `pdf_page_size`, `pdf_brand_primary_color`, `pdf_font_family`, `company_logo_url` AppConfig keys
+- [x] `api/tests/unit/test_report_data_service.py` — 25 unit tests covering `_assemble()` and all private helpers
+- [x] `api/tests/integration/test_report_data_service.py` — 5 integration tests for `build_report_data()` with real DB
+- [x] `api/pyproject.toml` — added `weasyprint==68.1` + `Pillow` dependencies
+
+### Sprint 2: PDF Rendering + Generation + Download Endpoint — COMPLETE (verified green 2026-05-03)
+- [x] `api/templates/pdf/styles.css` — WeasyPrint CSS with Jinja2 config variables; `@page` rule with footer page counter; 3-col A4 / 2-col Letter photo grid; management review alert box
+- [x] `api/templates/pdf/appraisal_report.html.j2` — full Jinja2 template: report header, title block, equipment details, valuation & pricing (price cards, score badge, component scores table, comparable sales, management review alert), photo gallery (base64 inline), personnel info
+- [x] `api/services/pdf_render_service.py` — `render_pdf(ReportData) → bytes`; enriches photos with base64 inline data fetched from R2 and re-compressed (Pillow 800×800, 60% JPEG); runs WeasyPrint via `FileSystemLoader`
+- [x] `api/services/pdf_generation_worker.py` — `generate_and_store()` (async: build_report_data → to_thread(render_pdf) → to_thread(_upload_pdf) → upsert AppraisalReport row); `generate_and_store_best_effort()` (swallows errors, writes AuditLog); `generate_download_url()` (R2 presigned GET, 15-min expiry)
+- [x] `api/routers/reports.py` — `GET /api/v1/equipment-records/{id}/report/pdf`; customer ownership check via explicit Customer query; 202 if no report, 503 if R2 not configured, 200 + signed URL if report exists
+- [x] `api/routers/manager_approvals.py` — added `_pdf_background()` (own `AsyncSessionLocal` session); `background_tasks.add_task(_pdf_background, ...)` on approve
+- [x] `api/main.py` — registered `reports_router`
+- [x] `api/tests/unit/test_pdf_render_service.py` — 3 WeasyPrint smoke tests (real render, returns `%PDF` bytes)
+- [x] `api/tests/integration/test_pdf_generation.py` — 8 integration tests (render + R2 mocked, DB real)
+
+**Unit test gate: PASSED — 205/205 green 2026-05-03**
+**Integration test gate: PASSED — 544/544 green 2026-05-03**
+
+### Sprint 3: Frontend + E2E Gate — COMPLETE (verified green 2026-05-03)
+- [x] `web/src/api/reports.ts` — `getReportDownload()`, `isReportReady()` type guard, `ReportDownloadResponse` / `ReportGeneratingResponse` / `ReportResponse` types
+- [x] `web/src/pages/EquipmentDetail.tsx` — `ReportCard` component (hidden for non-eligible statuses; shows generating message or download link)
+- [x] `web/src/pages/SalesEquipmentDetail.tsx` — `SalesReportCard` component (same pattern for internal staff)
+- [x] `web/src/test/handlers.ts` — added MSW handler for `GET /equipment-records/:id/report/pdf` (202 default)
+- [x] `web/src/pages/ReportDownload.test.tsx` — 3 Vitest tests (hidden for new_request, generating message, download link)
+- [x] `scripts/seed_e2e_phase7.py` — multi-mode seeder (approved | new_request)
+- [x] `web/e2e/helpers/api.ts` — added `seedPhase7()` helper
+- [x] `web/e2e/phase7_pdf.spec.ts` — 5 E2E gate scenarios (generating message, non-eligible hidden, sales rep card, a11y scan, API RBAC)
+
+**Frontend test gate: PASSED — 131/131 green 2026-05-03**
+
+---
+
+## Phase 8 — Not started

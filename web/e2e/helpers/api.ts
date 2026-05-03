@@ -109,6 +109,33 @@ export function seedPhase6<T>(
   return JSON.parse(out.trim()) as T;
 }
 
+/**
+ * Phase 7 fixture seeder — customer + sales_rep + equipment records for PDF report UI.
+ *
+ * Modes: approved (record in approved_pending_esign, no report row) |
+ *        new_request (record in new_request, no report eligible).
+ */
+export function seedPhase7<T>(mode: "approved" | "new_request" = "approved"): T {
+  const args = [
+    "run",
+    "python",
+    path.join(REPO_ROOT, "scripts", "seed_e2e_phase7.py"),
+    "--mode",
+    mode,
+  ];
+  const out = execFileSync("uv", args, {
+    cwd: path.join(REPO_ROOT, "api"),
+    env: {
+      ...process.env,
+      DATABASE_URL:
+        process.env.E2E_DATABASE_URL ??
+        "postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe",
+    },
+    encoding: "utf8",
+  });
+  return JSON.parse(out.trim()) as T;
+}
+
 const VALID_PASSWORD = "TestPassword1!";
 
 export interface TestUser {

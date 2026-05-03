@@ -155,4 +155,11 @@ export const handlers = [
   http.post("http://localhost/api/v1/auth/login", () =>
     HttpResponse.json({ access_token: "fake-token", token_type: "bearer" }),
   ),
+
+  http.get("http://localhost/api/v1/equipment-records/:id/report/pdf", () =>
+    HttpResponse.json(
+      { status: "generating", message: "Your report is being prepared. Please check back in a few minutes." },
+      { status: 202 },
+    ),
+  ),
 ];
