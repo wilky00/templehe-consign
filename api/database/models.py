@@ -888,6 +888,9 @@ class ConsignmentContract(Base):
     envelope_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="sent")
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
 
     equipment_record: Mapped[EquipmentRecord] = relationship(
         "EquipmentRecord", back_populates="consignment_contract"
