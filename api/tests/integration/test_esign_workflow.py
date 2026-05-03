@@ -1,9 +1,7 @@
 # ABOUTME: Phase 6 Sprint 3 — integration tests for the eSign workflow.
-# ABOUTME: Covers contract dispatch on approval, stub sign page, webhook completion/decline/idempotency, HMAC.
+# ABOUTME: Covers contract dispatch, stub sign page, webhook completion/decline/idempotency, HMAC.
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import uuid
 from unittest.mock import AsyncMock, patch
@@ -21,7 +19,6 @@ from database.models import (
     EquipmentRecord,
     Role,
     User,
-    UserRole,
 )
 
 _VALID_PASSWORD = "TestPassword1!"
@@ -71,7 +68,7 @@ async def _setup_approved_record(
     client: AsyncClient,
     db: AsyncSession,
 ) -> tuple[EquipmentRecord, AppraisalSubmission, str]:
-    """Create an approved appraisal record + submission; return (record, submission, manager_token)."""
+    """Create an approved appraisal + submission; return (record, submission, manager_token)."""
     cat = EquipmentCategory(name=f"ESCat-{_tag()}", slug=f"es-cat-{_tag()}", version=1)
     db.add(cat)
     await db.flush()
@@ -298,7 +295,6 @@ async def test_webhook_idempotent(
     db_session: AsyncSession,
 ) -> None:
     """Sending envelope_completed twice doesn't error or double-transition the record."""
-    from database.models import EquipmentRecord as _ER
 
     record, _, _ = await _setup_approved_record(client, db_session)
     contract_result = await db_session.execute(
@@ -392,7 +388,8 @@ async def test_webhook_unknown_envelope(
     db_session: AsyncSession,
 ) -> None:
     """A webhook referencing an unknown envelope_id is handled gracefully."""
-    payload = json.dumps({"event": "envelope_completed", "envelope_id": "stub-nonexistent"}).encode()
+    data = {"event": "envelope_completed", "envelope_id": "stub-nonexistent"}
+    payload = json.dumps(data).encode()
     resp = await client.post(
         "/api/v1/esign/webhook",
         content=payload,

@@ -12,13 +12,17 @@ The customer receives an email with a link to the signing flow at
 
 from __future__ import annotations
 
-import uuid
-
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import AppraisalSubmission, ConsignmentContract, Customer, EquipmentRecord, User
+from database.models import (
+    AppraisalSubmission,
+    ConsignmentContract,
+    Customer,
+    EquipmentRecord,
+    User,
+)
 from services import notification_service
 from services.signing_service import get_signing_service
 

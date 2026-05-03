@@ -2,10 +2,7 @@
 # ABOUTME: Pure tests — no DB, no fixtures. Uses red_flag_service.make_rule() factory.
 from __future__ import annotations
 
-import pytest
-
 from services.red_flag_service import RedFlagResult, evaluate_rules, make_rule
-
 
 # --------------------------------------------------------------------------- #
 # Helpers

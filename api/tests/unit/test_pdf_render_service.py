@@ -5,9 +5,6 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from schemas.report import (
     BrandingSection,

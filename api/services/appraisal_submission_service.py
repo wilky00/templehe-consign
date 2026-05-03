@@ -36,7 +36,6 @@ from database.models import (
     Customer,
     EquipmentCategory,
     EquipmentRecord,
-    NotificationPreference,
     Role,
     User,
 )

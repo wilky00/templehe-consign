@@ -30,7 +30,12 @@ from sqlalchemy.orm import selectinload
 
 from config import settings
 from database.models import AuditLog, ChangeRequest, Customer, EquipmentRecord, User
-from services import equipment_status_service, notification_service, price_change_service, sanitization
+from services import (
+    equipment_status_service,
+    notification_service,
+    price_change_service,
+    sanitization,
+)
 from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)

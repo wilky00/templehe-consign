@@ -1,5 +1,5 @@
 # ABOUTME: Phase 6 Sprint 2 — integration tests for the manager approval workflow.
-# ABOUTME: Covers queue listing, approve/reject status transitions, RBAC, audit log, and notifications.
+# ABOUTME: Covers queue listing, approve/reject status transitions, RBAC, audit log, notifications.
 from __future__ import annotations
 
 import uuid
