@@ -1,0 +1,53 @@
+# ABOUTME: Fastlane configuration for TempleHE Appraiser iOS app.
+# ABOUTME: Provides a 'beta' lane for TestFlight upload after a successful archive build.
+
+default_platform(:ios)
+
+platform :ios do
+
+  # Required env vars (set via CI secrets or local .env):
+  #   APP_STORE_CONNECT_API_KEY_ID
+  #   APP_STORE_CONNECT_ISSUER_ID
+  #   APP_STORE_CONNECT_API_KEY_CONTENT  (base64-encoded .p8 file)
+  #   MATCH_GIT_URL                       (repo holding encrypted certs)
+  #   MATCH_PASSWORD
+  #   MATCH_GIT_BRANCH                    (default: main)
+
+  desc "Run unit tests on the simulator"
+  lane :test do
+    run_tests(
+      scheme: "TempleHEAppraiser",
+      device: "iPhone 15 Pro",
+      clean: true
+    )
+  end
+
+  desc "Build and upload a TestFlight beta build"
+  lane :beta do
+    # Fetch provisioning profiles and certificates from match repo.
+    match(
+      type: "appstore",
+      app_identifier: "com.templehe.appraiser",
+      readonly: true
+    )
+
+    # Bump build number to current UNIX timestamp so each upload is unique.
+    increment_build_number(
+      build_number: Time.now.to_i.to_s,
+      xcodeproj: "TempleHEAppraiser/TempleHEAppraiser.xcodeproj"
+    )
+
+    build_app(
+      scheme: "TempleHEAppraiser",
+      configuration: "Release",
+      export_method: "app-store",
+      xcargs: "-allowProvisioningUpdates"
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      changelog: "Automated build from CI — see git log for changes."
+    )
+  end
+
+end

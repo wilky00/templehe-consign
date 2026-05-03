@@ -472,3 +472,13 @@ Append ADR-003: "Fly.io and Neon sunset completed, data archived to `gs://temple
 - `10_operations_runbook.md` — Fly.io active ops (legacy after cutover)
 - `12_gcp_production_target.md` — GCP target architecture (primary after cutover)
 - `11_security_baseline.md` — application-level security (platform-agnostic; carries over unchanged)
+
+---
+
+## Phase 5 note — APNs dispatch and appraisal photo uploads (added 2026-05-02)
+
+Both new Phase 5 data paths use the same presigned-URL pattern as the existing customer intake photo uploads and therefore follow the identical R2 → GCS swap path:
+
+**APNs dispatch** (`apns_dispatch_service.py`) — reads the APNs AuthKey JSON blob from the integration credentials vault (DB-encrypted via `credentials_vault.get('apns')`). On GCP, `credentials_vault` will read from Secret Manager (ADR-013 + ADR-014 cover this swap). No storage bucket involved; the connection target changes from `api.push.apple.com` development to `api.push.apple.com` production depending on `device_tokens.environment`. No R2 → GCS step needed for APNs.
+
+**Appraisal photo uploads** (`appraisal_photo_service.py`) — presigned PUT URLs generated against R2 under the `appraisal-photos/{submission_id}/{uuid}.{ext}` key prefix. Same `boto3` S3-compatible client as the customer intake photo service (`photo_upload_service.py`). GCS migration step: update `CLOUDFLARE_R2_*` environment variables to point at a GCS bucket via the S3-compatible HMAC key (same swap documented in the main migration checklist above for the customer intake bucket). The `gcs_path` column in `appraisal_photos` reflects this naming — it stores R2 keys now and will store GCS keys after the swap without schema changes.
