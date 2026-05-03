@@ -753,6 +753,12 @@ class AppraisalSubmission(Base):
     suggested_consignment_price: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
     )
+    # Phase 6 Sprint 2: written by the manager approval workflow
+    rejection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Triggered red flags. Phase 5 iOS writers MUST embed the rule
     # version that fired so historical reports stay correct after Phase 4
     # admin edits the rule. Shape (versioned, post-migration 014):

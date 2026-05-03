@@ -473,3 +473,48 @@ MANAGEMENT_REVIEW_FLAGGED_SMS = register(
         ),
     )
 )
+
+
+# Phase 6 Sprint 2 — Rejection notifications.
+
+APPRAISAL_REJECTED_SALES_REP_EMAIL = register(
+    Template(
+        name="appraisal_rejected_sales_rep_email",
+        channel="email",
+        category="approval",
+        variables=("reference_number", "make", "model", "rejection_notes", "send_back"),
+        description=(
+            "Sent to the assigned Sales Rep when a manager rejects an appraisal, "
+            "whether permanently declined or sent back for re-appraisal."
+        ),
+        subject_template="Appraisal Rejected: {{ reference_number }}",
+        body_template=(
+            "<p>The appraisal for <strong>{{ make }} {{ model }}</strong> "
+            "({{ reference_number }}) has been rejected.</p>"
+            "<p><strong>Manager notes:</strong> {{ rejection_notes }}</p>"
+            "<p>{% if send_back %}The record has been returned for re-appraisal.{% else %}"
+            "The record has been declined.{% endif %}</p>"
+        ),
+    )
+)
+
+
+APPRAISAL_REJECTED_APPRAISER_EMAIL = register(
+    Template(
+        name="appraisal_rejected_appraiser_email",
+        channel="email",
+        category="approval",
+        variables=("reference_number", "make", "model", "rejection_notes"),
+        description=(
+            "Sent to the Appraiser when a manager sends an appraisal back for re-appraisal. "
+            "Not sent on permanent declines — the appraiser's role ends at submission."
+        ),
+        subject_template="Re-Appraisal Required: {{ reference_number }}",
+        body_template=(
+            "<p>The appraisal you submitted for <strong>{{ make }} {{ model }}</strong> "
+            "({{ reference_number }}) requires a re-inspection.</p>"
+            "<p><strong>Manager notes:</strong> {{ rejection_notes }}</p>"
+            "<p>Please log in to the app to begin a new appraisal for this record.</p>"
+        ),
+    )
+)

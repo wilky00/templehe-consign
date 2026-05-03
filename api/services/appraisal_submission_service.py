@@ -33,6 +33,7 @@ from database.models import (
     CategoryPhotoSlot,
     CategoryRedFlagRule,
     ComponentScore,
+    Customer,
     EquipmentCategory,
     EquipmentRecord,
     NotificationPreference,
@@ -40,7 +41,14 @@ from database.models import (
     User,
 )
 from schemas.appraisal_submission import ComponentScoreIn, SubmissionUpdateRequest
-from services import notification_service, red_flag_service, scoring_service, user_roles_service
+from services import (
+    equipment_status_service,
+    notification_service,
+    red_flag_service,
+    scoring_service,
+    user_roles_service,
+)
+from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)
 
@@ -214,6 +222,22 @@ async def submit(
     submission.status = "submitted"
     submission.submitted_at = datetime.now(UTC)
     await db.flush()
+
+    # Transition the equipment record so it appears in the manager approval queue.
+    record = await db.get(EquipmentRecord, submission.equipment_record_id)
+    if record is not None:
+        customer_user: User | None = None
+        customer = await db.get(Customer, record.customer_id)
+        if customer is not None and customer.user_id is not None:
+            customer_user = await db.get(User, customer.user_id)
+        await equipment_status_service.record_transition(
+            db,
+            record=record,
+            to_status=Status.APPRAISAL_COMPLETE.value,
+            changed_by=appraiser,
+            customer=customer_user,
+        )
+
     logger.info(
         "appraisal_submitted",
         submission_id=str(submission_id),

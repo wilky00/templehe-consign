@@ -79,9 +79,17 @@ class SubmissionOut(BaseModel):
     title_status: str | None
     overall_score: Decimal | None
     score_band: str | None
+    management_review_required: bool
+    hold_for_title_review: bool
+    review_notes: str | None
     marketability_rating: str | None
     transport_notes: str | None
     listing_notes: str | None
+    approved_purchase_offer: Decimal | None
+    suggested_consignment_price: Decimal | None
+    rejection_notes: str | None
+    approved_by_id: uuid.UUID | None
+    approved_at: datetime | None
     field_values: list | dict | None
     red_flags: list | None
     comparable_sales_data: list | None
