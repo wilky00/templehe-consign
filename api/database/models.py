@@ -869,6 +869,9 @@ class AppraisalReport(Base):
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
 
     equipment_record: Mapped[EquipmentRecord] = relationship(
         "EquipmentRecord", back_populates="appraisal_reports"
