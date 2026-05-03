@@ -110,6 +110,10 @@ class Settings(BaseSettings):
     # credentials vault — only the `channel` field on the payload changes.
     slack_staging_channel_id: str = ""
 
+    # eSign — HMAC-SHA256 webhook validation. Empty string disables signature
+    # verification (safe for dev/test; required in production).
+    esign_webhook_secret: str = ""
+
     # Application
     environment: str = "development"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

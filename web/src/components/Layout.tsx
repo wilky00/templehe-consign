@@ -16,6 +16,7 @@ const navLinkClasses = (isActive: boolean) =>
 const SALES_ROLES = new Set(["sales", "sales_manager"]);
 const ADMIN_ROLES = new Set(["admin"]);
 const REPORTING_ROLES = new Set(["reporting"]);
+const MANAGER_ROLES = new Set(["sales_manager", "admin"]);
 
 export function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const heldRoles = user ? user.roles ?? [user.role] : [];
   const isAdminSide = heldRoles.some((r) => ADMIN_ROLES.has(r));
   const isSalesSide = !isAdminSide && heldRoles.some((r) => SALES_ROLES.has(r));
+  const isManager = heldRoles.some((r) => MANAGER_ROLES.has(r));
   const isReportingOnly =
     !isAdminSide &&
     !isSalesSide &&
@@ -117,6 +119,12 @@ export function Layout({ children }: { children: ReactNode }) {
                   Reports
                 </NavLink>
                 <NavLink
+                  to="/manager/approvals"
+                  className={({ isActive }) => navLinkClasses(isActive)}
+                >
+                  Approvals
+                </NavLink>
+                <NavLink
                   to="/account/notifications"
                   className={({ isActive }) => navLinkClasses(isActive)}
                 >
@@ -159,6 +167,14 @@ export function Layout({ children }: { children: ReactNode }) {
                 >
                   Calendar
                 </NavLink>
+                {isManager && (
+                  <NavLink
+                    to="/manager/approvals"
+                    className={({ isActive }) => navLinkClasses(isActive)}
+                  >
+                    Approvals
+                  </NavLink>
+                )}
                 <NavLink
                   to="/account/notifications"
                   className={({ isActive }) => navLinkClasses(isActive)}

@@ -27,7 +27,7 @@ from database.models import (
     EquipmentRecord,
     User,
 )
-from services import equipment_status_service, notification_service, user_roles_service
+from services import equipment_status_service, esign_service, notification_service, user_roles_service
 from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)
@@ -164,6 +164,13 @@ async def approve(
         submission_id=str(submission_id),
         approving_user_id=str(approving_user.id),
     )
+
+    # Dispatch eSign contract — best-effort; failures are logged but don't
+    # roll back the approval so the record isn't left in a broken state.
+    try:
+        await esign_service.dispatch_contract(db, equipment_record=record)
+    except Exception:
+        logger.exception("esign_dispatch_failed", record_id=str(record.id))
 
     return await _fetch(db, submission_id=submission_id)
 

@@ -1438,6 +1438,48 @@ Full spec: `dev_plan/06_phase6_approval_esign.md`
 **Integration test gate: PASSED — 512/512 green 2026-05-02**
 **Unit test gate: PASSED — 177/177 green 2026-05-02**
 
+### Sprint 3: Frontend Manager Approval Queue + eSign Stub + Price Change Re-approval — COMPLETE (verified green 2026-05-03)
+
+**Backend:**
+- [x] `api/alembic/versions/030_phase6_change_request_price.py` (NEW) — add `proposed_consignment_price DECIMAL(12,2)` to `change_requests`
+- [x] `api/database/models.py` — `proposed_consignment_price` mapped on `ChangeRequest`
+- [x] `api/services/signing_service.py` (NEW) — `SigningService` ABC + `StubSigningService` + `get_signing_service()` factory
+- [x] `api/services/esign_service.py` (NEW) — `dispatch_contract()` (idempotent; resolves customer user; creates `ConsignmentContract`; enqueues `customer_esign_ready` email)
+- [x] `api/routers/esign.py` (NEW) — `GET /esign/sign/:id`, `GET /esign/stub-preview/:id`, `POST /esign/stub-sign/:id`, `POST /esign/webhook` (HMAC-validated)
+- [x] `api/services/approval_service.py` — `approve()` calls `esign_service.dispatch_contract()` in best-effort try/except after approval flush
+- [x] `api/services/price_change_service.py` (NEW) — `evaluate()` compares proposed vs approved price; sets `requires_manager_reapproval`; notifies sales_manager users
+- [x] `api/services/change_request_service.py` — `_ALLOWED_REQUEST_TYPES` + `update_consignment_price`; calls `price_change_service.evaluate()` after flush
+- [x] `api/routers/manager_approvals.py` — `GET /manager/approvals/price-changes` queue endpoint (route placed before `/{submission_id}` to avoid FastAPI path collision)
+- [x] `api/services/notification_templates.py` — `customer_esign_ready` + `manager_price_change_reapproval` templates
+- [x] `api/main.py` — registered `esign` router
+- [x] `api/config.py` — `esign_webhook_secret: str = ""` (HMAC validation; empty = disabled for dev/test)
+- [x] `api/tests/integration/test_esign_workflow.py` (NEW) — 10 tests: contract dispatch on approval, idempotent dispatch, stub preview HTML, stub sign, webhook completed, webhook idempotent, webhook declined, HMAC invalid → 403, unknown envelope → 404, unknown event → 200
+- [x] `api/tests/integration/test_price_change_reapproval.py` (NEW) — 6 tests: above threshold sets flag, below threshold no flag, above threshold notifies managers, no approved submission skips, queue endpoint shows flagged requests, RBAC blocks customers
+
+**Frontend:**
+- [x] `web/src/api/approvals.ts` (NEW) — `ApprovalQueueItem`, `ApprovalQueueResponse`, `SubmissionDetail`, `ApproveRequest`, `RejectRequest`, `PriceChangeQueueItem`, `PriceChangeQueueResponse`; `getApprovalQueue()`, `getApprovalDetail()`, `approveSubmission()`, `rejectSubmission()`, `getPriceChangeQueue()`
+- [x] `web/src/test/handlers.ts` — `TEST_QUEUE_ITEM`, `TEST_SUBMISSION`, `TEST_PRICE_CHANGE_ITEM`; 7 MSW handlers (price-changes before `:id` to avoid MSW path collision)
+- [x] `web/src/pages/ManagerApprovals.tsx` (NEW) — two-section layout: AppraisalQueueTable (score badge, flag badges, click-to-navigate) + PriceChangeTable
+- [x] `web/src/pages/ManagerApprovalDetail.tsx` (NEW) — full detail view: ScoreBar, title-hold/mgmt-review alerts, SubmissionReadOnly, ApproveForm (disabled until prices filled, title_review_confirmed when hold active), RejectForm; uses `useRecordLock` + `RecordLockIndicator`
+- [x] `web/src/pages/ManagerApprovals.test.tsx` (NEW) — 9 tests
+- [x] `web/src/pages/ManagerApprovalDetail.test.tsx` (NEW) — 8 tests
+- [x] `web/src/App.tsx` — `/manager/approvals` + `/manager/approvals/:id` routes
+- [x] `web/src/components/Layout.tsx` — `MANAGER_ROLES`, `isManager`; Approvals nav link for sales + admin
+- [x] `web/src/test/render.tsx` — added `path?` option to `renderWithProviders` (wraps in `<Routes><Route>` for `useParams` support)
+
+**Bugs fixed during sprint:**
+- structlog `event` reserved keyword conflict in `esign.py` (renamed to `webhook_event`)
+- Duplicate migration 030 (`030_phase6_consignment_contracts.py` created erroneously then deleted)
+- FastAPI route ordering: `/price-changes` moved before `/{submission_id}` in `manager_approvals.py`
+- MSW handler ordering: `/price-changes` moved before `/:id` in `handlers.ts`
+- `app_config_registry.get_value()` → `get_typed(...name)` in `price_change_service.py`
+- `esign_webhook_secret` field missing from `config.py` Settings model
+- Webhook decline handler: guard against same-state transition when record already at `approved_pending_esign`
+
+**Integration test gate: PASSED — 528/528 green 2026-05-03**
+**Unit test gate: PASSED — 177/177 green 2026-05-03**
+**Frontend test gate: PASSED — 126/126 green 2026-05-03**
+
 ---
 
 ## Phase 7–8 — Not started

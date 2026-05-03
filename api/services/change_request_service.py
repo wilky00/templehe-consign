@@ -30,7 +30,7 @@ from sqlalchemy.orm import selectinload
 
 from config import settings
 from database.models import AuditLog, ChangeRequest, Customer, EquipmentRecord, User
-from services import equipment_status_service, notification_service, sanitization
+from services import equipment_status_service, notification_service, price_change_service, sanitization
 from services.equipment_status_machine import Status
 
 logger = structlog.get_logger(__name__)
@@ -40,6 +40,7 @@ _ALLOWED_REQUEST_TYPES = frozenset(
         "edit_details",
         "update_location",
         "update_photos",
+        "update_consignment_price",
         "withdraw",
         "other",
     }
@@ -53,6 +54,7 @@ async def submit_change_request(
     record: EquipmentRecord,
     request_type: str,
     customer_notes: str | None,
+    proposed_consignment_price: float | None = None,
 ) -> ChangeRequest:
     if request_type not in _ALLOWED_REQUEST_TYPES:
         raise HTTPException(
@@ -66,6 +68,7 @@ async def submit_change_request(
         request_type=request_type,
         customer_notes=clean_notes,
         status="pending",
+        proposed_consignment_price=proposed_consignment_price,
     )
     db.add(change)
     try:
@@ -81,6 +84,9 @@ async def submit_change_request(
             detail="A change request for this record is already pending. "
             "Wait for the sales team to resolve it before submitting another.",
         ) from exc
+
+    # Evaluate re-approval threshold for price change requests.
+    await price_change_service.evaluate(db, change_request=change)
 
     await _notify_sales(
         db,

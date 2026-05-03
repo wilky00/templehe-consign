@@ -22,6 +22,7 @@ from routers import admin_routing as admin_routing_router
 from routers import admin_templates as admin_templates_router
 from routers import appraisal_photos as appraisal_photos_router
 from routers import appraisal_submissions as appraisal_submissions_router
+from routers import esign as esign_router
 from routers import manager_approvals as manager_approvals_router
 from routers import auth as auth_router
 from routers import calendar as calendar_router
@@ -93,4 +94,5 @@ app.include_router(sales_router.router, prefix="/api/v1")
 app.include_router(appraisal_photos_router.router, prefix="/api/v1")
 app.include_router(appraisal_submissions_router.router, prefix="/api/v1")
 app.include_router(manager_approvals_router.router, prefix="/api/v1")
+app.include_router(esign_router.router, prefix="/api/v1")
 app.include_router(valuation_router.router, prefix="/api/v1")

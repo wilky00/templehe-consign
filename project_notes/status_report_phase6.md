@@ -92,3 +92,55 @@
 
 - Frontend approval queue page (`/manager/approvals`) is deferred to Sprint 3.
 - `field_values` (JSONB, keyed by prompt UUID) is still not extracted for red flag evaluation. Carry-forward from Sprint 1.
+
+---
+
+## Sprint 3: Frontend Manager Approval Queue + eSign Stub + Price Change Re-approval — COMPLETE (2026-05-03)
+
+### What was built
+
+**Backend (eSign):**
+- `api/services/signing_service.py` — `SigningService` ABC with `StubSigningService` and `get_signing_service()` factory. `StubSigningService` returns `stub-{uuid}` envelope IDs and serves HTML preview from `/esign/stub-preview/:id`.
+- `api/services/esign_service.py` — `dispatch_contract()`: idempotent (no-op if contract already exists); resolves approved submission + customer user; calls `signing_service.create_envelope()`; creates `ConsignmentContract` row with status `sent`; enqueues `customer_esign_ready` email.
+- `api/routers/esign.py` — Four endpoints: signing redirect, stub preview HTML page, stub sign (fires `_handle_envelope_completed`), HMAC-validated webhook. Webhook handles `envelope_completed` → `esigned_pending_publish`, `envelope_declined` → `approved_pending_esign` (no-op if already there), unknown events → 200 ignored.
+- `api/config.py` — `esign_webhook_secret: str = ""` (empty = HMAC skipped for dev/test).
+- `api/services/approval_service.py` — `approve()` calls `esign_service.dispatch_contract()` in a best-effort try/except after flush.
+
+**Backend (price change re-approval):**
+- `api/alembic/versions/030_phase6_change_request_price.py` — adds `proposed_consignment_price DECIMAL(12,2)` to `change_requests`.
+- `api/services/price_change_service.py` — `evaluate()` reads approved submission's `suggested_consignment_price`, computes pct change, reads `consignment_price_change_threshold_pct` from AppConfig, sets `requires_manager_reapproval = True` and notifies active sales_manager users when threshold exceeded.
+- `api/services/change_request_service.py` — allows `update_consignment_price` request type; calls `price_change_service.evaluate()`.
+- `api/routers/manager_approvals.py` — `GET /manager/approvals/price-changes` (route placed before `/{submission_id}` to avoid FastAPI path conflict).
+
+**Frontend:**
+- `web/src/api/approvals.ts` — full API client for approval queue, detail, approve/reject, and price-change queue.
+- `web/src/pages/ManagerApprovals.tsx` — approval queue table (score badge, flag badges, click-to-navigate) + price change re-approval table.
+- `web/src/pages/ManagerApprovalDetail.tsx` — full review detail page: ScoreBar visualization, management-review + title-hold alert banners, submission read-only display, ApproveForm + RejectForm.
+- `web/src/App.tsx` / `web/src/components/Layout.tsx` — routes and nav links wired.
+- `web/src/test/render.tsx` — added `path?` option so `useParams`-dependent pages work in tests.
+
+### Key decisions
+
+- `ConsignmentContract` was already in the DB schema (Phase 5 init); Sprint 3 only added `proposed_consignment_price` to `change_requests` — no new table needed.
+- Route ordering: both FastAPI and MSW require specific routes before generic path-param routes (`/price-changes` before `/{submission_id}`, `/price-changes` before `/:id`).
+- HMAC validation is opt-in (`esign_webhook_secret = ""`); enabling it in production requires setting the env var.
+- Decline handler skips `record_transition` if record is already at `approved_pending_esign` (dispatch doesn't advance the status; a 409 would fire otherwise).
+
+### Test results
+
+- Backend integration: **528/528 passed**
+- Backend unit: **177/177 passed**
+- Frontend: **126/126 passed**
+
+### Bugs found and fixed
+
+- `logger.info("esign_webhook_received", event=event, ...)` — structlog's `event` is a reserved positional argument; renamed to `webhook_event`.
+- `app_config_registry.get_value()` doesn't exist; corrected to `get_typed(...name)`.
+- `esign_webhook_secret` not in `Settings` model — added with default `""`.
+- MSW handler order: `/price-changes` must precede `/:id` in the handlers array.
+- FastAPI route order: `/price-changes` must precede `/{submission_id}` in the router.
+
+### Open issues / carry-forwards
+
+- `field_values` (JSONB, keyed by prompt UUID) is still not extracted for red flag evaluation. Carry-forward from Sprint 1.
+- eSign stub is used in all tests; real DocuSign/Dropbox Sign integration is deferred until the provider decision is made (tracked in `project_notes/decisions.md`).

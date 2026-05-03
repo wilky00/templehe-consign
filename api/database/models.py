@@ -908,6 +908,9 @@ class ChangeRequest(Base):
     requires_manager_reapproval: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    proposed_consignment_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )

@@ -3,13 +3,24 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
+from decimal import Decimal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from database.base import get_db
-from database.models import User
+from database.models import (
+    AppraisalSubmission,
+    ChangeRequest,
+    Customer,
+    EquipmentRecord,
+    User,
+)
 from middleware.rbac import require_roles
 from schemas.approval import (
     ApprovalDecisionRequest,
@@ -80,6 +91,22 @@ def _submission_to_out(submission) -> SubmissionOut:
     )
 
 
+class PriceChangeQueueItemOut(BaseModel):
+    change_request_id: uuid.UUID
+    equipment_record_id: uuid.UUID
+    reference_number: str | None
+    make_model: str | None
+    approved_price: Decimal | None
+    proposed_price: Decimal | None
+    submitted_at: datetime | None
+    customer_email: str | None
+
+
+class PriceChangeQueueResponse(BaseModel):
+    items: list[PriceChangeQueueItemOut]
+    total: int
+
+
 @router.get("", response_model=ApprovalQueueResponse)
 async def get_approval_queue(
     current_user: User = Depends(_require_manager),
@@ -91,6 +118,61 @@ async def get_approval_queue(
         items=[_queue_item_to_out(item) for item in items],
         total=len(items),
     )
+
+
+@router.get("/price-changes", response_model=PriceChangeQueueResponse)
+async def get_price_change_queue(
+    current_user: User = Depends(_require_manager),
+    db: AsyncSession = Depends(get_db),
+) -> PriceChangeQueueResponse:
+    """List pending change requests that require manager re-approval due to price threshold."""
+    result = await db.execute(
+        select(ChangeRequest)
+        .where(
+            ChangeRequest.requires_manager_reapproval.is_(True),
+            ChangeRequest.status == "pending",
+        )
+        .options(
+            selectinload(ChangeRequest.equipment_record)
+            .selectinload(EquipmentRecord.customer)
+            .selectinload(Customer.user)
+        )
+        .order_by(ChangeRequest.submitted_at.asc())
+    )
+    changes = list(result.scalars().all())
+
+    items: list[PriceChangeQueueItemOut] = []
+    for change in changes:
+        record = change.equipment_record
+        customer_user = record.customer.user if (record and record.customer) else None
+
+        sub_result = await db.execute(
+            select(AppraisalSubmission).where(
+                AppraisalSubmission.equipment_record_id == change.equipment_record_id,
+                AppraisalSubmission.status == "approved",
+            )
+        )
+        sub = sub_result.scalar_one_or_none()
+
+        make_model = None
+        if sub:
+            parts = [sub.make, sub.model]
+            make_model = " ".join(p for p in parts if p) or None
+
+        items.append(
+            PriceChangeQueueItemOut(
+                change_request_id=change.id,
+                equipment_record_id=change.equipment_record_id,
+                reference_number=record.reference_number if record else None,
+                make_model=make_model,
+                approved_price=sub.suggested_consignment_price if sub else None,
+                proposed_price=change.proposed_consignment_price,
+                submitted_at=change.submitted_at,
+                customer_email=customer_user.email if customer_user else None,
+            )
+        )
+
+    return PriceChangeQueueResponse(items=items, total=len(items))
 
 
 @router.get("/{submission_id}", response_model=SubmissionOut)
