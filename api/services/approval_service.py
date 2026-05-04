@@ -88,9 +88,7 @@ async def get_queue(db: AsyncSession) -> list[dict]:
             "score_band": row["score_band"],
             "marketability_rating": row["marketability_rating"],
             "appraiser_name": (
-                f"{row['first_name']} {row['last_name']}"
-                if row["first_name"] is not None
-                else None
+                f"{row['first_name']} {row['last_name']}" if row["first_name"] is not None else None
             ),
             "submitted_at": row["submitted_at"],
             "management_review_required": row["management_review_required"],
