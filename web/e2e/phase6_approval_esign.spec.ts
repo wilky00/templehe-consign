@@ -84,12 +84,35 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
       `Expected ${fixture.reference_number} in queue items: ${JSON.stringify(diagBody.items.map((i) => i.reference_number))}`,
     ).toBe(true);
 
+    // Set up network listener BEFORE navigating so the queue response is captured.
+    const queueRespPromise = page.waitForResponse(
+      (resp) =>
+        /\/api\/v1\/manager\/approvals(\?|$)/.test(resp.url()) &&
+        resp.request().method() === "GET",
+      { timeout: 30_000 },
+    );
+
     await uiLoginAsStaff(page, {
       email: fixture.manager_email,
       password: fixture.password,
       fakeIp: randomFakeIp(),
       landingPath: "/manager/approvals",
     });
+
+    // Verify the browser's actual network response — tells us exactly what the proxy returned.
+    const queueResp = await queueRespPromise;
+    const queueBody = (await queueResp.json().catch(() => null)) as {
+      items: Array<{ reference_number: string }>;
+      total: number;
+    } | null;
+    expect(
+      queueResp.status(),
+      `Browser approval queue returned non-200: ${JSON.stringify(queueBody)}`,
+    ).toBe(200);
+    expect(
+      queueBody?.items?.some((i) => i.reference_number === fixture.reference_number),
+      `Reference number ${fixture.reference_number} not in browser response: ${JSON.stringify(queueBody?.items?.map((i) => i.reference_number))}`,
+    ).toBe(true);
 
     await expect(
       page.getByRole("heading", { name: /manager approval queue/i }),
@@ -98,7 +121,7 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
     // The seeded record's reference number must appear in the queue.
     await expect(
       page.getByText(fixture.reference_number).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible({ timeout: 10_000 });
 
     // Click the queue row to open the detail view.
     const row = page.getByRole("row", {
@@ -139,12 +162,26 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
   }) => {
     const fixture = seedPhase6<DefaultFixture>("red_flags");
 
+    const queueRespPromise2 = page.waitForResponse(
+      (resp) =>
+        /\/api\/v1\/manager\/approvals(\?|$)/.test(resp.url()) &&
+        resp.request().method() === "GET",
+      { timeout: 30_000 },
+    );
+
     await uiLoginAsStaff(page, {
       email: fixture.manager_email,
       password: fixture.password,
       fakeIp: randomFakeIp(),
       landingPath: "/manager/approvals",
     });
+
+    const queueResp2 = await queueRespPromise2;
+    const queueBody2 = await queueResp2.json().catch(() => null);
+    expect(
+      queueResp2.status(),
+      `Browser approval queue (red_flags) returned non-200: ${JSON.stringify(queueBody2)}`,
+    ).toBe(200);
 
     await expect(
       page.getByRole("heading", { name: /manager approval queue/i }),
@@ -176,12 +213,26 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
   }) => {
     const fixture = seedPhase6<DefaultFixture>("title_hold");
 
+    const queueRespPromise3 = page.waitForResponse(
+      (resp) =>
+        /\/api\/v1\/manager\/approvals(\?|$)/.test(resp.url()) &&
+        resp.request().method() === "GET",
+      { timeout: 30_000 },
+    );
+
     await uiLoginAsStaff(page, {
       email: fixture.manager_email,
       password: fixture.password,
       fakeIp: randomFakeIp(),
       landingPath: "/manager/approvals",
     });
+
+    const queueResp3 = await queueRespPromise3;
+    const queueBody3 = await queueResp3.json().catch(() => null);
+    expect(
+      queueResp3.status(),
+      `Browser approval queue (title_hold) returned non-200: ${JSON.stringify(queueBody3)}`,
+    ).toBe(200);
 
     await expect(
       page.getByRole("heading", { name: /manager approval queue/i }),
@@ -288,12 +339,26 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
   }) => {
     const fixture = seedPhase6<PriceChangeFixture>("price_change");
 
+    const queueRespPromise6 = page.waitForResponse(
+      (resp) =>
+        /\/api\/v1\/manager\/approvals(\?|$)/.test(resp.url()) &&
+        resp.request().method() === "GET",
+      { timeout: 30_000 },
+    );
+
     await uiLoginAsStaff(page, {
       email: fixture.manager_email,
       password: fixture.password,
       fakeIp: randomFakeIp(),
       landingPath: "/manager/approvals",
     });
+
+    const queueResp6 = await queueRespPromise6;
+    const queueBody6 = await queueResp6.json().catch(() => null);
+    expect(
+      queueResp6.status(),
+      `Browser approval queue (price_change) returned non-200: ${JSON.stringify(queueBody6)}`,
+    ).toBe(200);
 
     // Wait for ProtectedRoute to finish loading before checking sub-sections.
     await expect(
@@ -354,12 +419,26 @@ test.describe("A11y — Phase 6 manager approval queue", () => {
   test("approval queue and detail pass axe-core scan", async ({ page }) => {
     const fixture = seedPhase6<DefaultFixture>("default");
 
+    const queueRespPromiseA11y = page.waitForResponse(
+      (resp) =>
+        /\/api\/v1\/manager\/approvals(\?|$)/.test(resp.url()) &&
+        resp.request().method() === "GET",
+      { timeout: 30_000 },
+    );
+
     await uiLoginAsStaff(page, {
       email: fixture.manager_email,
       password: fixture.password,
       fakeIp: randomFakeIp(),
       landingPath: "/manager/approvals",
     });
+
+    const queueRespA11y = await queueRespPromiseA11y;
+    const queueBodyA11y = await queueRespA11y.json().catch(() => null);
+    expect(
+      queueRespA11y.status(),
+      `Browser approval queue (a11y) returned non-200: ${JSON.stringify(queueBodyA11y)}`,
+    ).toBe(200);
 
     await expect(
       page.getByRole("heading", { name: /manager approval queue/i }),
