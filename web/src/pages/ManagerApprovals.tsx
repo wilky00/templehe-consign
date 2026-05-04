@@ -26,18 +26,20 @@ function formatDate(iso: string | null): string {
 }
 
 function ScoreBadge({ score, band }: { score: number | null; band: string | null }) {
-  if (score === null) return <span className="text-gray-400">—</span>;
+  // Pydantic serializes Decimal as a JSON string; coerce to number defensively.
+  const n = score == null ? null : Number(score);
+  if (n == null || Number.isNaN(n)) return <span className="text-gray-400">—</span>;
   const color =
-    score >= 4.5
+    n >= 4.5
       ? "bg-green-100 text-green-800"
-      : score >= 3.75
+      : n >= 3.75
         ? "bg-blue-100 text-blue-800"
-        : score >= 3.0
+        : n >= 3.0
           ? "bg-yellow-100 text-yellow-800"
           : "bg-red-100 text-red-800";
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>
-      {score.toFixed(2)}
+      {n.toFixed(2)}
       {band ? ` · ${band}` : ""}
     </span>
   );

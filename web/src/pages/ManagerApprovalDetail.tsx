@@ -25,14 +25,16 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 function ScoreBar({ score }: { score: number | null }) {
-  if (score === null) return null;
-  const pct = Math.min(100, (score / 5) * 100);
+  // Pydantic serializes Decimal as a JSON string; coerce to number defensively.
+  const n = score == null ? null : Number(score);
+  if (n == null || Number.isNaN(n)) return null;
+  const pct = Math.min(100, (n / 5) * 100);
   const color =
-    score >= 4.5
+    n >= 4.5
       ? "bg-green-500"
-      : score >= 3.75
+      : n >= 3.75
         ? "bg-blue-500"
-        : score >= 3.0
+        : n >= 3.0
           ? "bg-yellow-500"
           : "bg-red-500";
   return (
@@ -40,7 +42,7 @@ function ScoreBar({ score }: { score: number | null }) {
       <div className="flex-1 overflow-hidden rounded-full bg-gray-200" style={{ height: 8 }}>
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-sm font-semibold text-gray-900">{score.toFixed(2)} / 5.00</span>
+      <span className="text-sm font-semibold text-gray-900">{n.toFixed(2)} / 5.00</span>
     </div>
   );
 }
@@ -78,7 +80,7 @@ function SubmissionReadOnly({ sub }: { sub: SubmissionDetail }) {
                   <tr key={cs.id}>
                     <td className="py-1 pr-4 text-gray-700">{cs.component_name}</td>
                     <td className="py-1 pr-4 font-medium text-gray-900">
-                      {cs.raw_score.toFixed(1)}
+                      {Number(cs.raw_score).toFixed(1)}
                     </td>
                     <td className="py-1 text-gray-500">{cs.notes ?? "—"}</td>
                   </tr>
