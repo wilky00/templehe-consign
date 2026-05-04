@@ -55,4 +55,54 @@ None — Sprint 1 is clean.
 
 ---
 
-*Sprint 2 next: Public Listing Frontend (React pages, filters, inquiry form, analytics page_view stub)*
+---
+
+## Sprint 2 — Public Listing Frontend
+
+**Completed:** 2026-05-04
+
+### What was built
+
+| File | Type | Summary |
+|---|---|---|
+| `web/src/api/listings.ts` | NEW | Typed client for all public listing + inquiry + listing PATCH endpoints |
+| `web/src/services/analytics.ts` | NEW | `trackEvent()` + `usePageView()` route-change hook; fire-and-forget |
+| `web/src/pages/PublicListings.tsx` | NEW | `/listings` — filter sidebar (price/condition), sort, pagination, URL-encoded state |
+| `web/src/pages/PublicListingDetail.tsx` | NEW | `/listings/:id` — specs, notes, price, inquiry form, SEO meta via react-helmet-async |
+| `web/src/App.tsx` | MODIFY | Added public `/listings` + `/listings/:id` routes (no ProtectedRoute) |
+| `web/src/pages/SalesEquipmentDetail.tsx` | MODIFY | `ListingManagementCard` — price update + mark-sold + withdraw |
+| `web/src/pages/PublicListings.test.tsx` | NEW | 17 Vitest tests (list, detail, inquiry form, validation, empty/error states) |
+| `web/e2e/phase8_listing.spec.ts` | NEW | 5 Playwright E2E scenarios |
+| `scripts/seed_e2e_phase8.py` | NEW | Phase 8 E2E fixture seeder |
+| `web/e2e/helpers/api.ts` | MODIFY | Added `seedPhase8()` |
+| `web/src/test/render.tsx` | MODIFY | Added `HelmetProvider` wrapper for tests |
+| `web/src/test/handlers.ts` | MODIFY | Added `POST /analytics/event` MSW no-op handler |
+| `web/src/main.tsx` | MODIFY | Added `HelmetProvider` to app bootstrap |
+
+### Test results
+
+- Frontend unit: 148/148 ✓ (17 new, 0 regressions)
+- Backend unit: 205/205 ✓ (unchanged)
+- Backend integration: 570/570 ✓ (unchanged)
+
+### Key decisions
+
+- **No ProtectedRoute** on `/listings` + `/listings/:id` — public catalog is unauthenticated. Token sent if present (analytics benefit) but never required.
+- **SEO:** SPA + `react-helmet-async` (not Next.js). Sufficient for Google crawl; avoids framework change.
+- **Filter state in URL:** `useSearchParams` — makes filters bookmarkable and shareable.
+- **Analytics service dir:** `web/src/services/` (new directory) for non-API concerns. Keeps analytics out of the API client layer.
+- **Inquiry honeypot:** hidden `web_address` field in the form (via `sr-only` + `aria-hidden`). Backend silently drops it.
+
+### Bugs found and fixed during sprint
+
+1. `HelmetProvider` not in `renderWithProviders` — `<Helmet>` threw in every test; fixed by adding to `render.tsx`
+2. `POST /analytics/event` not mocked in MSW handlers — MSW warned on every test; fixed by adding no-op handler to `handlers.ts`
+3. Two tests used `getByText("2019 Caterpillar 336")` — matched both the card title AND subtitle (year + make + model), causing "found multiple elements" error; fixed by using `getAllByText(...).length > 0`
+
+### Open issues / follow-ups
+
+None — Sprint 2 is clean.
+
+---
+
+*Sprint 3 next: Admin Reporting Backend (funnel metrics, category breakdown, geographic heatmap, CSV export)*

@@ -162,4 +162,9 @@ export const handlers = [
       { status: 202 },
     ),
   ),
+
+  // Analytics — fire-and-forget; always succeed silently
+  http.post("http://localhost/api/v1/analytics/event", () =>
+    HttpResponse.json({ recorded: true }),
+  ),
 ];

@@ -28,6 +28,8 @@ import { SalesCalendarPage } from "./pages/SalesCalendar";
 import { SalesDashboardPage } from "./pages/SalesDashboard";
 import { SalesEquipmentDetailPage } from "./pages/SalesEquipmentDetail";
 import { VerifyEmailPage } from "./pages/VerifyEmail";
+import { PublicListingsPage } from "./pages/PublicListings";
+import { PublicListingDetailPage } from "./pages/PublicListingDetail";
 
 export default function App() {
   return (
@@ -36,6 +38,9 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+
+      <Route path="/listings" element={<PublicListingsPage />} />
+      <Route path="/listings/:id" element={<PublicListingDetailPage />} />
 
       <Route
         path="/portal"

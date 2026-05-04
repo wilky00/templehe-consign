@@ -12,6 +12,7 @@ import {
   resolveChangeRequest,
 } from "../api/sales";
 import { getReportDownload, isReportReady } from "../api/reports";
+import { patchListing } from "../api/listings";
 import { useMe } from "../hooks/useMe";
 import { useRecordLock } from "../hooks/useRecordLock";
 import { Alert } from "../components/ui/Alert";
@@ -134,6 +135,14 @@ export function SalesEquipmentDetailPage() {
 
       {detail.status === PUBLISH_STATUS && (
         <PublishCard detail={detail} canWrite={canWrite} recordId={id} />
+      )}
+
+      {detail.public_listing_status != null && (
+        <ListingManagementCard
+          recordId={id}
+          listingStatus={detail.public_listing_status}
+          canWrite={canWrite}
+        />
       )}
 
       <ChangeRequestsCard
@@ -673,6 +682,123 @@ function TimelineCard({ detail }: { detail: SalesEquipmentDetail }) {
             </li>
           ))}
         </ol>
+      )}
+    </Card>
+  );
+}
+
+function ListingManagementCard({
+  recordId,
+  listingStatus,
+  canWrite,
+}: {
+  recordId: string;
+  listingStatus: string;
+  canWrite: boolean;
+}) {
+  const qc = useQueryClient();
+  const [newPrice, setNewPrice] = useState("");
+
+  const priceMutation = useMutation({
+    mutationFn: (price: number) => patchListing(recordId, { asking_price: price }),
+    onSuccess: () => {
+      setNewPrice("");
+      qc.invalidateQueries({ queryKey: ["sales-equipment", recordId] });
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: (status: "sold" | "withdrawn") => patchListing(recordId, { status }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales-equipment", recordId] });
+    },
+  });
+
+  const isBusy = priceMutation.isPending || statusMutation.isPending;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-medium text-gray-900">Listing management</h2>
+        <StatusBadge status={listingStatus} />
+      </div>
+
+      {listingStatus === "active" && (
+        <>
+          <div className="mt-4">
+            <TextInput
+              id="new-asking-price"
+              label="Update asking price"
+              type="number"
+              min={0}
+              step={500}
+              value={newPrice}
+              onChange={(e) => setNewPrice(e.target.value)}
+              disabled={!canWrite || isBusy}
+              hint="Leave blank to keep the current price."
+            />
+          </div>
+          {priceMutation.isError && (
+            <div className="mt-2">
+              <Alert tone="error" title="Price update failed">
+                {apiErrorMessage(priceMutation.error)}
+              </Alert>
+            </div>
+          )}
+          {priceMutation.isSuccess && (
+            <div className="mt-2">
+              <Alert tone="success" title="Price updated" />
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              disabled={!canWrite || isBusy || !newPrice}
+              onClick={() => {
+                const n = Number(newPrice);
+                if (n > 0) priceMutation.mutate(n);
+              }}
+            >
+              {priceMutation.isPending ? "Saving…" : "Save price"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!canWrite || isBusy}
+              onClick={() => statusMutation.mutate("sold")}
+            >
+              {statusMutation.isPending ? "Updating…" : "Mark sold"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!canWrite || isBusy}
+              onClick={() => statusMutation.mutate("withdrawn")}
+            >
+              Withdraw
+            </Button>
+          </div>
+        </>
+      )}
+
+      {listingStatus === "sold" && (
+        <p className="mt-3 text-sm text-gray-500">
+          This listing has been marked as sold and is no longer publicly visible.
+        </p>
+      )}
+
+      {listingStatus === "withdrawn" && (
+        <p className="mt-3 text-sm text-gray-500">
+          This listing was withdrawn from the catalog.
+        </p>
+      )}
+
+      {statusMutation.isError && (
+        <div className="mt-2">
+          <Alert tone="error" title="Status update failed">
+            {apiErrorMessage(statusMutation.error)}
+          </Alert>
+        </div>
       )}
     </Card>
   );

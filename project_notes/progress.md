@@ -1578,3 +1578,24 @@ Public listing catalog and inquiry form API; analytics event capture; listing ma
 - Public listing domain: `temple.saltrun.net` for staging/demo; will update to TempleHE domain post sign-off.
 - Bot prevention: honeypot field `web_address` (not CAPTCHA). Silently returns 201 to avoid revealing detection.
 - Analytics events from staff roles silently drop — event captured but `recorded: false` returned so client doesn't error.
+
+### Sprint 2 — Public Listing Frontend — COMPLETE (verified green 2026-05-04)
+
+React pages for the public consignment catalog; analytics page_view hook; listing management card for sales reps.
+
+- [x] `web/src/api/listings.ts` (NEW) — typed API client for `GET /public/listings`, `GET /public/listings/:id`, `POST .../inquiries`, `PATCH /sales/equipment/:id/listing`
+- [x] `web/src/services/analytics.ts` (NEW) — `trackEvent()` + `usePageView()` hook (fires on route change; best-effort, never surfaces errors)
+- [x] `web/src/pages/PublicListings.tsx` (NEW) — `/listings` catalog page; filter sidebar (price range + condition), sort dropdown, URL-encoded filter state, pagination, empty state
+- [x] `web/src/pages/PublicListingDetail.tsx` (NEW) — `/listings/:id` detail page; equipment specs card, listing notes/transport notes, inquiry form with client-side validation + honeypot field, success/error states; SEO meta via `react-helmet-async`
+- [x] `web/src/App.tsx` (modify) — added public `/listings` and `/listings/:id` routes (no ProtectedRoute)
+- [x] `web/src/pages/SalesEquipmentDetail.tsx` (modify) — `ListingManagementCard` added; shows when `public_listing_status != null`; allows price update + mark-sold + withdraw
+- [x] `web/src/pages/PublicListings.test.tsx` (NEW) — 17 unit tests (Vitest + MSW) covering list render, empty state, filter UI, detail render, inquiry form submission + validation
+- [x] `web/e2e/phase8_listing.spec.ts` (NEW) — 5 E2E acceptance scenarios (catalog without auth, detail page, inquiry form, sales rep price update, a11y scan)
+- [x] `scripts/seed_e2e_phase8.py` (NEW) — Phase 8 E2E fixture seeder (sales user + customer + equipment record + active public listing)
+- [x] `web/e2e/helpers/api.ts` (modify) — added `seedPhase8()` helper
+- [x] `web/src/test/render.tsx` (modify) — added `HelmetProvider` wrapper
+- [x] `web/src/test/handlers.ts` (modify) — added `POST /analytics/event` MSW handler
+- [x] `web/src/main.tsx` (modify) — added `HelmetProvider` to app bootstrap
+- [x] `react-helmet-async` npm dependency added
+
+**Test gate:** 148/148 frontend unit — all green 2026-05-04. Zero regressions vs. prior 131 tests. Backend: 570/570 + 205/205 (unchanged, re-confirmed).
