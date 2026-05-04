@@ -74,9 +74,9 @@ describe("ManagerApprovalDetailPage", () => {
       path: "/manager/approvals/:id",
     });
     await waitFor(() => {
-      expect(screen.getByLabelText(/submit approval/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^approve$/i })).toBeInTheDocument();
     });
-    const approveBtn = screen.getByLabelText(/submit approval/i);
+    const approveBtn = screen.getByRole("button", { name: /^approve$/i });
     expect(approveBtn).toBeDisabled();
 
     await user.type(screen.getByLabelText(/purchase offer/i), "50000");
@@ -125,7 +125,7 @@ describe("ManagerApprovalDetailPage", () => {
 
     await user.type(screen.getByLabelText(/purchase offer/i), "50000");
     await user.type(screen.getByLabelText(/consignment price/i), "65000");
-    await user.click(screen.getByLabelText(/submit approval/i));
+    await user.click(screen.getByRole("button", { name: /^approve$/i }));
     // Navigation fires on success; no error visible means it worked.
     await waitFor(() => {
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
