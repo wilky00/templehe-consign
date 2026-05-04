@@ -448,7 +448,7 @@ test.describe("A11y — Phase 6 manager approval queue", () => {
     // Also scan the detail view.
     await page.goto(`/manager/approvals/${fixture.submission_id}`);
     await expect(
-      page.getByRole("heading", { name: /appraisal review/i }),
+      page.getByRole("heading", { name: /approval review/i }),
     ).toBeVisible({ timeout: 8_000 });
     await assertA11y(page);
   });

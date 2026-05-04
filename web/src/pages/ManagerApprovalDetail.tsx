@@ -215,7 +215,6 @@ function ApproveForm({
       <Button
         type="submit"
         disabled={!canSubmit || mutation.isPending}
-        aria-label="Submit approval"
       >
         {mutation.isPending ? "Approving…" : "Approve"}
       </Button>
