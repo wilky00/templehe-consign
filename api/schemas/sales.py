@@ -137,3 +137,10 @@ class PublishResponse(BaseModel):
     status: str
     public_listing_id: uuid.UUID
     published_at: datetime
+
+
+class ListingPatchOut(BaseModel):
+    equipment_record_id: uuid.UUID
+    listing_id: uuid.UUID
+    status: str
+    asking_price: float | None

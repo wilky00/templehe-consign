@@ -1547,4 +1547,34 @@ Full spec: `dev_plan/07_phase7_pdf_reports.md`
 
 ---
 
-## Phase 8 — Not started
+## Phase 8 — Analytics & Public Listing Page — In progress
+
+Branch: `phase8-analytics-listing`
+
+---
+
+### Sprint 1 — Public Listing + Analytics Backend — COMPLETE (verified green 2026-05-04)
+
+Public listing catalog and inquiry form API; analytics event capture; listing management for sales reps.
+
+- [x] `api/schemas/public_listing.py` (NEW) — `PublicListingCard`, `PublicListingDetail`, `PublicListingsResponse`, `InquiryCreate`, `InquiryResponse`, `ListingPatch`
+- [x] `api/schemas/analytics.py` (NEW) — `AnalyticsEventCreate`, `AnalyticsEventResponse`; PII validator on metadata
+- [x] `api/services/listing_service.py` (NEW) — `list_public_listings` (paginated, filtered, sorted), `get_public_listing_detail`, `patch_listing`; joins `AppraisalSubmission` for verified fields, falls back to `customer_*` columns
+- [x] `api/services/inquiry_service.py` (NEW) — `create_inquiry`; sends buyer confirmation + sales rep alert via `BackgroundTasks`
+- [x] `api/services/email_service.py` (modify) — added `send_inquiry_confirmation_email` + `send_inquiry_alert_email` templates
+- [x] `api/routers/public.py` (NEW) — `GET /api/v1/public/listings`, `GET /api/v1/public/listings/:id`, `POST /api/v1/public/listings/:id/inquiries`; honeypot bot prevention; 60/min/IP listing rate limit, 5/hr/IP inquiry rate limit
+- [x] `api/routers/analytics.py` (NEW) — `POST /api/v1/analytics/event`; silently drops events from staff roles (sales/sales_manager/admin/appraiser/reporting); PII guard via schema validator
+- [x] `api/routers/sales.py` (modify) — `PATCH /api/v1/sales/equipment/{id}/listing`; sales rep updates asking_price or status (active/sold/withdrawn)
+- [x] `api/schemas/sales.py` (modify) — `ListingPatchOut`
+- [x] `api/main.py` (modify) — registered `public_router` and `analytics_router`
+- [x] `api/tests/integration/test_public_listings.py` (NEW, 10 tests) — filter, pagination, sort, detail, 404, condition filter with AppraisalSubmission
+- [x] `api/tests/integration/test_inquiries.py` (NEW, 10 tests) — creation, email, honeypot, 404, validation, listing PATCH (sold, price, auth, 404)
+- [x] `api/tests/integration/test_analytics_events.py` (NEW, 6 tests) — anonymous, customer, sales-drop, admin-drop, PII rejection, no-auth
+
+**Test gate:** 570/570 integration + 205/205 unit — all green 2026-05-04. Zero regressions vs. prior 544 integration tests.
+
+**Key decisions:**
+- `hours_condition` (condition filter) uses `AppraisalSubmission` (appraiser-verified), not `EquipmentRecord`. Listings without approved submissions are excluded from condition-filtered results.
+- Public listing domain: `temple.saltrun.net` for staging/demo; will update to TempleHE domain post sign-off.
+- Bot prevention: honeypot field `web_address` (not CAPTCHA). Silently returns 201 to avoid revealing detection.
+- Analytics events from staff roles silently drop — event captured but `recorded: false` returned so client doesn't error.

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.base import get_db
 from database.models import ChangeRequest, Role, User
 from middleware.rbac import require_roles
+from schemas.public_listing import ListingPatch as ListingPatchBody
 from schemas.sales import (
     AssignmentPatch,
     CascadePatch,
@@ -23,10 +24,11 @@ from schemas.sales import (
     DashboardResponse,
     EquipmentDetailOut,
     EquipmentRowOut,
+    ListingPatchOut,
     PublishResponse,
     StatusEventSummary,
 )
-from services import change_request_service, sales_service
+from services import change_request_service, listing_service, sales_service
 
 logger = structlog.get_logger(__name__)
 
@@ -279,6 +281,35 @@ async def publish(
         status=record.status,
         public_listing_id=listing.id,
         published_at=listing.published_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Listing management — Phase 8
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/equipment/{record_id}/listing", response_model=ListingPatchOut)
+async def patch_listing(
+    record_id: uuid.UUID,
+    body: ListingPatchBody,
+    current_user: User = Depends(_require_sales),
+    db: AsyncSession = Depends(get_db),
+) -> ListingPatchOut:
+    role_slug = await _acting_role_slug(db, current_user)
+    listing = await listing_service.patch_listing(
+        db,
+        record_id=record_id,
+        patch=body,
+        acting_user_id=current_user.id,
+        acting_role_slug=role_slug,
+    )
+    await db.commit()
+    return ListingPatchOut(
+        equipment_record_id=record_id,
+        listing_id=listing.id,
+        status=listing.status,
+        asking_price=float(listing.asking_price) if listing.asking_price is not None else None,
     )
 
 
