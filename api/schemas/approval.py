@@ -16,7 +16,7 @@ class ApprovalQueueItemOut(BaseModel):
     make: str | None
     model: str | None
     year: int | None
-    overall_score: Decimal | None
+    overall_score: float | None
     score_band: str | None
     marketability_rating: str | None
     appraiser_name: str | None

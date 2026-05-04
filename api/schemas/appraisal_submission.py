@@ -56,7 +56,7 @@ class ComponentScoreOut(BaseModel):
     id: uuid.UUID
     component_id: uuid.UUID
     component_name: str
-    raw_score: Decimal
+    raw_score: float
     weight_at_time_of_scoring: Decimal
     notes: str | None
 
@@ -77,7 +77,7 @@ class SubmissionOut(BaseModel):
     running_status: str | None
     serial_number: str | None
     title_status: str | None
-    overall_score: Decimal | None
+    overall_score: float | None
     score_band: str | None
     management_review_required: bool
     hold_for_title_review: bool
