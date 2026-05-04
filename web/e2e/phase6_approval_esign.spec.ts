@@ -69,14 +69,36 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
       landingPath: "/manager/approvals",
     });
 
+    // Verify API returns the seeded record directly — faster failure path
+    // that shows the actual response body when the queue is empty.
+    const managerTokenDiag = await apiLoginAsStaff({
+      email: fixture.manager_email,
+      password: fixture.password,
+      fakeIp: randomFakeIp(),
+    });
+    const diagApi = await authedApi(managerTokenDiag, randomFakeIp());
+    const diagResp = await diagApi.get("/api/v1/manager/approvals");
+    const diagBody = (await diagResp.json()) as {
+      items: Array<{ reference_number: string }>;
+      total: number;
+    };
+    expect(
+      diagResp.status(),
+      `Approval queue API returned non-200: ${JSON.stringify(diagBody)}`,
+    ).toBe(200);
+    expect(
+      diagBody.items.some((i) => i.reference_number === fixture.reference_number),
+      `Expected ${fixture.reference_number} in queue items: ${JSON.stringify(diagBody.items.map((i) => i.reference_number))}`,
+    ).toBe(true);
+
     await expect(
       page.getByRole("heading", { name: /manager approval queue/i }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
     // The seeded record's reference number must appear in the queue.
     await expect(
       page.getByText(fixture.reference_number).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
 
     // Click the queue row to open the detail view.
     const row = page.getByRole("row", {
@@ -124,6 +146,10 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
       landingPath: "/manager/approvals",
     });
 
+    await expect(
+      page.getByRole("heading", { name: /manager approval queue/i }),
+    ).toBeVisible({ timeout: 10_000 });
+
     // The "Review required" badge must be visible in the queue table row.
     await expect(page.getByText("Review required")).toBeVisible({
       timeout: 10_000,
@@ -156,6 +182,10 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
       fakeIp: randomFakeIp(),
       landingPath: "/manager/approvals",
     });
+
+    await expect(
+      page.getByRole("heading", { name: /manager approval queue/i }),
+    ).toBeVisible({ timeout: 10_000 });
 
     // "Title hold" badge visible in the queue row.
     await expect(page.getByText("Title hold")).toBeVisible({
