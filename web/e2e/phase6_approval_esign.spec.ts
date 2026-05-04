@@ -62,15 +62,8 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
   }) => {
     const fixture = seedPhase6<DefaultFixture>("default");
 
-    await uiLoginAsStaff(page, {
-      email: fixture.manager_email,
-      password: fixture.password,
-      fakeIp: randomFakeIp(),
-      landingPath: "/manager/approvals",
-    });
-
-    // Verify API returns the seeded record directly — faster failure path
-    // that shows the actual response body when the queue is empty.
+    // Verify the API returns the seeded record before touching the browser —
+    // direct call so the login here doesn't invalidate the browser session below.
     const managerTokenDiag = await apiLoginAsStaff({
       email: fixture.manager_email,
       password: fixture.password,
@@ -90,6 +83,13 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
       diagBody.items.some((i) => i.reference_number === fixture.reference_number),
       `Expected ${fixture.reference_number} in queue items: ${JSON.stringify(diagBody.items.map((i) => i.reference_number))}`,
     ).toBe(true);
+
+    await uiLoginAsStaff(page, {
+      email: fixture.manager_email,
+      password: fixture.password,
+      fakeIp: randomFakeIp(),
+      landingPath: "/manager/approvals",
+    });
 
     await expect(
       page.getByRole("heading", { name: /manager approval queue/i }),
