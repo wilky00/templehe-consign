@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -46,38 +46,56 @@ logger = structlog.get_logger(__name__)
 
 async def get_queue(db: AsyncSession) -> list[dict]:
     """Return all submissions currently awaiting manager approval, oldest first."""
-    stmt = (
-        select(EquipmentRecord, AppraisalSubmission, User)
-        .join(
-            AppraisalSubmission,
-            (AppraisalSubmission.equipment_record_id == EquipmentRecord.id)
-            & (AppraisalSubmission.status == "submitted")
-            & (AppraisalSubmission.deleted_at.is_(None)),
+    stmt = text("""
+        SELECT
+            s.id              AS submission_id,
+            er.id             AS equipment_record_id,
+            er.reference_number,
+            s.make,
+            s.model,
+            s.year,
+            s.overall_score,
+            s.score_band,
+            s.marketability_rating,
+            s.management_review_required,
+            s.hold_for_title_review,
+            s.red_flags,
+            s.submitted_at,
+            u.first_name,
+            u.last_name
+        FROM equipment_records er
+        JOIN appraisal_submissions s ON (
+            s.equipment_record_id = er.id
+            AND s.status = 'submitted'
+            AND s.deleted_at IS NULL
         )
-        .outerjoin(User, User.id == AppraisalSubmission.appraiser_id)
-        .where(
-            EquipmentRecord.status == Status.APPRAISAL_COMPLETE.value,
-            EquipmentRecord.deleted_at.is_(None),
-        )
-        .order_by(AppraisalSubmission.submitted_at.asc())
-    )
-    rows = (await db.execute(stmt)).all()
+        LEFT JOIN users u ON u.id = s.appraiser_id
+        WHERE er.status = :status
+          AND er.deleted_at IS NULL
+        ORDER BY s.submitted_at ASC
+    """)
+    result = await db.execute(stmt, {"status": Status.APPRAISAL_COMPLETE.value})
+    rows = result.mappings().all()
     return [
         {
-            "submission_id": row.AppraisalSubmission.id,
-            "equipment_record_id": row.EquipmentRecord.id,
-            "reference_number": row.EquipmentRecord.reference_number,
-            "make": row.AppraisalSubmission.make,
-            "model": row.AppraisalSubmission.model,
-            "year": row.AppraisalSubmission.year,
-            "overall_score": row.AppraisalSubmission.overall_score,
-            "score_band": row.AppraisalSubmission.score_band,
-            "marketability_rating": row.AppraisalSubmission.marketability_rating,
-            "appraiser_name": (f"{row.User.first_name} {row.User.last_name}" if row.User else None),
-            "submitted_at": row.AppraisalSubmission.submitted_at,
-            "management_review_required": row.AppraisalSubmission.management_review_required,
-            "hold_for_title_review": row.AppraisalSubmission.hold_for_title_review,
-            "red_flags": row.AppraisalSubmission.red_flags,
+            "submission_id": row["submission_id"],
+            "equipment_record_id": row["equipment_record_id"],
+            "reference_number": row["reference_number"],
+            "make": row["make"],
+            "model": row["model"],
+            "year": row["year"],
+            "overall_score": row["overall_score"],
+            "score_band": row["score_band"],
+            "marketability_rating": row["marketability_rating"],
+            "appraiser_name": (
+                f"{row['first_name']} {row['last_name']}"
+                if row["first_name"] is not None
+                else None
+            ),
+            "submitted_at": row["submitted_at"],
+            "management_review_required": row["management_review_required"],
+            "hold_for_title_review": row["hold_for_title_review"],
+            "red_flags": row["red_flags"],
         }
         for row in rows
     ]

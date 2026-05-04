@@ -21,6 +21,7 @@ if not DATABASE_URL:
 PASSWORD = "TestPassword1!"
 
 CUSTOMER_EMAIL = "e2e-phase7-customer@example.com"
+CUSTOMER2_EMAIL = "e2e-phase7-customer2@example.com"
 SALES_EMAIL = "e2e-phase7-sales@example.com"
 
 
@@ -131,10 +132,10 @@ async def _reset_rate_limits(session: AsyncSession) -> None:
         text(
             """
             UPDATE users SET failed_login_count = 0, locked_until = NULL
-            WHERE email IN (:c, :s)
+            WHERE email IN (:c, :c2, :s)
             """
         ),
-        {"c": CUSTOMER_EMAIL, "s": SALES_EMAIL},
+        {"c": CUSTOMER_EMAIL, "c2": CUSTOMER2_EMAIL, "s": SALES_EMAIL},
     )
 
 
@@ -255,19 +256,35 @@ async def _seed_approved(session: AsyncSession) -> dict:
 
 
 async def _seed_new_request(session: AsyncSession) -> dict:
-    """Record in new_request — report section should not appear."""
-    base = await _seed_base_users(session)
+    """Record in new_request — report section should not appear.
+
+    Uses a distinct customer (CUSTOMER2_EMAIL) so that E2E test 5 can verify
+    that a different customer cannot access the approved fixture's record.
+    """
+    customer_user_id = await _upsert_user(
+        session, email=CUSTOMER2_EMAIL, role_slug="customer", first="E2E7b", last="Customer"
+    )
+    customer_id = await _upsert_customer_profile(session, user_id=customer_user_id)
+    sales_id = await _upsert_user(
+        session, email=SALES_EMAIL, role_slug="sales", first="E2E7", last="Sales"
+    )
+    await _reset_rate_limits(session)
     category_id = await _first_category_id(session)
 
     record_id, ref = await _create_record(
         session,
-        customer_id=base["customer_id"],
-        sales_rep_id=base["sales_id"],
+        customer_id=customer_id,
+        sales_rep_id=sales_id,
         status="new_request",
         category_id=category_id,
     )
     return {
-        **base,
+        "customer_email": CUSTOMER2_EMAIL,
+        "customer_id": customer_id,
+        "customer_user_id": customer_user_id,
+        "sales_email": SALES_EMAIL,
+        "sales_id": sales_id,
+        "password": PASSWORD,
         "record_id": record_id,
         "reference_number": ref,
     }

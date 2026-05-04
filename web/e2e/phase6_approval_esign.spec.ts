@@ -208,7 +208,7 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
       fakeIp: randomFakeIp(),
     });
     const api = await authedApi(managerToken, randomFakeIp());
-    const resp = await api.get(`/api/v1/admin/equipment/${fixture.record_id}`);
+    const resp = await api.get(`/api/v1/sales/equipment/${fixture.record_id}`);
     expect(resp.status()).toBe(200);
     const body = (await resp.json()) as { status: string };
     expect(body.status).toBe("esigned_pending_publish");
@@ -246,7 +246,7 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
       fakeIp: randomFakeIp(),
     });
     const api = await authedApi(salesToken, randomFakeIp());
-    const resp = await api.get(`/api/v1/admin/equipment/${fixture.record_id}`);
+    const resp = await api.get(`/api/v1/sales/equipment/${fixture.record_id}`);
     expect(resp.status()).toBe(200);
     const body = (await resp.json()) as { status: string };
     expect(body.status).toBe("listed");
