@@ -739,10 +739,13 @@ class AppraisalSubmission(Base):
     serial_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
     title_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     overall_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
-    score_band: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Phase 6: widened to VARCHAR(100) in migration 028 (longest label is 33 chars)
+    score_band: Mapped[str | None] = mapped_column(String(100), nullable=True)
     management_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     hold_for_title_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     marketability_rating: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Phase 6: server-written advisory notes (appended by RedFlagService at submit time)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Sprint 4: narrative fields for the summary section
     transport_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     listing_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -750,6 +753,12 @@ class AppraisalSubmission(Base):
     suggested_consignment_price: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
     )
+    # Phase 6 Sprint 2: written by the manager approval workflow
+    rejection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Triggered red flags. Phase 5 iOS writers MUST embed the rule
     # version that fired so historical reports stay correct after Phase 4
     # admin edits the rule. Shape (versioned, post-migration 014):
@@ -860,6 +869,9 @@ class AppraisalReport(Base):
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
 
     equipment_record: Mapped[EquipmentRecord] = relationship(
         "EquipmentRecord", back_populates="appraisal_reports"
@@ -879,6 +891,9 @@ class ConsignmentContract(Base):
     envelope_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="sent")
     signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+    )
 
     equipment_record: Mapped[EquipmentRecord] = relationship(
         "EquipmentRecord", back_populates="consignment_contract"
@@ -898,6 +913,9 @@ class ChangeRequest(Base):
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     requires_manager_reapproval: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
+    )
+    proposed_consignment_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2), nullable=True
     )
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()

@@ -251,10 +251,33 @@ fly machine run . --app temple-sweeper \
 **Impact:** APNs dispatch silently skips (status = "skipped") until the AuthKey JSON blob `{private_key, key_id, team_id}` is added to the integration credentials vault under `apns`.
 **Fix:** Download AuthKey from developer.apple.com → Keys → APNs; add via `/admin/integrations` in the SPA.
 
+## OPEN — iOS min-version kill switch not shipped (security baseline §9, Feature 5.1.4)
+**Status:** Open; pre-production blocker per `11_security_baseline.md`.
+**Impact:** Backend has no `min_supported_ios_version` AppConfig key; `/api/v1/ios/config` does not return a minimum version; iOS app does not check version on launch and cannot be remotely killed. Without this, a critical bug in a shipped build has no kill-switch — all users would need to update voluntarily.
+**Fix:**
+- `api/services/app_config_registry.py` — register `min_supported_ios_version` key (string, default "1.0.0")
+- `api/routers/ios_config.py` — include `min_supported_ios_version` in the `/ios/config` response payload
+- iOS `App.swift` or `AppRouter.swift` — on config load, compare `Bundle.main.infoDictionary["CFBundleShortVersionString"]` against the config value; show a blocking `ForceUpdateView` if current version < min
+**Tracked for:** Phase 5.5 / Phase 6 carry-forward. Required before App Store submission.
+
 ## OPEN — iOS CI macOS runner cost (Phase 5 Sprint 7)
 **Status:** Deferred per plan; manual `xcodebuild test` + TestFlight upload via Fastlane.
 **Impact:** iOS tests don't run in CI. Backend + web CI green on every push; iOS is manual-only.
 **Fix:** Add macOS GitHub Actions runner ($0.08/min vs $0.008/min ubuntu). Revisit in Phase 6 when distribution scale justifies it.
+
+## OPEN — Phase 6: `field_values` prompt answers not extracted for red flag evaluation
+**Status:** Carry-forward from Phase 6 Sprint 1 (2026-05-02). Not fixed in Phase 6.
+**File:** `api/services/red_flag_service.py` (evaluate function)
+**Impact:** Red flag detection runs against score fields, marketability, and boolean flags only. Inspection prompt answers (stored as `field_values` JSONB keyed by prompt UUID in `appraisal_submissions.inspections`) are not checked against red flag rules that reference specific prompt IDs. Any red flag rule of type `prompt_answer` silently goes unevaluated.
+**Fix:** In `red_flag_service.evaluate()`, pass `field_values: dict[str, str]` (extracted from `submission.inspections`) alongside the existing field dict. Match `rule.field_name` against prompt UUID keys. Straightforward addition; blocked only by needing to align with the appraisal_submissions schema finalized in Phase 5.
+
+## OPEN — Phase 6: eSign webhook replay protection not fully implemented
+**Status:** Open, surfaced during Phase 6 close-out gate check (2026-05-03).
+**File:** `api/routers/esign.py` (esign_webhook handler)
+**Requirement:** `dev_plan/11_security_baseline.md` §8 Feature 6.3.4 requires (1) HMAC-SHA256 signature, (2) timestamp within 5 minutes (replay guard), and (3) `event_id` de-duplication via a `webhook_events_seen` table.
+**What ships in Phase 6:** HMAC verification is implemented (opt-in via `esign_webhook_secret`; skipped when empty). Idempotency is handled by checking `contract.status == "completed"` before transitioning. Timestamp replay guard and formal `event_id` de-duplication via a DB table are not implemented.
+**Impact:** Low for the stub provider (event IDs are synthetic and not replayed). Becomes a production concern when DocuSign or Dropbox Sign is wired in — a captured webhook payload could be replayed within the HMAC window. The idempotency check prevents double-transitions but not the repeated computation.
+**Fix:** In `esign_webhook`, after HMAC verification: (a) extract `payload["timestamp"]` and reject if `abs(now - ts) > 300s`; (b) check/insert `event_id` into a `webhook_events_seen (event_id PK, received_at)` table and return 200 immediately if already seen. The `temple-sweeper` already schedules daily cleanup of that table. Track as a Phase 7 carry-forward alongside the real eSign provider integration.
 
 ## FIXED — Phase 4 carry-forwards (closed Sprint 0, 2026-04-28)
 All five Sprint 0 carry-forwards are closed:

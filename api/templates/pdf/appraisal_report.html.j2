@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TempleHE Appraisal Report — {{ report.equipment.reference_number or report.submission_id }}</title>
+  <style>
+    {% include "pdf/styles.css" %}
+  </style>
+</head>
+<body>
+
+{# ------------------------------------------------------------------ #}
+{# Header — logo + title + generation date                            #}
+{# ------------------------------------------------------------------ #}
+<div class="report-header">
+  <div class="logo">
+    {% if report.branding.company_logo_url %}
+      <img src="{{ report.branding.company_logo_url | e }}" alt="Temple Heavy Equipment">
+    {% else %}
+      <span class="logo-text">Temple Heavy Equipment</span>
+    {% endif %}
+  </div>
+  <div class="report-title">Heavy Equipment Appraisal Report</div>
+  <div class="report-meta">Generated: {{ generated_date }}</div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Title block — record ID + equipment summary + appraisal date       #}
+{# ------------------------------------------------------------------ #}
+<div class="title-block">
+  <div class="record-id">{{ report.equipment.reference_number or "REPORT" }}</div>
+  <div class="equipment-summary">
+    {{ [report.equipment.year, report.equipment.make, report.equipment.model] | select | join(" ") or "Equipment Appraisal" }}
+    {% if report.equipment.category_name %} — {{ report.equipment.category_name | e }}{% endif %}
+  </div>
+  {% if report.equipment.appraisal_date %}
+  <div class="appraisal-date">Appraisal Date: {{ report.equipment.appraisal_date.strftime("%B %d, %Y") }}</div>
+  {% endif %}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 1. Equipment Details                                                #}
+{# ------------------------------------------------------------------ #}
+<div class="section">
+  <div class="section-heading">Equipment Details</div>
+  <div class="field-grid">
+    <div class="field-row">
+      <span class="field-label">Manufacturer / Make</span>
+      <span class="field-value {% if not report.equipment.make %}empty{% endif %}">
+        {{ report.equipment.make | e if report.equipment.make else "Not recorded" }}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Model</span>
+      <span class="field-value {% if not report.equipment.model %}empty{% endif %}">
+        {{ report.equipment.model | e if report.equipment.model else "Not recorded" }}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Model Year</span>
+      <span class="field-value {% if not report.equipment.year %}empty{% endif %}">
+        {{ report.equipment.year if report.equipment.year else "Not recorded" }}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Serial Number / PIN</span>
+      <span class="field-value {% if not report.equipment.serial_number %}empty{% endif %}">
+        {{ report.equipment.serial_number | e if report.equipment.serial_number else "Not recorded" }}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Machine Hours</span>
+      <span class="field-value {% if not report.equipment.hours_condition %}empty{% endif %}">
+        {{ report.equipment.hours_condition | e if report.equipment.hours_condition else "Not recorded" }}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Running Status</span>
+      <span class="field-value {% if not report.equipment.running_status %}empty{% endif %}">
+        {{ report.equipment.running_status | e if report.equipment.running_status else "Not recorded" }}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Title Status</span>
+      <span class="field-value {% if not report.equipment.title_status %}empty{% endif %}">
+        {{ report.equipment.title_status | e if report.equipment.title_status else "Not recorded" }}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Asset Category</span>
+      <span class="field-value {% if not report.equipment.category_name %}empty{% endif %}">
+        {{ report.equipment.category_name | e if report.equipment.category_name else "Not recorded" }}
+      </span>
+    </div>
+    {% if report.equipment.transport_notes %}
+    <div class="field-row" style="grid-column: span 2;">
+      <span class="field-label">Transport Notes</span>
+      <span class="field-value">{{ report.equipment.transport_notes | e }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 2. Valuation & Pricing                                              #}
+{# ------------------------------------------------------------------ #}
+<div class="section">
+  <div class="section-heading">Valuation &amp; Pricing</div>
+
+  <div class="price-cards">
+    <div class="price-card">
+      <div class="price-label">Approved Purchase Offer</div>
+      <div class="price-value">
+        {% if report.valuation.approved_purchase_offer %}
+          ${{ "{:,.2f}".format(report.valuation.approved_purchase_offer) }}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    </div>
+    <div class="price-card">
+      <div class="price-label">Suggested Consignment Price</div>
+      <div class="price-value">
+        {% if report.valuation.suggested_consignment_price %}
+          ${{ "{:,.2f}".format(report.valuation.suggested_consignment_price) }}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if report.valuation.overall_score is not none %}
+  <div class="score-summary">
+    <div class="score-badge">{{ report.valuation.overall_score }}</div>
+    <div>
+      <div class="score-band-label">{{ report.valuation.score_band or "" }}</div>
+      {% if report.valuation.marketability_rating %}
+      <div class="marketability-label">Marketability: {{ report.valuation.marketability_rating | e }}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if report.valuation.management_review_required or report.valuation.red_flags %}
+  <div class="alert-box">
+    <div class="alert-title">Management Review Required</div>
+    <div class="alert-body">
+      {% if report.valuation.red_flags %}
+        Red flags triggered:
+        {% for flag in report.valuation.red_flags %}
+          {{ flag.label | e }}{% if not loop.last %};{% endif %}
+        {% endfor %}
+      {% endif %}
+      {% if report.valuation.manager_notes %}
+        <br>Notes: {{ report.valuation.manager_notes | e }}
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if report.valuation.component_scores %}
+  <table>
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Score (0–5)</th>
+        <th>Weight</th>
+        <th>Weighted</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in report.valuation.component_scores %}
+      <tr>
+        <td>{{ row.component_name | e }}</td>
+        <td>{{ row.raw_score }}</td>
+        <td>{{ (row.weight_pct * 100) | round(1) }}%</td>
+        <td>{{ row.weighted_contribution }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if report.valuation.comparable_sales %}
+  <div style="margin-top: 16px;">
+    <div style="font-weight: 600; font-size: 10pt; margin-bottom: 6px;">Comparable Sales</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Sale Price</th>
+          <th>Sale Date</th>
+          <th>Make / Model / Year</th>
+          <th>Hours</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cs in report.valuation.comparable_sales %}
+        <tr>
+          <td>{% if cs.sale_price %}${{ "{:,.2f}".format(cs.sale_price) }}{% else %}—{% endif %}</td>
+          <td>{{ cs.sale_date | e if cs.sale_date else "—" }}</td>
+          <td>{{ [cs.make, cs.model, cs.year | string if cs.year else None] | select | join(" ") or "—" }}</td>
+          <td>{{ cs.hours if cs.hours else "—" }}</td>
+          <td>{{ cs.source | e if cs.source else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 3. Verified Photography Gallery                                     #}
+{# ------------------------------------------------------------------ #}
+<div class="section">
+  <div class="section-heading">Verified Photography Gallery</div>
+
+  {% if report.gallery.photos %}
+  <div class="photo-grid-{% if report.branding.page_size == 'Letter' %}letter{% else %}a4{% endif %}">
+    {% for photo in report.gallery.photos %}
+    <div class="photo-cell">
+      {% if photo.inline_image_data %}
+      <img src="data:image/jpeg;base64,{{ photo.inline_image_data }}" alt="{{ photo.slot_label | e }}">
+      {% else %}
+      <div style="height:160px; background:#F3F4F6; display:flex; align-items:center; justify-content:center; color:#9CA3AF; font-size:8pt;">
+        Photo unavailable
+      </div>
+      {% endif %}
+      <div class="photo-meta">
+        <div class="photo-slot">{{ photo.slot_label | e }}</div>
+        <div class="photo-detail">
+          {% if photo.capture_timestamp %}
+            {{ photo.capture_timestamp.strftime("%B %d, %Y at %I:%M %p") }}
+          {% endif %}
+        </div>
+        <div class="photo-detail">
+          {% if not photo.gps_missing and photo.gps_latitude is not none %}
+            {{ "%.4f"|format(photo.gps_latitude) }}° N, {{ "%.4f"|format(photo.gps_longitude) }}° W
+          {% endif %}
+        </div>
+        {% if photo.gps_missing %}
+          <span class="warning-tag">GPS unavailable</span>
+        {% endif %}
+        {% if photo.gps_out_of_range %}
+          <span class="warning-tag">GPS off-site</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color:#6B7280; font-style:italic;">No photos were submitted with this appraisal.</p>
+  {% endif %}
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# 4. Personnel Information                                            #}
+{# ------------------------------------------------------------------ #}
+<div class="section">
+  <div class="section-heading">Personnel Information</div>
+  <div class="personnel-cards">
+
+    <div class="personnel-card">
+      <div style="font-size:8.5pt; color:#6B7280; text-transform:uppercase; margin-bottom:6px;">Appraiser</div>
+      {% if report.personnel.appraiser %}
+        <div class="person-name">{{ report.personnel.appraiser.full_name | e }}</div>
+        <div class="person-role">{{ report.personnel.appraiser.role_label | e }}</div>
+        <div class="person-contact">
+          {% if report.personnel.appraiser.email %}
+            {{ report.personnel.appraiser.email | e }}
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="no-personnel">Contact TempleHE for information.</div>
+      {% endif %}
+    </div>
+
+    <div class="personnel-card">
+      <div style="font-size:8.5pt; color:#6B7280; text-transform:uppercase; margin-bottom:6px;">Sales Representative</div>
+      {% if report.personnel.sales_rep %}
+        <div class="person-name">{{ report.personnel.sales_rep.full_name | e }}</div>
+        <div class="person-role">{{ report.personnel.sales_rep.role_label | e }}</div>
+        <div class="person-contact">
+          {% if report.personnel.sales_rep.email %}
+            {{ report.personnel.sales_rep.email | e }}
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="no-personnel">Contact TempleHE for information.</div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

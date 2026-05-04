@@ -1,7 +1,7 @@
 // ABOUTME: Lifecycle hook — acquire on mount, heartbeat every 60s, release on unmount.
 // ABOUTME: Exposes { status, conflict, overrideAvailable, refresh } so the detail page can render the right banner.
 import { useEffect, useRef, useState } from "react";
-import { acquireLock, heartbeatLock, releaseLock } from "../api/sales";
+import { acquireLock, heartbeatLock, overrideLock, releaseLock } from "../api/sales";
 import { ApiError } from "../api/client";
 import type { LockConflict, LockInfo } from "../api/types";
 
@@ -18,6 +18,7 @@ const HEARTBEAT_MS = 60_000;
 export function useRecordLock(recordId: string | undefined): {
   lock: LockState;
   refresh: () => Promise<void>;
+  override: () => Promise<void>;
 } {
   const [lock, setLock] = useState<LockState>({ status: "idle" });
   const heartbeatRef = useRef<number | null>(null);
@@ -94,5 +95,11 @@ export function useRecordLock(recordId: string | undefined): {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordId]);
 
-  return { lock, refresh };
+  const override = async () => {
+    if (!recordId) return;
+    await overrideLock(recordId);
+    await refresh();
+  };
+
+  return { lock, refresh, override };
 }

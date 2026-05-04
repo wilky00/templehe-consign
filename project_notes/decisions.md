@@ -794,4 +794,42 @@ Phase 5 ships the native iOS Appraiser App (`dev_plan/05_phase5_ios_app.md`, Epi
 
 - PRs: #46 (Sprint 0), #47 (Sprint 1), #48 (Sprint 2), #49 (Sprint 3), #50 (Sprint 4), #51 (Sprint 5), #52 (Sprint 6), Sprint 7 PR.
 - Implementation: `api/alembic/versions/021–027`, `api/services/apns_dispatch_service.py`, `api/services/device_token_service.py`, `api/services/appraisal_submission_service.py`, `api/services/appraisal_photo_service.py`, `api/services/valuation_service.py`, `api/services/scoring_service.py`, `api/services/notification_service.py` (enqueue_sync_*), `api/services/notification_templates.py` (apns templates), `api/routers/me_device_tokens.py`, `api/routers/me_appointments.py`, `api/routers/appraisal_submissions.py`, `api/routers/appraisal_photos.py`, `api/routers/valuation.py`, `ios/TempleHEAppraiser/**` (Auth, Dashboard, Form, Photo, Sync, Crash, Networking, Storage, Maps, Push, Valuation).
+
+---
+
+## ADR-022: Phase 6 — Manager Approval Queue + eSign Stub
+
+**Date:** 2026-05-03
+**Status:** Accepted
+
+### Context
+
+Phase 6 closes the loop between field appraisals (Phase 5 `AppraisalSubmission`) and the eventual consignment listing (Phase 8). It ships the manager approval workflow, eSign contract dispatch + completion, and the price change re-approval queue.
+
+### Decisions
+
+1. **eSign provider: stub only (DocuSign/Dropbox Sign deferred).** `SigningService` ABC + `StubSigningService` keeps the signing flow testable end-to-end without a live provider account. The provider decision is gated on Jim signing a contract; the real implementation plugs in by swapping the factory in `get_signing_service()`. Stub preview lives at `GET /api/v1/esign/stub-preview/{envelope_id}` (HTML, no auth); `POST /api/v1/esign/stub-sign/{envelope_id}` fires the same `_handle_envelope_completed` logic as a real webhook.
+
+2. **Price change re-approval threshold read from AppConfig, not hardcoded.** `consignment_price_change_threshold_pct` (registered in Phase 4 Sprint 5) drives `price_change_service.evaluate()`. Admin can tune without a deploy. Threshold comparison: `abs(proposed - approved) / approved > threshold_pct / 100`.
+
+3. **`approve_price_change()` lives in `approval_service`, not `change_request_service`.** The re-approval action is manager-initiated, reads the current approved price from the submission, and updates `AppraisalSubmission.suggested_consignment_price` — all concepts owned by the approval surface. Keeping it out of `change_request_service` avoids coupling the customer-facing change-request flow to the manager surface.
+
+4. **FastAPI route ordering: specific paths before parameterized.** `/manager/approvals/price-changes` must precede `/{submission_id}` to avoid FastAPI matching `price-changes` as a submission UUID. Same pattern repeated in MSW handlers.
+
+5. **`PriceChangeApprovalOut.new_consignment_price` is `float`, not `Decimal`.** Pydantic v2 serializes `Decimal` as a quoted string in JSON (e.g. `"45000.00"`) rather than a JSON number. The frontend and tests expect a number; `float` serializes correctly. The upstream DB value is `DECIMAL(12,2)` — coercion happens at the Pydantic boundary.
+
+6. **Title hold requires UI checkbox before approve button enables.** `canSubmit = ... && (!holdForTitle || titleConfirmed)` in `ApproveForm`. This is enforced client-side only (the backend `approve()` already requires `title_review_confirmed=True` when the hold flag is set). The client-side gate prevents the accidental submit; the server-side guard is the authority.
+
+7. **Six-mode multi-seeder pattern for E2E.** Each Phase 6 gate scenario needs a different pre-seeded state. A single script (`seed_e2e_phase6.py`) with `--mode` covers all six — consistent with the Phase 3/4 seeder pattern. Each mode is idempotent via email-based upserts, so re-runs against the same DB are clean.
+
+### Consequences
+
+- `appraisal_submissions.status = "approved"` + `ConsignmentContract.signed_at IS NOT NULL` + record `status = "esigned_pending_publish"` are the gating conditions for Phase 8 publish.
+- `field_values` JSONB (prompt answer extraction for red flag evaluation) is still not implemented — carried forward from Sprint 1. Red flags are detected on score/rating fields only. Tracked in `project_notes/known-issues.md`.
+- The real eSign provider decision belongs in `project_notes/decisions.md` as a sub-decision of ADR-022 once Jim selects DocuSign vs Dropbox Sign.
+
+### References
+
+- Sprint 1–4 implementation in `project_notes/status_report_phase6.md`.
+- `api/alembic/versions/028–031`, `api/services/approval_service.py`, `api/services/esign_service.py`, `api/services/signing_service.py`, `api/services/price_change_service.py`, `api/routers/manager_approvals.py`, `api/routers/esign.py`, `web/src/pages/ManagerApprovals.tsx`, `web/src/pages/ManagerApprovalDetail.tsx`, `web/e2e/phase6_approval_esign.spec.ts`.
 - Tests: ~65 new backend tests (final gate **652/652** passing); iOS XCTest + XCUITest suites across all 8 sprints; Phase5Gate.swift covers all 9 acceptance scenarios.

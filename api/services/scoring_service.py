@@ -1,4 +1,5 @@
 # ABOUTME: Phase 5 Sprint 4 — weighted-average scoring for appraisal component scores.
+# ABOUTME: Phase 6 Sprint 1 updated score band labels to match the manager-facing condition scale.
 # ABOUTME: Pure function; no DB access. Called by appraisal_submission_service after score upsert.
 """Scoring service — weighted average of component 0–5 scores.
 
@@ -8,12 +9,13 @@ Public surface:
   returns an :class:`ScoringResult` with the weighted average, score band, and a flag
   indicating whether the weights were normalized (i.e., they didn't sum to 100).
 
-Score bands (applied after normalization):
-    4.5+ → excellent
-    3.5+ → good
-    2.5+ → fair
-    1.5+ → poor
-    0+   → salvage
+Score bands (Phase 6 condition scale, from 00_condition_scale_and_scoring.md):
+    4.50–5.00 → "Premium resale-ready"
+    3.75–4.49 → "Strong resale candidate"
+    3.00–3.74 → "Usable with value deductions"
+    2.00–2.99 → "Heavy discount / repair candidate"
+    1.00–1.99 → "Project, salvage, or parts-biased"
+    0.00–0.99 → "Insufficient data"
 """
 
 from __future__ import annotations
@@ -21,13 +23,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
-# (threshold, band) — evaluated in order; first match wins
+# (threshold, band) — evaluated in order; first match wins.
+# Thresholds and labels per dev_plan/01_checklists/00_condition_scale_and_scoring.md.
 _SCORE_BANDS: list[tuple[Decimal, str]] = [
-    (Decimal("4.5"), "excellent"),
-    (Decimal("3.5"), "good"),
-    (Decimal("2.5"), "fair"),
-    (Decimal("1.5"), "poor"),
-    (Decimal("0"), "salvage"),
+    (Decimal("4.50"), "Premium resale-ready"),
+    (Decimal("3.75"), "Strong resale candidate"),
+    (Decimal("3.00"), "Usable with value deductions"),
+    (Decimal("2.00"), "Heavy discount / repair candidate"),
+    (Decimal("1.00"), "Project, salvage, or parts-biased"),
+    (Decimal("0.00"), "Insufficient data"),
 ]
 
 
@@ -53,11 +57,15 @@ def calculate_overall(
     Returns a zero/salvage result for empty or zero-weight input.
     """
     if not component_scores:
-        return ScoringResult(overall=Decimal("0.00"), band="salvage", weight_normalized=False)
+        return ScoringResult(
+            overall=Decimal("0.00"), band="Insufficient data", weight_normalized=False
+        )
 
     total_weight = sum(w for _, w in component_scores.values())
     if total_weight == 0:
-        return ScoringResult(overall=Decimal("0.00"), band="salvage", weight_normalized=False)
+        return ScoringResult(
+            overall=Decimal("0.00"), band="Insufficient data", weight_normalized=False
+        )
 
     weight_normalized = not (99.5 <= total_weight <= 100.5)
 

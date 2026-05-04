@@ -251,7 +251,7 @@ async def test_update_component_scores_recalculates_overall(
     data = resp.json()
     assert data["overall_score"] is not None
     assert float(data["overall_score"]) == pytest.approx(4.0, abs=0.01)
-    assert data["score_band"] == "good"
+    assert data["score_band"] == "Strong resale candidate"
 
 
 @pytest.mark.asyncio

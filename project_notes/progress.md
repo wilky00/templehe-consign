@@ -1400,4 +1400,151 @@ Epics 4.3 + 4.6 + the Phase 3 Slack-dispatch carry-forward. Admin can now save, 
 
 All 7 epics shipped across 8 sprints. Backend gate 652/652. Phase 6 (Approval + eSign) is the next phase.
 
-## Phase 6–8 — Not started
+## Phase 6 — Approval & eSign (COMPLETE 2026-05-03, started 2026-05-02)
+
+Full spec: `dev_plan/06_phase6_approval_esign.md`
+
+### Sprint 1: Scoring Engine + Red Flag Detection — COMPLETE (verified green 2026-05-02)
+
+- [x] `api/alembic/versions/028_phase6_approval_columns.py` — widen `score_band` VARCHAR(20→100), add `review_notes TEXT`
+- [x] `api/database/models.py` — `score_band` String(100), `review_notes` mapped column
+- [x] `api/services/scoring_service.py` — Phase 6 score band labels (6 bands, new thresholds)
+- [x] `api/services/red_flag_service.py` (NEW) — pure `evaluate_rules()` + async `evaluate()` + `make_rule()` factory; supports `equals`/`is_true`/`is_false` operators; all action types
+- [x] `api/services/notification_templates.py` — `management_review_flagged_email` + `management_review_flagged_sms` templates
+- [x] `api/services/appraisal_submission_service.py` — `submit()` extended: red flag evaluation, manager notification on `management_review_required`
+- [x] `api/tests/unit/test_scoring_service.py` — updated for Phase 6 band labels + boundary tests
+- [x] `api/tests/unit/test_red_flag_service.py` (NEW) — 22 pure unit tests (no DB)
+- [x] `api/tests/integration/test_scoring_engine.py` (NEW) — 5 integration tests
+- [x] `api/tests/integration/test_red_flags.py` (NEW) — 10 integration tests
+- [x] `api/tests/integration/test_appraisal_submissions.py` — updated band label assertion
+
+**Integration test gate: PASSED — 497/497 green 2026-05-02**
+**Unit test gate: PASSED — 177/177 green 2026-05-02**
+
+### Sprint 2: Manager Approval Workflow — COMPLETE (verified green 2026-05-02)
+
+- [x] `api/alembic/versions/029_phase6_approval_workflow.py` (NEW) — add `rejection_notes`, `approved_by_id`, `approved_at` to `appraisal_submissions`
+- [x] `api/database/models.py` — 3 new nullable columns on `AppraisalSubmission`
+- [x] `api/services/appraisal_submission_service.py` — `submit()` now transitions `EquipmentRecord.status → "appraisal_complete"` via `record_transition()`; resolves customer user for notification
+- [x] `api/services/approval_service.py` (NEW) — `get_queue()`, `approve()`, `reject()` with `AuditLog` writes + structlog
+- [x] `api/schemas/approval.py` (NEW) — `ApprovalQueueItemOut`, `ApprovalQueueResponse`, `ApprovalDecisionRequest`, `RejectionDecisionRequest`
+- [x] `api/routers/manager_approvals.py` (NEW) — `GET /manager/approvals`, `GET /{id}`, `POST /{id}/approve`, `POST /{id}/reject` (sales_manager + admin only)
+- [x] `api/schemas/appraisal_submission.py` — `SubmissionOut` extended with `management_review_required`, `hold_for_title_review`, `review_notes`, `approved_purchase_offer`, `suggested_consignment_price`, `rejection_notes`, `approved_by_id`, `approved_at`
+- [x] `api/routers/appraisal_submissions.py` — `_submission_to_out()` updated for new `SubmissionOut` fields
+- [x] `api/main.py` — registered `manager_approvals` router
+- [x] `api/services/notification_templates.py` — `appraisal_rejected_sales_rep_email` + `appraisal_rejected_appraiser_email` templates
+- [x] `api/tests/integration/test_approval_workflow.py` (NEW) — 12 integration tests: queue, RBAC, approve (status transitions, audit log, title hold enforcement), reject (permanent + send-back, appraiser notification, audit log, 404)
+
+**Integration test gate: PASSED — 512/512 green 2026-05-02**
+**Unit test gate: PASSED — 177/177 green 2026-05-02**
+
+### Sprint 3: Frontend Manager Approval Queue + eSign Stub + Price Change Re-approval — COMPLETE (verified green 2026-05-03)
+
+**Backend:**
+- [x] `api/alembic/versions/030_phase6_change_request_price.py` (NEW) — add `proposed_consignment_price DECIMAL(12,2)` to `change_requests`
+- [x] `api/database/models.py` — `proposed_consignment_price` mapped on `ChangeRequest`
+- [x] `api/services/signing_service.py` (NEW) — `SigningService` ABC + `StubSigningService` + `get_signing_service()` factory
+- [x] `api/services/esign_service.py` (NEW) — `dispatch_contract()` (idempotent; resolves customer user; creates `ConsignmentContract`; enqueues `customer_esign_ready` email)
+- [x] `api/routers/esign.py` (NEW) — `GET /esign/sign/:id`, `GET /esign/stub-preview/:id`, `POST /esign/stub-sign/:id`, `POST /esign/webhook` (HMAC-validated)
+- [x] `api/services/approval_service.py` — `approve()` calls `esign_service.dispatch_contract()` in best-effort try/except after approval flush
+- [x] `api/services/price_change_service.py` (NEW) — `evaluate()` compares proposed vs approved price; sets `requires_manager_reapproval`; notifies sales_manager users
+- [x] `api/services/change_request_service.py` — `_ALLOWED_REQUEST_TYPES` + `update_consignment_price`; calls `price_change_service.evaluate()` after flush
+- [x] `api/routers/manager_approvals.py` — `GET /manager/approvals/price-changes` queue endpoint (route placed before `/{submission_id}` to avoid FastAPI path collision)
+- [x] `api/services/notification_templates.py` — `customer_esign_ready` + `manager_price_change_reapproval` templates
+- [x] `api/main.py` — registered `esign` router
+- [x] `api/config.py` — `esign_webhook_secret: str = ""` (HMAC validation; empty = disabled for dev/test)
+- [x] `api/tests/integration/test_esign_workflow.py` (NEW) — 10 tests: contract dispatch on approval, idempotent dispatch, stub preview HTML, stub sign, webhook completed, webhook idempotent, webhook declined, HMAC invalid → 403, unknown envelope → 404, unknown event → 200
+- [x] `api/tests/integration/test_price_change_reapproval.py` (NEW) — 6 tests: above threshold sets flag, below threshold no flag, above threshold notifies managers, no approved submission skips, queue endpoint shows flagged requests, RBAC blocks customers
+
+**Frontend:**
+- [x] `web/src/api/approvals.ts` (NEW) — `ApprovalQueueItem`, `ApprovalQueueResponse`, `SubmissionDetail`, `ApproveRequest`, `RejectRequest`, `PriceChangeQueueItem`, `PriceChangeQueueResponse`; `getApprovalQueue()`, `getApprovalDetail()`, `approveSubmission()`, `rejectSubmission()`, `getPriceChangeQueue()`
+- [x] `web/src/test/handlers.ts` — `TEST_QUEUE_ITEM`, `TEST_SUBMISSION`, `TEST_PRICE_CHANGE_ITEM`; 7 MSW handlers (price-changes before `:id` to avoid MSW path collision)
+- [x] `web/src/pages/ManagerApprovals.tsx` (NEW) — two-section layout: AppraisalQueueTable (score badge, flag badges, click-to-navigate) + PriceChangeTable
+- [x] `web/src/pages/ManagerApprovalDetail.tsx` (NEW) — full detail view: ScoreBar, title-hold/mgmt-review alerts, SubmissionReadOnly, ApproveForm (disabled until prices filled, title_review_confirmed when hold active), RejectForm; uses `useRecordLock` + `RecordLockIndicator`
+- [x] `web/src/pages/ManagerApprovals.test.tsx` (NEW) — 9 tests
+- [x] `web/src/pages/ManagerApprovalDetail.test.tsx` (NEW) — 8 tests
+- [x] `web/src/App.tsx` — `/manager/approvals` + `/manager/approvals/:id` routes
+- [x] `web/src/components/Layout.tsx` — `MANAGER_ROLES`, `isManager`; Approvals nav link for sales + admin
+- [x] `web/src/test/render.tsx` — added `path?` option to `renderWithProviders` (wraps in `<Routes><Route>` for `useParams` support)
+
+**Bugs fixed during sprint:**
+- structlog `event` reserved keyword conflict in `esign.py` (renamed to `webhook_event`)
+- Duplicate migration 030 (`030_phase6_consignment_contracts.py` created erroneously then deleted)
+- FastAPI route ordering: `/price-changes` moved before `/{submission_id}` in `manager_approvals.py`
+- MSW handler ordering: `/price-changes` moved before `/:id` in `handlers.ts`
+- `app_config_registry.get_value()` → `get_typed(...name)` in `price_change_service.py`
+- `esign_webhook_secret` field missing from `config.py` Settings model
+- Webhook decline handler: guard against same-state transition when record already at `approved_pending_esign`
+
+**Integration test gate: PASSED — 528/528 green 2026-05-03**
+**Unit test gate: PASSED — 177/177 green 2026-05-03**
+**Frontend test gate: PASSED — 126/126 green 2026-05-03**
+
+### Sprint 4: Price Change Re-Approval Action + E2E Gate + Close-out — COMPLETE (verified green 2026-05-03)
+
+**Backend:**
+- [x] `api/services/approval_service.py` — added `approve_price_change()`: fetches `ChangeRequest` with `FOR UPDATE`, validates `status=pending` + `requires_manager_reapproval=True`, resolves the change, updates `AppraisalSubmission.suggested_consignment_price`, writes `AuditLog(event_type="change_request.price_reapproved")`
+- [x] `api/routers/manager_approvals.py` — added `PriceChangeApprovalOut` schema (changed `new_consignment_price` from `Decimal` to `float` for correct JSON serialization); added `POST /price-changes/{change_request_id}/approve` between `get_price_change_queue` and `get_approval_detail`
+- [x] `api/tests/integration/test_price_change_reapproval.py` — added 3 tests: happy path (resolves change, updates price, writes audit log), already-resolved → 422, RBAC blocks customers → 403
+
+**Frontend:**
+- [x] `web/src/api/approvals.ts` — added `PriceChangeApprovalOut` interface + `approvePriceChange()` function
+- [x] `web/src/pages/ManagerApprovals.tsx` — extracted `PriceChangeRow` component with `useMutation` for re-approval ("Re-approve" / "Approving…" / "Approved" states, error display, `aria-label`)
+- [x] `web/src/test/handlers.ts` — added MSW handler for `POST /manager/approvals/price-changes/:id/approve`
+- [x] `web/src/pages/ManagerApprovals.test.tsx` — added 2 tests: re-approve button renders, button shows Approved + disabled after success
+
+**E2E:**
+- [x] `scripts/seed_e2e_phase6.py` (NEW) — 6-mode seeder (default, red_flags, title_hold, esign, price_change, publish_ready); returns JSON with user credentials + record IDs via stdout
+- [x] `web/e2e/helpers/api.ts` — added `seedPhase6()` helper following the Phase 3/4 pattern
+- [x] `web/e2e/phase6_approval_esign.spec.ts` (NEW) — 6 acceptance scenarios (approval flow, red flags, title hold checkbox gate, eSign stub sign, sales rep publish, price change re-approval) + axe-core a11y sweep of queue + detail pages
+
+**Bugs fixed during sprint:**
+- `PriceChangeApprovalOut.new_consignment_price` typed as `Decimal` → serialized as string `"45000.00"` instead of number; fixed to `float`
+
+**Integration test gate: PASSED — 530/530 green 2026-05-03**
+**Unit test gate: PASSED — 177/177 green 2026-05-03**
+**Frontend test gate: PASSED — 128/128 green 2026-05-03**
+
+---
+
+## Phase 7 — PDF Reports — COMPLETE (verified green 2026-05-03)
+
+Full spec: `dev_plan/07_phase7_pdf_reports.md`
+
+### Sprint 1: Data Assembly + Schemas — COMPLETE (verified green 2026-05-03)
+- [x] `api/schemas/report.py` — `ReportData`, `EquipmentDetailsSection`, `ValuationSection`, `PhotoGallerySection`, `PersonnelSection`, `BrandingSection`, `ReportDownloadResponse`, `ReportGeneratingResponse` Pydantic models
+- [x] `api/services/report_data_service.py` — `build_report_data()` (async, DB-backed) + `_assemble()` (pure function); raises `ReportDataIncompleteError` when approval pricing is missing
+- [x] `api/services/app_config_registry.py` — added `pdf_page_size`, `pdf_brand_primary_color`, `pdf_font_family`, `company_logo_url` AppConfig keys
+- [x] `api/tests/unit/test_report_data_service.py` — 25 unit tests covering `_assemble()` and all private helpers
+- [x] `api/tests/integration/test_report_data_service.py` — 5 integration tests for `build_report_data()` with real DB
+- [x] `api/pyproject.toml` — added `weasyprint==68.1` + `Pillow` dependencies
+
+### Sprint 2: PDF Rendering + Generation + Download Endpoint — COMPLETE (verified green 2026-05-03)
+- [x] `api/templates/pdf/styles.css` — WeasyPrint CSS with Jinja2 config variables; `@page` rule with footer page counter; 3-col A4 / 2-col Letter photo grid; management review alert box
+- [x] `api/templates/pdf/appraisal_report.html.j2` — full Jinja2 template: report header, title block, equipment details, valuation & pricing (price cards, score badge, component scores table, comparable sales, management review alert), photo gallery (base64 inline), personnel info
+- [x] `api/services/pdf_render_service.py` — `render_pdf(ReportData) → bytes`; enriches photos with base64 inline data fetched from R2 and re-compressed (Pillow 800×800, 60% JPEG); runs WeasyPrint via `FileSystemLoader`
+- [x] `api/services/pdf_generation_worker.py` — `generate_and_store()` (async: build_report_data → to_thread(render_pdf) → to_thread(_upload_pdf) → upsert AppraisalReport row); `generate_and_store_best_effort()` (swallows errors, writes AuditLog); `generate_download_url()` (R2 presigned GET, 15-min expiry)
+- [x] `api/routers/reports.py` — `GET /api/v1/equipment-records/{id}/report/pdf`; customer ownership check via explicit Customer query; 202 if no report, 503 if R2 not configured, 200 + signed URL if report exists
+- [x] `api/routers/manager_approvals.py` — added `_pdf_background()` (own `AsyncSessionLocal` session); `background_tasks.add_task(_pdf_background, ...)` on approve
+- [x] `api/main.py` — registered `reports_router`
+- [x] `api/tests/unit/test_pdf_render_service.py` — 3 WeasyPrint smoke tests (real render, returns `%PDF` bytes)
+- [x] `api/tests/integration/test_pdf_generation.py` — 8 integration tests (render + R2 mocked, DB real)
+
+**Unit test gate: PASSED — 205/205 green 2026-05-03**
+**Integration test gate: PASSED — 544/544 green 2026-05-03**
+
+### Sprint 3: Frontend + E2E Gate — COMPLETE (verified green 2026-05-03)
+- [x] `web/src/api/reports.ts` — `getReportDownload()`, `isReportReady()` type guard, `ReportDownloadResponse` / `ReportGeneratingResponse` / `ReportResponse` types
+- [x] `web/src/pages/EquipmentDetail.tsx` — `ReportCard` component (hidden for non-eligible statuses; shows generating message or download link)
+- [x] `web/src/pages/SalesEquipmentDetail.tsx` — `SalesReportCard` component (same pattern for internal staff)
+- [x] `web/src/test/handlers.ts` — added MSW handler for `GET /equipment-records/:id/report/pdf` (202 default)
+- [x] `web/src/pages/ReportDownload.test.tsx` — 3 Vitest tests (hidden for new_request, generating message, download link)
+- [x] `scripts/seed_e2e_phase7.py` — multi-mode seeder (approved | new_request)
+- [x] `web/e2e/helpers/api.ts` — added `seedPhase7()` helper
+- [x] `web/e2e/phase7_pdf.spec.ts` — 5 E2E gate scenarios (generating message, non-eligible hidden, sales rep card, a11y scan, API RBAC)
+
+**Frontend test gate: PASSED — 131/131 green 2026-05-03**
+
+---
+
+## Phase 8 — Not started

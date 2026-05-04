@@ -9,6 +9,10 @@ import {
   listChangeRequests,
   submitChangeRequest,
 } from "../api/equipment";
+import {
+  getReportDownload,
+  isReportReady,
+} from "../api/reports";
 import type { ChangeRequestOut, EquipmentRecord } from "../api/types";
 import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
@@ -99,6 +103,7 @@ export function EquipmentDetailPage() {
       </div>
 
       <PhotosCard record={record} />
+      <ReportCard recordId={record.id} status={record.status} />
       <ChangeRequestsCard recordId={record.id} />
     </div>
   );
@@ -215,6 +220,66 @@ function PhotosCard({ record }: { record: EquipmentRecord }) {
             );
           })}
         </ul>
+      )}
+    </Card>
+  );
+}
+
+const REPORT_ELIGIBLE_STATUSES = new Set([
+  "approved_pending_esign",
+  "esigned_pending_publish",
+  "active",
+]);
+
+function ReportCard({
+  recordId,
+  status,
+}: {
+  recordId: string;
+  status: string;
+}) {
+  const reportQuery = useQuery({
+    queryKey: ["report", recordId],
+    queryFn: () => getReportDownload(recordId),
+    enabled: REPORT_ELIGIBLE_STATUSES.has(status),
+    retry: false,
+  });
+
+  if (!REPORT_ELIGIBLE_STATUSES.has(status)) return null;
+
+  return (
+    <Card>
+      <h2 className="text-base font-medium text-gray-900">Appraisal report</h2>
+      {reportQuery.isLoading && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
+          <Spinner />
+          <span>Checking report status…</span>
+        </div>
+      )}
+      {reportQuery.isError && (
+        <p className="mt-3 text-sm text-gray-500">
+          Report not yet available.
+        </p>
+      )}
+      {reportQuery.data && isReportReady(reportQuery.data) && (
+        <div className="mt-3">
+          <p className="text-sm text-gray-600">
+            Your appraisal report is ready to download.
+          </p>
+          <a
+            href={reportQuery.data.download_url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex items-center rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+          >
+            Download PDF
+          </a>
+        </div>
+      )}
+      {reportQuery.data && !isReportReady(reportQuery.data) && (
+        <p className="mt-3 text-sm text-gray-500">
+          {reportQuery.data.message}
+        </p>
       )}
     </Card>
   );

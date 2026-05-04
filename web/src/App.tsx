@@ -17,6 +17,8 @@ import { AdminOperationsPage } from "./pages/AdminOperations";
 import { AdminReportsPage } from "./pages/AdminReports";
 import { AdminRoutingPage } from "./pages/AdminRouting";
 import { DashboardPage } from "./pages/Dashboard";
+import { ManagerApprovalsPage } from "./pages/ManagerApprovals";
+import { ManagerApprovalDetailPage } from "./pages/ManagerApprovalDetail";
 import { EquipmentDetailPage } from "./pages/EquipmentDetail";
 import { IntakeFormPage } from "./pages/IntakeForm";
 import { LoginPage } from "./pages/Login";
@@ -222,6 +224,26 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <AdminReportsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/manager/approvals"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <ManagerApprovalsPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/manager/approvals/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <ManagerApprovalDetailPage />
             </Layout>
           </ProtectedRoute>
         }

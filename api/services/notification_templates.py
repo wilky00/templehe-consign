@@ -431,3 +431,143 @@ SYNC_FAILED_APNS = register(
         body_template="Appraisal {{ reference_number }} could not be synced: {{ error_reason }}.",
     )
 )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 Sprint 1 — Manager approval workflow notifications.
+# ---------------------------------------------------------------------------
+
+MANAGEMENT_REVIEW_FLAGGED_EMAIL = register(
+    Template(
+        name="management_review_flagged_email",
+        channel="email",
+        category="approval",
+        variables=("reference_number", "make", "model", "red_flag_summary"),
+        description=(
+            "Sent to all Sales Managers when an appraisal submission is flagged "
+            "for management review (structural damage, active leak, non-running, etc.)."
+        ),
+        subject_template="Management Review Required: {{ reference_number }}",
+        body_template=(
+            "<p>An appraisal submission requires your review.</p>"
+            "<p><strong>{{ make }} {{ model }}</strong> ({{ reference_number }})</p>"
+            "<p><strong>Flagged conditions:</strong><br>{{ red_flag_summary }}</p>"
+            "<p>Please log in to the manager approval queue to review and approve or reject.</p>"
+        ),
+    )
+)
+
+MANAGEMENT_REVIEW_FLAGGED_SMS = register(
+    Template(
+        name="management_review_flagged_sms",
+        channel="sms",
+        category="approval",
+        variables=("reference_number", "make", "model", "red_flag_summary"),
+        description=(
+            "SMS variant of management_review_flagged_email. "
+            "Sent to Sales Managers who prefer SMS notifications."
+        ),
+        body_template=(
+            "TempleHE: Management review required for {{ make }} {{ model }} "
+            "({{ reference_number }}). Flags: {{ red_flag_summary }}"
+        ),
+    )
+)
+
+
+# Phase 6 Sprint 2 — Rejection notifications.
+
+APPRAISAL_REJECTED_SALES_REP_EMAIL = register(
+    Template(
+        name="appraisal_rejected_sales_rep_email",
+        channel="email",
+        category="approval",
+        variables=("reference_number", "make", "model", "rejection_notes", "send_back"),
+        description=(
+            "Sent to the assigned Sales Rep when a manager rejects an appraisal, "
+            "whether permanently declined or sent back for re-appraisal."
+        ),
+        subject_template="Appraisal Rejected: {{ reference_number }}",
+        body_template=(
+            "<p>The appraisal for <strong>{{ make }} {{ model }}</strong> "
+            "({{ reference_number }}) has been rejected.</p>"
+            "<p><strong>Manager notes:</strong> {{ rejection_notes }}</p>"
+            "<p>{% if send_back %}The record has been returned for re-appraisal.{% else %}"
+            "The record has been declined.{% endif %}</p>"
+        ),
+    )
+)
+
+
+APPRAISAL_REJECTED_APPRAISER_EMAIL = register(
+    Template(
+        name="appraisal_rejected_appraiser_email",
+        channel="email",
+        category="approval",
+        variables=("reference_number", "make", "model", "rejection_notes"),
+        description=(
+            "Sent to the Appraiser when a manager sends an appraisal back for re-appraisal. "
+            "Not sent on permanent declines — the appraiser's role ends at submission."
+        ),
+        subject_template="Re-Appraisal Required: {{ reference_number }}",
+        body_template=(
+            "<p>The appraisal you submitted for <strong>{{ make }} {{ model }}</strong> "
+            "({{ reference_number }}) requires a re-inspection.</p>"
+            "<p><strong>Manager notes:</strong> {{ rejection_notes }}</p>"
+            "<p>Please log in to the app to begin a new appraisal for this record.</p>"
+        ),
+    )
+)
+
+
+CUSTOMER_ESIGN_READY = register(
+    Template(
+        name="customer_esign_ready",
+        channel="email",
+        category="customer",
+        variables=("first_name", "reference_number", "make_model", "envelope_id"),
+        description="Sent to the customer when the consignment agreement is ready to sign.",
+        subject_template=(
+            "Action Required: Sign Your Consignment Agreement for {{ reference_number }}"
+        ),
+        body_template=(
+            "<p>Hi {{ first_name }},</p>"
+            "<p>Your consignment agreement for <strong>{{ make_model }}</strong> "
+            "({{ reference_number }}) is ready for your signature.</p>"
+            "<p><a href='/api/v1/esign/sign/{{ envelope_id }}'>Sign Agreement</a></p>"
+            "<p>If you have any questions, please contact us.</p>"
+            "<p>— The Temple Heavy Equipment team</p>"
+        ),
+    )
+)
+
+
+MANAGER_PRICE_CHANGE_REAPPROVAL = register(
+    Template(
+        name="manager_price_change_reapproval",
+        channel="email",
+        category="approval",
+        variables=(
+            "reference_number",
+            "make_model",
+            "approved_price",
+            "proposed_price",
+            "change_pct",
+        ),
+        description=(
+            "Sent to managers when a customer's proposed price change exceeds the"
+            " re-approval threshold."
+        ),
+        subject_template="Re-Approval Required: Price Change on {{ reference_number }}",
+        body_template=(
+            "<p>A customer has requested a consignment price change that requires your"
+            " approval.</p>"
+            "<p>Record: <strong>{{ reference_number }}</strong> ({{ make_model }})</p>"
+            "<p>Approved price: ${{ approved_price }}<br>"
+            "Proposed price: ${{ proposed_price }}<br>"
+            "Change: {{ change_pct }}%</p>"
+            "<p>Log in to the manager approval queue to review and approve or reject this"
+            " change.</p>"
+        ),
+    )
+)

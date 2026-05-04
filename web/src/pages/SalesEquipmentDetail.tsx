@@ -11,6 +11,7 @@ import {
   publishListing,
   resolveChangeRequest,
 } from "../api/sales";
+import { getReportDownload, isReportReady } from "../api/reports";
 import { useMe } from "../hooks/useMe";
 import { useRecordLock } from "../hooks/useRecordLock";
 import { Alert } from "../components/ui/Alert";
@@ -141,8 +142,72 @@ export function SalesEquipmentDetailPage() {
         recordId={id}
       />
 
+      <SalesReportCard recordId={id} status={detail.status} />
+
       <TimelineCard detail={detail} />
     </div>
+  );
+}
+
+const REPORT_ELIGIBLE_STATUSES = new Set([
+  "approved_pending_esign",
+  "esigned_pending_publish",
+  "active",
+]);
+
+function SalesReportCard({
+  recordId,
+  status,
+}: {
+  recordId: string;
+  status: string;
+}) {
+  const reportQuery = useQuery({
+    queryKey: ["report", recordId],
+    queryFn: () => getReportDownload(recordId),
+    enabled: REPORT_ELIGIBLE_STATUSES.has(status),
+    retry: false,
+  });
+
+  if (!REPORT_ELIGIBLE_STATUSES.has(status)) return null;
+
+  return (
+    <Card>
+      <h2 className="text-base font-medium text-gray-900">Appraisal report</h2>
+      {reportQuery.isLoading && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
+          <Spinner />
+          <span>Checking report status…</span>
+        </div>
+      )}
+      {reportQuery.isError && (
+        <p className="mt-3 text-sm text-gray-500">Report not yet available.</p>
+      )}
+      {reportQuery.data && isReportReady(reportQuery.data) && (
+        <div className="mt-3">
+          <a
+            href={reportQuery.data.download_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+          >
+            Download appraisal PDF
+          </a>
+          <p className="mt-1 text-xs text-gray-500">
+            Link expires{" "}
+            {new Date(reportQuery.data.expires_at).toLocaleTimeString(
+              undefined,
+              { hour: "numeric", minute: "2-digit" },
+            )}
+          </p>
+        </div>
+      )}
+      {reportQuery.data && !isReportReady(reportQuery.data) && (
+        <p className="mt-3 text-sm text-gray-500">
+          {reportQuery.data.message}
+        </p>
+      )}
+    </Card>
   );
 }
 
