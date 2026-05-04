@@ -265,6 +265,11 @@ test.describe("Phase 6 gate — approval queue + eSign", () => {
       landingPath: "/manager/approvals",
     });
 
+    // Wait for ProtectedRoute to finish loading before checking sub-sections.
+    await expect(
+      page.getByRole("heading", { name: /manager approval queue/i }),
+    ).toBeVisible({ timeout: 10_000 });
+
     await expect(
       page.getByRole("heading", { name: /price change re-approvals/i }),
     ).toBeVisible({ timeout: 10_000 });

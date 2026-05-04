@@ -76,6 +76,7 @@ async def get_queue(db: AsyncSession) -> list[dict]:
     """)
     result = await db.execute(stmt, {"status": Status.APPRAISAL_COMPLETE.value})
     rows = result.mappings().all()
+    logger.warning("approval_queue_fetched", count=len(rows))
     return [
         {
             "submission_id": row["submission_id"],
