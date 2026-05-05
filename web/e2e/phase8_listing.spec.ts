@@ -77,7 +77,7 @@ test.describe("Phase 8 gate — public listing catalog", () => {
   });
 
   // Scenario 4: Sales rep can update listing price via the listing management card
-  test("sales rep can update asking price from the detail page", async ({ page }) => {
+  test("sales rep can update asking price from the detail page", async ({ page: _page }) => {
     const fixture = seedPhase8<Phase8Fixture>();
     const fakeIp = randomFakeIp();
 
