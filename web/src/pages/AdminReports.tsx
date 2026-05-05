@@ -446,7 +446,7 @@ function SalesByTypeLocationTab() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number, name: string) => [value, name]}
+                    formatter={(value, name) => [value, name]}
                   />
                   <Legend />
                 </PieChart>
