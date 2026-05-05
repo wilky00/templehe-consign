@@ -31,9 +31,7 @@ _VALID_PASSWORD = "TestPassword1!"
 # ---------------------------------------------------------------------------
 
 
-async def _user_with_role(
-    client: AsyncClient, db: AsyncSession, email: str, role_slug: str
-) -> str:
+async def _user_with_role(client: AsyncClient, db: AsyncSession, email: str, role_slug: str) -> str:
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         await client.post(
             "/api/v1/auth/register",
@@ -76,9 +74,7 @@ async def _seed_approved_record(
 ) -> tuple[EquipmentRecord, AppraisalSubmission]:
     """Seed an EquipmentRecord with an approved AppraisalSubmission."""
     category = (
-        await db.execute(
-            select(EquipmentCategory).where(EquipmentCategory.name == category_name)
-        )
+        await db.execute(select(EquipmentCategory).where(EquipmentCategory.name == category_name))
     ).scalar_one_or_none()
     category_id = category.id if category else None
 
@@ -133,13 +129,32 @@ async def _seed_approved_record(
 
 async def _seed_analytics_events(db: AsyncSession) -> None:
     """Seed a small set of analytics events for portal traffic tests."""
+    now = datetime.now(UTC)
     events = [
-        AnalyticsEvent(session_id="sess-001", event_type="page_view", page="/listings", created_at=datetime.now(UTC)),
-        AnalyticsEvent(session_id="sess-001", event_type="page_view", page="/listings/abc", created_at=datetime.now(UTC)),
-        AnalyticsEvent(session_id="sess-002", event_type="page_view", page="/listings", created_at=datetime.now(UTC)),
-        AnalyticsEvent(session_id="sess-002", event_type="form_step_start", page="/portal/submit", created_at=datetime.now(UTC)),
-        AnalyticsEvent(session_id="sess-002", event_type="form_abandon", page="/portal/submit", created_at=datetime.now(UTC)),
-        AnalyticsEvent(session_id="sess-003", event_type="pdf_download_click", page="/portal/report", created_at=datetime.now(UTC)),
+        AnalyticsEvent(
+            session_id="sess-001", event_type="page_view", page="/listings", created_at=now
+        ),  # noqa: E501
+        AnalyticsEvent(
+            session_id="sess-001", event_type="page_view", page="/listings/abc", created_at=now
+        ),  # noqa: E501
+        AnalyticsEvent(
+            session_id="sess-002", event_type="page_view", page="/listings", created_at=now
+        ),  # noqa: E501
+        AnalyticsEvent(
+            session_id="sess-002",
+            event_type="form_step_start",
+            page="/portal/submit",
+            created_at=now,
+        ),  # noqa: E501
+        AnalyticsEvent(
+            session_id="sess-002", event_type="form_abandon", page="/portal/submit", created_at=now
+        ),  # noqa: E501
+        AnalyticsEvent(
+            session_id="sess-003",
+            event_type="pdf_download_click",
+            page="/portal/report",
+            created_at=now,
+        ),  # noqa: E501
     ]
     for e in events:
         db.add(e)
@@ -159,7 +174,9 @@ async def test_sales_by_period_requires_auth(client: AsyncClient, db_session: As
 
 
 @pytest.mark.asyncio
-async def test_sales_by_period_forbidden_for_sales_rep(client: AsyncClient, db_session: AsyncSession):
+async def test_sales_by_period_forbidden_for_sales_rep(
+    client: AsyncClient, db_session: AsyncSession
+):
     tok = await _user_with_role(client, db_session, "period_sales@example.com", "sales")
     await db_session.commit()
     r = await client.get("/api/v1/admin/reports/sales-by-period", headers=_auth(tok))
@@ -185,7 +202,9 @@ async def test_sales_by_period_admin_can_access(client: AsyncClient, db_session:
 
 
 @pytest.mark.asyncio
-async def test_sales_by_period_reporting_role_can_access(client: AsyncClient, db_session: AsyncSession):
+async def test_sales_by_period_reporting_role_can_access(
+    client: AsyncClient, db_session: AsyncSession
+):
     tok = await _user_with_role(client, db_session, "period_reporting@example.com", "reporting")
     await _seed_approved_record(db_session)
     await db_session.commit()

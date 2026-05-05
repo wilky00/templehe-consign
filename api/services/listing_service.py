@@ -2,7 +2,6 @@
 # ABOUTME: Joins AppraisalSubmission for verified field data; falls back to customer_* columns.
 from __future__ import annotations
 
-import math
 import uuid
 from decimal import Decimal
 
@@ -26,7 +25,9 @@ logger = structlog.get_logger(__name__)
 def _base_stmt():
     """Base SELECT joining the four tables needed for both list and detail views."""
     return (
-        select(PublicListing, EquipmentRecord, AppraisalSubmission, Customer, EquipmentCategory, User)
+        select(
+            PublicListing, EquipmentRecord, AppraisalSubmission, Customer, EquipmentCategory, User
+        )
         .join(EquipmentRecord, PublicListing.equipment_record_id == EquipmentRecord.id)
         .outerjoin(
             AppraisalSubmission,
@@ -116,9 +117,7 @@ async def get_public_listing_detail(
 ) -> PublicListingDetail | None:
     """Return full listing detail for the public detail page."""
     stmt = (
-        _base_stmt()
-        .where(PublicListing.id == listing_id)
-        .where(PublicListing.status == "active")
+        _base_stmt().where(PublicListing.id == listing_id).where(PublicListing.status == "active")
     )
     row = (await db.execute(stmt)).first()
     if row is None:

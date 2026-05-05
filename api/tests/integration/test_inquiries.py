@@ -24,9 +24,7 @@ from database.models import (
 _VALID_PASSWORD = "TestPassword1!"
 
 
-async def _make_user(
-    client: AsyncClient, db: AsyncSession, email: str, role_slug: str
-) -> str:
+async def _make_user(client: AsyncClient, db: AsyncSession, email: str, role_slug: str) -> str:
     with patch("services.email_service.send_email", new_callable=AsyncMock):
         await client.post(
             "/api/v1/auth/register",

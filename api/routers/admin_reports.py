@@ -1,5 +1,5 @@
 # ABOUTME: Admin reporting endpoints — Phase 8 Sprint 3.
-# ABOUTME: GET /admin/reports/{sales-by-period,sales-by-type,sales-by-state,portal-traffic} + CSV export.
+# ABOUTME: GET /admin/reports/{sales-by-period,sales-by-type,sales-by-state,portal-traffic,export}.
 from __future__ import annotations
 
 from datetime import date
@@ -48,9 +48,7 @@ async def get_sales_by_type(
     _current_user: User = Depends(_require_reporting),
     db: AsyncSession = Depends(get_db),
 ) -> SalesByTypeResponse:
-    return await reporting_service.sales_by_type(
-        db, start_date=start_date, end_date=end_date
-    )
+    return await reporting_service.sales_by_type(db, start_date=start_date, end_date=end_date)
 
 
 @router.get("/sales-by-state", response_model=SalesByStateResponse)
@@ -60,9 +58,7 @@ async def get_sales_by_state(
     _current_user: User = Depends(_require_reporting),
     db: AsyncSession = Depends(get_db),
 ) -> SalesByStateResponse:
-    return await reporting_service.sales_by_state(
-        db, start_date=start_date, end_date=end_date
-    )
+    return await reporting_service.sales_by_state(db, start_date=start_date, end_date=end_date)
 
 
 @router.get("/portal-traffic", response_model=PortalTrafficResponse)

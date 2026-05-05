@@ -5,8 +5,6 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
-from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -19,8 +17,6 @@ from database.models import (
     EquipmentCategory,
     EquipmentRecord,
     PublicListing,
-    Role,
-    User,
 )
 
 _VALID_PASSWORD = "TestPassword1!"
@@ -40,7 +36,9 @@ async def _seed_listing(
     category_id = None
     if category_name:
         cat = (
-            await db.execute(select(EquipmentCategory).where(EquipmentCategory.name == category_name))
+            await db.execute(
+                select(EquipmentCategory).where(EquipmentCategory.name == category_name)
+            )
         ).scalar_one_or_none()
         if cat:
             category_id = cat.id

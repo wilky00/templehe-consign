@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -35,7 +35,11 @@ def _date_bounds(
     start_date: date | None, end_date: date | None
 ) -> tuple[datetime | None, datetime | None]:
     """Convert optional date bounds to UTC-aware datetimes for timestamp comparisons."""
-    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=UTC) if start_date else None
+    start_dt = (
+        datetime(start_date.year, start_date.month, start_date.day, tzinfo=UTC)
+        if start_date
+        else None
+    )
     end_dt = (
         datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59, tzinfo=UTC)
         if end_date
@@ -96,18 +100,18 @@ async def sales_by_period(
         select(
             trunc_expr.label("period"),
             func.count(AppraisalSubmission.id).label("approved_count"),
-            func.count(
-                case((AppraisalSubmission.approved_purchase_offer.is_not(None), 1))
-            ).label("direct_purchase_count"),
+            func.count(case((AppraisalSubmission.approved_purchase_offer.is_not(None), 1))).label(
+                "direct_purchase_count"
+            ),
             func.count(
                 case((AppraisalSubmission.suggested_consignment_price.is_not(None), 1))
             ).label("consignment_count"),
-            func.coalesce(
-                func.sum(AppraisalSubmission.approved_purchase_offer), 0
-            ).label("total_approved_offer"),
-            func.coalesce(
-                func.sum(AppraisalSubmission.suggested_consignment_price), 0
-            ).label("total_consignment_price"),
+            func.coalesce(func.sum(AppraisalSubmission.approved_purchase_offer), 0).label(
+                "total_approved_offer"
+            ),
+            func.coalesce(func.sum(AppraisalSubmission.suggested_consignment_price), 0).label(
+                "total_consignment_price"
+            ),
             days_expr.label("avg_days_to_publish"),
         )
         .join(EquipmentRecord, AppraisalSubmission.equipment_record_id == EquipmentRecord.id)
@@ -118,13 +122,6 @@ async def sales_by_period(
     )
 
     rows_raw = (await db.execute(stmt)).all()
-
-    # Total distinct equipment records in the date window (approved submissions)
-    total_stmt = (
-        select(func.count(func.distinct(AppraisalSubmission.equipment_record_id)))
-        .where(and_(*filters))
-    )
-    total_count = (await db.execute(total_stmt)).scalar_one() or 0
 
     rows: list[SalesByPeriodRow] = []
     for r in rows_raw:
@@ -190,10 +187,20 @@ async def sales_by_type(
                 case((AppraisalSubmission.status == "approved", AppraisalSubmission.overall_score))
             ).label("avg_overall_score"),
             func.avg(
-                case((AppraisalSubmission.status == "approved", AppraisalSubmission.approved_purchase_offer))
+                case(
+                    (
+                        AppraisalSubmission.status == "approved",
+                        AppraisalSubmission.approved_purchase_offer,
+                    )
+                )
             ).label("avg_approved_offer"),
             func.avg(
-                case((AppraisalSubmission.status == "approved", AppraisalSubmission.suggested_consignment_price))
+                case(
+                    (
+                        AppraisalSubmission.status == "approved",
+                        AppraisalSubmission.suggested_consignment_price,
+                    )
+                )
             ).label("avg_consignment_price"),
         )
         .join(EquipmentCategory, EquipmentRecord.category_id == EquipmentCategory.id)
@@ -216,9 +223,17 @@ async def sales_by_type(
             category_name=r.category_name,
             record_count=r.record_count,
             approved_count=r.approved_count,
-            avg_overall_score=Decimal(str(r.avg_overall_score)) if r.avg_overall_score is not None else None,
-            avg_approved_offer=Decimal(str(r.avg_approved_offer)) if r.avg_approved_offer is not None else None,
-            avg_consignment_price=Decimal(str(r.avg_consignment_price)) if r.avg_consignment_price is not None else None,
+            avg_overall_score=(
+                Decimal(str(r.avg_overall_score)) if r.avg_overall_score is not None else None
+            ),
+            avg_approved_offer=(
+                Decimal(str(r.avg_approved_offer)) if r.avg_approved_offer is not None else None
+            ),
+            avg_consignment_price=(
+                Decimal(str(r.avg_consignment_price))
+                if r.avg_consignment_price is not None
+                else None
+            ),
         )
         for r in rows_raw
     ]
@@ -253,7 +268,12 @@ async def sales_by_state(
                 case((AppraisalSubmission.status == "approved", AppraisalSubmission.id))
             ).label("approved_count"),
             func.avg(
-                case((AppraisalSubmission.status == "approved", AppraisalSubmission.approved_purchase_offer))
+                case(
+                    (
+                        AppraisalSubmission.status == "approved",
+                        AppraisalSubmission.approved_purchase_offer,
+                    )
+                )
             ).label("avg_approved_offer"),
         )
         .join(Customer, EquipmentRecord.customer_id == Customer.id)
@@ -276,7 +296,9 @@ async def sales_by_state(
             state=r.state,
             record_count=r.record_count,
             approved_count=r.approved_count,
-            avg_approved_offer=Decimal(str(r.avg_approved_offer)) if r.avg_approved_offer is not None else None,
+            avg_approved_offer=(
+                Decimal(str(r.avg_approved_offer)) if r.avg_approved_offer is not None else None
+            ),
         )
         for r in rows_raw
     ]
@@ -307,15 +329,13 @@ async def portal_traffic(
     base_where = and_(*filters) if filters else True
 
     # Total distinct sessions
-    sessions_stmt = select(
-        func.count(func.distinct(AnalyticsEvent.session_id))
-    ).where(base_where)
+    sessions_stmt = select(func.count(func.distinct(AnalyticsEvent.session_id))).where(base_where)
     total_sessions: int = (await db.execute(sessions_stmt)).scalar_one() or 0
 
     # Unique authenticated users
-    users_stmt = select(
-        func.count(func.distinct(AnalyticsEvent.user_id))
-    ).where(and_(base_where, AnalyticsEvent.user_id.is_not(None)))
+    users_stmt = select(func.count(func.distinct(AnalyticsEvent.user_id))).where(
+        and_(base_where, AnalyticsEvent.user_id.is_not(None))
+    )
     unique_users: int = (await db.execute(users_stmt)).scalar_one() or 0
 
     # Total page views
@@ -330,7 +350,13 @@ async def portal_traffic(
             AnalyticsEvent.page.label("page"),
             func.count(AnalyticsEvent.id).label("view_count"),
         )
-        .where(and_(base_where, AnalyticsEvent.event_type == "page_view", AnalyticsEvent.page.is_not(None)))
+        .where(
+            and_(
+                base_where,
+                AnalyticsEvent.event_type == "page_view",
+                AnalyticsEvent.page.is_not(None),
+            )
+        )
         .group_by(AnalyticsEvent.page)
         .order_by(func.count(AnalyticsEvent.id).desc())
         .limit(10)
@@ -375,13 +401,22 @@ async def portal_traffic(
 
 _REPORT_HEADERS: dict[str, list[str]] = {
     "sales-by-period": [
-        "period_label", "record_count", "approved_count", "direct_purchase_count",
-        "consignment_count", "total_approved_offer", "total_consignment_price",
+        "period_label",
+        "record_count",
+        "approved_count",
+        "direct_purchase_count",
+        "consignment_count",
+        "total_approved_offer",
+        "total_consignment_price",
         "avg_days_to_publish",
     ],
     "sales-by-type": [
-        "category_name", "record_count", "approved_count", "avg_overall_score",
-        "avg_approved_offer", "avg_consignment_price",
+        "category_name",
+        "record_count",
+        "approved_count",
+        "avg_overall_score",
+        "avg_approved_offer",
+        "avg_consignment_price",
     ],
     "sales-by-state": ["state", "record_count", "approved_count", "avg_approved_offer"],
     "portal-traffic": ["page", "view_count"],
@@ -408,7 +443,9 @@ async def export_csv(
     headers = _REPORT_HEADERS[report_type]
 
     if report_type == "sales-by-period":
-        result = await sales_by_period(db, period_type=period_type, start_date=start_date, end_date=end_date)
+        result = await sales_by_period(
+            db, period_type=period_type, start_date=start_date, end_date=end_date
+        )
         rows = [r.model_dump() for r in result.rows]
     elif report_type == "sales-by-type":
         result = await sales_by_type(db, start_date=start_date, end_date=end_date)

@@ -81,7 +81,11 @@ async def get_listing_detail(
     return detail
 
 
-@router.post("/public/listings/{listing_id}/inquiries", response_model=InquiryResponse, status_code=201)
+@router.post(
+    "/public/listings/{listing_id}/inquiries",
+    response_model=InquiryResponse,
+    status_code=201,
+)
 async def submit_inquiry(
     listing_id: uuid.UUID,
     body: InquiryCreate,
