@@ -1,6 +1,6 @@
 // ABOUTME: Client-side analytics — fire-and-forget page_view events to /analytics/event.
-// ABOUTME: usePageView() hook wires route changes; trackEvent() is the raw sender.
-import { useEffect, useRef } from "react";
+// ABOUTME: usePageView() tracks route changes; useFormAnalytics() instruments multi-step forms.
+import { useCallback, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { request } from "../api/client";
 
@@ -45,4 +45,31 @@ export function usePageView(): void {
     lastPath.current = path;
     void trackEvent("page_view", path);
   }, [location.pathname]);
+}
+
+// Fires form_step_start on mount, form_step_complete on onComplete(), and
+// form_abandon on unmount if onComplete() was never called.
+export function useFormAnalytics(formName: string): { onComplete: () => void } {
+  const formNameRef = useRef(formName);
+  const completedRef = useRef(false);
+
+  useEffect(() => {
+    const page = window.location.pathname;
+    const form = formNameRef.current;
+    void trackEvent("form_step_start", page, { form });
+    return () => {
+      if (!completedRef.current) {
+        void trackEvent("form_abandon", page, { form });
+      }
+    };
+  }, []); // intentional: fires once on mount only
+
+  const onComplete = useCallback(() => {
+    completedRef.current = true;
+    void trackEvent("form_step_complete", window.location.pathname, {
+      form: formNameRef.current,
+    });
+  }, []);
+
+  return { onComplete };
 }

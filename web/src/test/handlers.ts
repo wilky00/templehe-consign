@@ -167,4 +167,100 @@ export const handlers = [
   http.post("http://localhost/api/v1/analytics/event", () =>
     HttpResponse.json({ recorded: true }),
   ),
+
+  // Admin reports index (static tab list from admin router)
+  http.get("http://localhost/api/v1/admin/reports", () =>
+    HttpResponse.json({
+      tabs: [
+        { slug: "sales_by_period", label: "Sales by Period", status: "phase8" },
+        { slug: "sales_by_type_location", label: "Sales by Type/Location", status: "phase8" },
+        { slug: "user_traffic", label: "User Traffic", status: "phase8" },
+        { slug: "export_center", label: "Export Center", status: "phase8" },
+      ],
+    }),
+  ),
+
+  http.get("http://localhost/api/v1/admin/reports/sales-by-period", () =>
+    HttpResponse.json({
+      period_type: "month",
+      rows: [
+        {
+          period_label: "2026-04",
+          record_count: 2,
+          approved_count: 2,
+          direct_purchase_count: 1,
+          consignment_count: 1,
+          total_approved_offer: 120000,
+          total_consignment_price: 85000,
+          avg_days_to_publish: 12.5,
+        },
+        {
+          period_label: "2026-05",
+          record_count: 3,
+          approved_count: 3,
+          direct_purchase_count: 2,
+          consignment_count: 1,
+          total_approved_offer: 200000,
+          total_consignment_price: 90000,
+          avg_days_to_publish: 9.0,
+        },
+      ],
+    }),
+  ),
+
+  http.get("http://localhost/api/v1/admin/reports/sales-by-type", () =>
+    HttpResponse.json({
+      rows: [
+        {
+          category_name: "Dozers",
+          record_count: 5,
+          approved_count: 4,
+          avg_overall_score: 3.75,
+          avg_approved_offer: 75000,
+          avg_consignment_price: null,
+        },
+        {
+          category_name: "Backhoe Loaders",
+          record_count: 3,
+          approved_count: 2,
+          avg_overall_score: 3.25,
+          avg_approved_offer: 45000,
+          avg_consignment_price: 50000,
+        },
+      ],
+    }),
+  ),
+
+  http.get("http://localhost/api/v1/admin/reports/sales-by-state", () =>
+    HttpResponse.json({
+      rows: [
+        { state: "TX", record_count: 4, approved_count: 3, avg_approved_offer: 80000 },
+        { state: "CA", record_count: 2, approved_count: 1, avg_approved_offer: 55000 },
+      ],
+    }),
+  ),
+
+  http.get("http://localhost/api/v1/admin/reports/portal-traffic", () =>
+    HttpResponse.json({
+      total_sessions: 42,
+      unique_users: 15,
+      total_page_views: 120,
+      top_pages: [
+        { page: "/listings", view_count: 50 },
+        { page: "/portal/submit", view_count: 30 },
+      ],
+      form_abandon_rate: 35.0,
+      pdf_download_count: 8,
+    }),
+  ),
+
+  http.get("http://localhost/api/v1/admin/reports/export", () =>
+    new HttpResponse("period_label,record_count\n2026-05,3\n", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv",
+        "Content-Disposition": 'attachment; filename="sales-by-period.csv"',
+      },
+    }),
+  ),
 ];

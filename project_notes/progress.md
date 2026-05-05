@@ -1610,3 +1610,33 @@ React pages for the public consignment catalog; analytics page_view hook; listin
 - [x] `api/tests/integration/test_admin_reports.py` (NEW) — 18 integration tests
 
 **Test gate:** 588/588 integration — 18 new, 0 regressions. Unit: 205/205 (unchanged).
+
+### Sprint 4 — Admin Reporting Frontend — COMPLETE (verified green 2026-05-05)
+
+Recharts charts, filter controls, and CSV export wired to the Sprint 3 backend; analytics instrumentation wired into the intake form.
+
+- [x] `web/package.json` (modify) — added `recharts@3.8.1`
+- [x] `web/src/api/reports.ts` (modify) — appended Phase 8 admin reporting types + fetch functions (getSalesByPeriod, getSalesByType, getSalesByState, getPortalTraffic, downloadReportCsv)
+- [x] `web/src/pages/AdminReports.tsx` (modify) — replaced placeholder with 4 real tab components: SalesByPeriodTab (LineChart + BarChart + summary table + period/date filters + CSV export), SalesByTypeLocationTab (PieChart + tables + sub-view switcher), PortalTrafficTab (metric cards + top pages table + segment filter), ExportCenterTab (4 CSV download buttons)
+- [x] `web/src/services/analytics.ts` (modify) — added `useFormAnalytics(formName)` hook (fires form_step_start on mount, form_step_complete on onComplete(), form_abandon on unmount if not completed)
+- [x] `web/src/App.tsx` (modify) — wired `usePageView()` so every route transition fires a page_view event
+- [x] `web/src/pages/IntakeForm.tsx` (modify) — wired `useFormAnalytics("equipment_intake")` (start on mount, complete on mutation success)
+- [x] `web/src/pages/AdminReports.test.tsx` (NEW) — 12 Vitest tests (tab labels, data display, sub-view switching, filter refetch, error state, empty state, export buttons)
+- [x] `web/src/test/handlers.ts` (modify) — added MSW handlers for /admin/reports index + 4 report endpoints + CSV export
+- [x] `scripts/seed_e2e_phase8_reporting.py` (NEW) — E2E fixture seeder (admin user + approved records + analytics events)
+- [x] `web/e2e/helpers/api.ts` (modify) — added `seedPhase8Reporting()` helper
+- [x] `web/e2e/phase8_analytics_reporting.spec.ts` (NEW) — 5 E2E acceptance scenarios (tab render, period table, traffic cards, export center buttons, a11y scan)
+
+**Test gate:** 160/160 frontend unit — 12 new, 0 regressions. Backend: 588/588 + 205/205 (unchanged, re-confirmed).
+
+**Key decisions:**
+- Choropleth map (dev plan Feature 8.1.2) deferred — sortable state table delivers the same data with zero extra GeoJSON/D3 dependency. Carry-forward.
+- PDF export from reports deferred — needs a WeasyPrint report template distinct from the appraisal PDF. Carry-forward.
+- `useFormAnalytics` fires `form_step_start` on mount (not first keystroke) because the intake form is single-step; abandon fires on unmount if the mutation didn't succeed first.
+- `formatUsdCompact` used for Recharts tick labels; full `Intl.NumberFormat` USD in data tables.
+
+**Carry-forwards:**
+- Choropleth state map visualization
+- PDF export from admin reports (WeasyPrint template for report type)
+- CSV async job for Export Center rows > 5,000 (already flagged in Sprint 3)
+- `user_segment` new/returning filter in portal traffic (requires session first-seen tracking)

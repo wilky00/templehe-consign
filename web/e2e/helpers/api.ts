@@ -150,6 +150,24 @@ export function seedPhase8<T>(): T {
   return JSON.parse(out.trim()) as T;
 }
 
+export function seedPhase8Reporting<T>(): T {
+  const out = execFileSync(
+    "uv",
+    ["run", "python", path.join(REPO_ROOT, "scripts", "seed_e2e_phase8_reporting.py")],
+    {
+      cwd: path.join(REPO_ROOT, "api"),
+      env: {
+        ...process.env,
+        DATABASE_URL:
+          process.env.E2E_DATABASE_URL ??
+          "postgresql+asyncpg://templehe:devpassword@localhost:5432/templehe",
+      },
+      encoding: "utf8",
+    },
+  );
+  return JSON.parse(out.trim()) as T;
+}
+
 const VALID_PASSWORD = "TestPassword1!";
 
 export interface TestUser {

@@ -145,4 +145,51 @@ None — Sprint 2 is clean.
 
 ---
 
-*Sprint 4 next: Admin Reporting Frontend (Recharts tabs + analytics hooks wired into intake flow)*
+---
+
+---
+
+## Sprint 4 — Admin Reporting Frontend
+
+**Completed:** 2026-05-05
+
+### What was built
+
+| File | Type | Summary |
+|---|---|---|
+| `web/package.json` | MODIFY | Added `recharts@3.8.1` |
+| `web/src/api/reports.ts` | MODIFY | Appended Phase 8 admin types + getSalesByPeriod/Type/State, getPortalTraffic, downloadReportCsv |
+| `web/src/pages/AdminReports.tsx` | MODIFY | Replaced placeholder — 4 real tab components with charts, tables, filters, CSV export |
+| `web/src/services/analytics.ts` | MODIFY | Added `useFormAnalytics(formName)` hook |
+| `web/src/App.tsx` | MODIFY | Wired `usePageView()` for auto page_view tracking on all route changes |
+| `web/src/pages/IntakeForm.tsx` | MODIFY | Wired `useFormAnalytics("equipment_intake")` into form mount + mutation success |
+| `web/src/pages/AdminReports.test.tsx` | NEW | 12 Vitest tests |
+| `web/src/test/handlers.ts` | MODIFY | Added MSW handlers for 5 new report endpoints |
+| `scripts/seed_e2e_phase8_reporting.py` | NEW | E2E seeder (admin user + approved records + analytics events) |
+| `web/e2e/helpers/api.ts` | MODIFY | Added `seedPhase8Reporting()` helper |
+| `web/e2e/phase8_analytics_reporting.spec.ts` | NEW | 5 E2E acceptance scenarios |
+
+### Test results
+
+- Frontend unit: 160/160 ✓ (12 new, 0 regressions)
+- Backend unit: 205/205 ✓ (unchanged)
+- Backend integration: 588/588 ✓ (unchanged)
+
+### Key decisions
+
+- **Choropleth map deferred** — The dev plan specified a D3/GeoJSON state map for By Location. A sortable state table delivers the same data. Carry-forward to a later sprint when/if visual mapping is prioritized.
+- **PDF export from reports deferred** — Would require a distinct WeasyPrint template from the appraisal PDF. Carry-forward.
+- **`useFormAnalytics` is single-step aware** — Fires `form_step_start` on mount (not first keystroke) since the IntakeForm is a single-card form, not a multi-step wizard.
+- **Sub-view switcher in Type/Location tab** — Uses a pill-style `role="tablist"` (not the outer page tabs) to switch between By Type and By State views within the same tab panel.
+- **`downloadReportCsv` bypasses `request()`** — Uses raw `fetch` + `URL.createObjectURL` so the browser triggers the native save dialog. The auth token is still included from Zustand `getState()`.
+
+### Bugs found and fixed during sprint
+
+None — Sprint 4 was clean on first run (12/12 tests passed without changes).
+
+### Open issues / follow-ups
+
+- Choropleth state map visualization (D3/react-simple-maps)
+- PDF export from admin reports (distinct WeasyPrint template)
+- CSV async job for Export Center (> 5,000 rows; flagged in Sprint 3)
+- `user_segment` new/returning filter in portal traffic (requires session first-seen tracking)
