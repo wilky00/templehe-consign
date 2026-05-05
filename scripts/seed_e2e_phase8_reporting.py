@@ -185,7 +185,7 @@ async def _seed_analytics(session: AsyncSession) -> None:
 
 
 async def _reset_rate_limits(session: AsyncSession) -> None:
-    await session.execute(text("DELETE FROM rate_limit_buckets"))
+    await session.execute(text("DELETE FROM rate_limit_counters"))
 
 
 async def main() -> None:
