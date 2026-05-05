@@ -105,4 +105,44 @@ None — Sprint 2 is clean.
 
 ---
 
-*Sprint 3 next: Admin Reporting Backend (funnel metrics, category breakdown, geographic heatmap, CSV export)*
+---
+
+## Sprint 3 — Admin Reporting Backend
+
+**Completed:** 2026-05-05
+
+### What was built
+
+| File | Type | Summary |
+|---|---|---|
+| `api/schemas/reporting.py` | NEW | SalesByPeriodRow/Response, SalesByTypeRow/Response, SalesByStateRow/Response, PortalTrafficResponse, PageViewMetric |
+| `api/services/reporting_service.py` | NEW | sales_by_period, sales_by_type, sales_by_state, portal_traffic, export_csv |
+| `api/routers/admin_reports.py` | NEW | GET /admin/reports/sales-by-period, sales-by-type, sales-by-state, portal-traffic; GET /admin/reports/export |
+| `api/main.py` | MODIFY | Registered admin_reports_router |
+| `api/tests/integration/test_admin_reports.py` | NEW | 18 tests |
+
+### Test results
+
+- Unit: 205/205 ✓ (unchanged)
+- Integration: 588/588 ✓ (18 new tests, 0 regressions)
+
+### Key decisions
+
+- **CSV export is synchronous:** Returns a `StreamingResponse` (text/csv) directly rather than the async job + signed URL pattern described in the dev plan. Row counts in this POC are small; async jobs are a carry-forward for when production data grows past 5 000 rows.
+- **Sales by Period buckets approved submissions:** The `approved_at` timestamp on `AppraisalSubmission` (status=`approved`) is the authoritative "closed deal" date, not `PublicListing.published_at`.
+- **Sales by Type requires category_id:** Records without a category are excluded from the by-type report — correct behavior since uncategorized records haven't gone through appraisal.
+- **Portal traffic excludes no user segment filtering yet:** The `user_segment` query param is wired to the endpoint but the service reads all events regardless of segment. Full new/returning segmentation requires session-level first-seen tracking; flagged as a carry-forward.
+- **RBAC:** All 5 endpoints gate on `require_roles("admin", "reporting")`. The `reporting` role slug was confirmed seeded in the test conftest and migrations.
+
+### Bugs found and fixed during sprint
+
+1. Test seeded "Excavator" category — not in the 3-category bundle (Dozers, Backhoe Loaders, Articulated Dump Trucks). Changed seed helper default to "Dozers".
+
+### Open issues / follow-ups
+
+- CSV export async job pattern for > 5 000 rows (dev plan Feature 8.1.4 Export Center)
+- `user_segment` new/returning filter in `portal_traffic` (requires session first-seen tracking)
+
+---
+
+*Sprint 4 next: Admin Reporting Frontend (Recharts tabs + analytics hooks wired into intake flow)*

@@ -35,6 +35,7 @@ from routers import me_appointments as me_appointments_router
 from routers import me_device_tokens as me_device_tokens_router
 from routers import me_notifications as me_notifications_router
 from routers import record_locks as record_locks_router
+from routers import admin_reports as admin_reports_router
 from routers import analytics as analytics_router
 from routers import public as public_router
 from routers import reports as reports_router
@@ -102,3 +103,4 @@ app.include_router(valuation_router.router, prefix="/api/v1")
 app.include_router(reports_router.router, prefix="/api/v1")
 app.include_router(public_router.router, prefix="/api/v1")
 app.include_router(analytics_router.router, prefix="/api/v1")
+app.include_router(admin_reports_router.router, prefix="/api/v1")

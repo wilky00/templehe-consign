@@ -1599,3 +1599,14 @@ React pages for the public consignment catalog; analytics page_view hook; listin
 - [x] `react-helmet-async` npm dependency added
 
 **Test gate:** 148/148 frontend unit — all green 2026-05-04. Zero regressions vs. prior 131 tests. Backend: 570/570 + 205/205 (unchanged, re-confirmed).
+
+### Sprint 3 — Admin Reporting Backend — COMPLETE (verified green 2026-05-05)
+
+**Files:**
+- [x] `api/schemas/reporting.py` (NEW) — SalesByPeriodRow/Response, SalesByTypeRow/Response, SalesByStateRow/Response, PortalTrafficResponse, PageViewMetric
+- [x] `api/services/reporting_service.py` (NEW) — sales_by_period, sales_by_type, sales_by_state, portal_traffic, export_csv aggregation queries
+- [x] `api/routers/admin_reports.py` (NEW) — GET /admin/reports/sales-by-period, sales-by-type, sales-by-state, portal-traffic; GET /admin/reports/export (CSV StreamingResponse)
+- [x] `api/main.py` (modify) — registered admin_reports_router
+- [x] `api/tests/integration/test_admin_reports.py` (NEW) — 18 integration tests
+
+**Test gate:** 588/588 integration — 18 new, 0 regressions. Unit: 205/205 (unchanged).
