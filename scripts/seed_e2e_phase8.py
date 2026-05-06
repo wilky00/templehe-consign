@@ -90,7 +90,7 @@ async def _upsert_user(
 
 
 async def _reset_rate_limits(session: AsyncSession) -> None:
-    await session.execute(text("DELETE FROM rate_limit_buckets"))
+    await session.execute(text("DELETE FROM rate_limit_counters"))
 
 
 async def _seed_listing(session: AsyncSession) -> dict:
