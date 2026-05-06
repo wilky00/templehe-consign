@@ -118,10 +118,7 @@ async def _seed_listing(session: AsyncSession) -> dict:
 
     # EquipmentRecord
     record_id = str(uuid.uuid4())
-    ref_row = await session.execute(
-        text("SELECT nextval('equipment_reference_seq')")
-    )
-    ref_num = f"THE-{ref_row.scalar_one():05d}"
+    ref_num = f"THE-P8L{uuid.uuid4().hex[:5].upper()}"
     await session.execute(
         text(
             """
