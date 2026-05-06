@@ -833,3 +833,46 @@ Phase 6 closes the loop between field appraisals (Phase 5 `AppraisalSubmission`)
 - Sprint 1–4 implementation in `project_notes/status_report_phase6.md`.
 - `api/alembic/versions/028–031`, `api/services/approval_service.py`, `api/services/esign_service.py`, `api/services/signing_service.py`, `api/services/price_change_service.py`, `api/routers/manager_approvals.py`, `api/routers/esign.py`, `web/src/pages/ManagerApprovals.tsx`, `web/src/pages/ManagerApprovalDetail.tsx`, `web/e2e/phase6_approval_esign.spec.ts`.
 - Tests: ~65 new backend tests (final gate **652/652** passing); iOS XCTest + XCUITest suites across all 8 sprints; Phase5Gate.swift covers all 9 acceptance scenarios.
+
+---
+
+## ADR-023: Phase 8 — Analytics, Public Listing Catalog & Admin Reporting
+
+**Date:** 2026-05-06
+**Status:** Accepted
+
+### Context
+
+Phase 8 ships three capabilities: (1) public consignment listing page at `/listings`, (2) client-side analytics event capture with a backend aggregation layer, and (3) an admin reporting suite with four tabs. Several implementation trade-offs arose during the four-sprint build.
+
+### Decisions
+
+1. **No `GET /admin/reports` index endpoint.** The dev plan implied a backend-driven tab list, but the four report tabs are a stable product surface that doesn't change between deploys. `AdminReportsPage` hardcodes a `TABS` constant instead of fetching from the API. Eliminates a useless roundtrip and removes the risk of the tab list failing to load. If tabs become dynamic (feature flags, per-role visibility), a `GET /admin/reports` endpoint can be added then.
+
+2. **`form_abandon_rate` is `number | null`, not `number`.** The backend returns `null` when no `form_step_start` events exist (avoids division-by-zero). The frontend type in `web/src/api/reports.ts` must reflect this; the display renders "—" instead of `undefined%`. Other rate fields (sessions, page views, downloads) are always integers and cannot be null.
+
+3. **Choropleth state map deferred in favor of sortable state table.** Feature 8.1.2 specified a D3/GeoJSON choropleth. The sortable `SalesByStateRow` table delivers the same data with zero extra dependencies (GeoJSON file, D3, react-simple-maps). Choropleth remains a carry-forward.
+
+4. **PDF export from admin reports deferred.** Requires a distinct WeasyPrint template from the Phase 7 appraisal PDF. Synchronous CSV export ships for all report types; async PDF generation is a carry-forward.
+
+5. **`user_roles` join table must be populated alongside `users.role_id` in all seed scripts.** RBAC (`require_roles()` via `user_roles_service.role_slugs_for_user`) reads exclusively from the `user_roles` join table, not from `users.role_id`. Seed scripts that only set `role_id` on the `users` row will produce 403 on every protected endpoint. The Phase 6 seed correctly did both; Phase 8 seeds were missing the join-table INSERT. Pattern: after inserting or updating a user, always `INSERT INTO user_roles (user_id, role_id) ... ON CONFLICT DO NOTHING`.
+
+6. **Honeypot bot prevention over CAPTCHA for inquiry form.** `InquiryCreate` schema includes a `web_address` field (hidden via CSS). Any non-empty value triggers a silent 201 response (no actual record created, no error revealed). Simpler to implement, zero user friction, sufficient for a low-traffic B2B listing page. If spam becomes a problem, Cloudflare Turnstile can be layered on without backend changes.
+
+7. **Public listing domain: `temple.saltrun.net` for staging/demo.** The final TempleHE domain and DNS records are a manual step pending Jim and the TempleHE domain admin. No code changes needed — environment variable `PUBLIC_LISTING_BASE_URL` controls the canonical URL in SEO meta tags.
+
+8. **Analytics events are fire-and-forget via direct `fetch`, not `navigator.sendBeacon`.** `sendBeacon` is suited for events fired on page-unload where the browser might cancel regular XHR. The intake form is single-step; abandon fires on React unmount (not page unload), where a normal `fetch` completes reliably. `sendBeacon` doesn't support auth headers, which would complicate the authenticated-user filtering path.
+
+### Consequences
+
+- Admin tab list is not dynamically controlled from the backend. A future per-role tab visibility requirement would need the index endpoint added back.
+- Any future seed script must populate `user_roles` in addition to `users.role_id` — this is now the documented pattern.
+- The `user_segment` new/returning filter in portal traffic is wired to the API but backend treats all as "all" — tracked in `known-issues.md` as a carry-forward requiring session first-seen tracking.
+
+### References
+
+- `web/src/pages/AdminReports.tsx`, `web/src/api/reports.ts`
+- `api/services/reporting_service.py`, `api/routers/admin_reports.py`, `api/routers/public.py`, `api/routers/analytics.py`
+- `scripts/seed_e2e_phase8.py`, `scripts/seed_e2e_phase8_reporting.py`
+- `web/e2e/phase8_listing.spec.ts`, `web/e2e/phase8_analytics_reporting.spec.ts`
+- Tests: 588/588 integration, 205/205 unit, 160/160 frontend unit, 53/53 E2E — all green 2026-05-06.

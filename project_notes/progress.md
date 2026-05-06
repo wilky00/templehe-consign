@@ -1547,9 +1547,9 @@ Full spec: `dev_plan/07_phase7_pdf_reports.md`
 
 ---
 
-## Phase 8 — Analytics & Public Listing Page — In progress
+## Phase 8 — Analytics & Public Listing Page — COMPLETE (verified green 2026-05-06)
 
-Branch: `phase8-analytics-listing`
+Branch: `phase8-analytics-listing` → merged to `main` PR #57 (squash, 2026-05-06)
 
 ---
 
@@ -1635,8 +1635,14 @@ Recharts charts, filter controls, and CSV export wired to the Sprint 3 backend; 
 - `useFormAnalytics` fires `form_step_start` on mount (not first keystroke) because the intake form is single-step; abandon fires on unmount if the mutation didn't succeed first.
 - `formatUsdCompact` used for Recharts tick labels; full `Intl.NumberFormat` USD in data tables.
 
-**Carry-forwards:**
-- Choropleth state map visualization
-- PDF export from admin reports (WeasyPrint template for report type)
-- CSV async job for Export Center rows > 5,000 (already flagged in Sprint 3)
+**Carry-forwards (tracked in known-issues.md):**
+- Choropleth state map visualization (Feature 8.1.2 — deferred, sortable state table ships instead)
+- PDF export from admin reports (WeasyPrint template for report type — deferred)
+- CSV async job for Export Center rows > 5,000 (flagged in dev plan; sync export ships for now)
 - `user_segment` new/returning filter in portal traffic (requires session first-seen tracking)
+
+**Phase 8 final test gate (2026-05-06):**
+- Backend unit: 205/205 ✓
+- Backend integration: 588/588 ✓
+- Frontend unit: 160/160 ✓
+- E2E (Playwright + axe-core): 53/53 ✓ (CI, `main` branch)

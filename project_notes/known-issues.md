@@ -279,6 +279,29 @@ fly machine run . --app temple-sweeper \
 **Impact:** Low for the stub provider (event IDs are synthetic and not replayed). Becomes a production concern when DocuSign or Dropbox Sign is wired in — a captured webhook payload could be replayed within the HMAC window. The idempotency check prevents double-transitions but not the repeated computation.
 **Fix:** In `esign_webhook`, after HMAC verification: (a) extract `payload["timestamp"]` and reject if `abs(now - ts) > 300s`; (b) check/insert `event_id` into a `webhook_events_seen (event_id PK, received_at)` table and return 200 immediately if already seen. The `temple-sweeper` already schedules daily cleanup of that table. Track as a Phase 7 carry-forward alongside the real eSign provider integration.
 
+## OPEN — Phase 6 E2E flake: phase6_approval_esign.spec.ts:395 "Re-approve" button toBeDisabled
+**Status:** Open flake, surfaced on CI run 25415492665 (2026-05-06, main branch after Phase 8 merge).
+**File:** `web/e2e/phase6_approval_esign.spec.ts:395`
+**Symptom:** `getByRole("button", { name: /Re-approve price change for .../i }).toBeDisabled({ timeout: 8_000 })` — button is present and enabled throughout the 8s window; never transitions to disabled. Only fails intermittently; re-run on same code passes. Phase 8 is unrelated (test isolation confirmed).
+**Root cause (suspected):** Race between the manager approval PATCH response and React's mutation `isPending` state committing to the DOM. The button is disabled during `isPending = true`; if the network is fast enough that `isPending` flips to `false` before the assertion starts, the button shows briefly enabled.
+**Fix:** In `ManagerApprovals.tsx` (or wherever the Re-approve button lives), keep the button disabled for at least one render cycle after success (e.g., check `isSuccess` in addition to `isPending`). Or tighten the test to `waitFor` the button label change to "Approved" first, then assert disabled. Tracked for Phase 9 E2E hardening.
+
+## OPEN — Phase 8 carry-forward: choropleth state map (Feature 8.1.2)
+**Status:** Deferred during Phase 8 Sprint 4. Sortable state table ships instead.
+**Fix:** Add D3/GeoJSON US choropleth to `SalesByTypeLocationTab` when state-drill-down is prioritized. Requires GeoJSON data file and a D3 or react-simple-maps dependency. `web/src/pages/AdminReports.tsx`, `SalesByTypeLocationTab` component.
+
+## OPEN — Phase 8 carry-forward: PDF export from admin reports
+**Status:** Deferred during Phase 8 Sprint 4. CSV export ships; PDF is not implemented.
+**Fix:** Requires a WeasyPrint HTML template per report type (separate from the appraisal PDF template in Phase 7). Backend: `reporting_service.export_pdf()`, new template files. Frontend: "Generate PDF" button in `ExportCenterTab`.
+
+## OPEN — Phase 8 carry-forward: CSV async job for large exports (>5,000 rows)
+**Status:** Not implemented. Current CSV export is synchronous (blocks the request). Fine for current data volume; becomes a timeout risk at scale.
+**Fix:** Move large-export generation to the `jobs` table worker. `POST /admin/reports/export` returns `202 Accepted` with a job ID; `GET /admin/reports/export/{job_id}` polls status; downloads via signed R2 URL on completion. Frontend `ExportCenterTab` needs polling UI.
+
+## OPEN — Phase 8 carry-forward: user_segment new/returning filter in portal traffic
+**Status:** `user_segment` query param wired to API but backend treats all as "all" — new/returning distinction requires session first-seen tracking not yet implemented.
+**Fix:** Record `session_first_seen_at` in a `sessions` table or derived from first `analytics_event` per `session_id`. `reporting_service.portal_traffic()` then filters on whether the session's first event is within the query window (new) or predates it (returning). `api/services/reporting_service.py:314`.
+
 ## FIXED — Phase 4 carry-forwards (closed Sprint 0, 2026-04-28)
 All five Sprint 0 carry-forwards are closed:
 - Slack staging-channel guard — closed (PR #46)
