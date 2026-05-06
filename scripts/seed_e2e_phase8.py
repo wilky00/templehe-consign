@@ -148,10 +148,10 @@ async def _seed_listing(session: AsyncSession) -> dict:
             """
             INSERT INTO public_listings (
                 id, equipment_record_id, listing_title,
-                asking_price, status, published_at, created_at, updated_at
+                asking_price, status, published_at
             ) VALUES (
                 :id, :record_id, '2020 Komatsu PC360',
-                95000.00, 'active', NOW(), NOW(), NOW()
+                95000.00, 'active', NOW()
             )
             """
         ),
