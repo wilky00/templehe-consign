@@ -84,6 +84,13 @@ async def _upsert_user(
                 "role": role_id,
             },
         )
+    await session.execute(
+        text(
+            "INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid) "
+            "ON CONFLICT (user_id, role_id) DO NOTHING"
+        ),
+        {"uid": user_id, "rid": role_id},
+    )
     return user_id
 
 
