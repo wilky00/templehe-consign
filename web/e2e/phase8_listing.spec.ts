@@ -28,7 +28,7 @@ test.describe("Phase 8 gate — public listing catalog", () => {
     await expect(page.getByRole("heading", { name: /equipment for sale/i })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText(fixture.listing_title)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(fixture.listing_title).first()).toBeVisible({ timeout: 10_000 });
   });
 
   // Scenario 2: Clicking a listing opens the detail page with full info
@@ -53,7 +53,7 @@ test.describe("Phase 8 gate — public listing catalog", () => {
       baseURL: API_URL,
       extraHTTPHeaders: { "CF-Connecting-IP": fakeIp },
     });
-    const r = await api.post(`/public/listings/${fixture.listing_id}/inquiries`, {
+    const r = await api.post(`/api/v1/public/listings/${fixture.listing_id}/inquiries`, {
       data: {
         first_name: "E2E",
         last_name: "Buyer",
@@ -86,14 +86,14 @@ test.describe("Phase 8 gate — public listing catalog", () => {
       baseURL: API_URL,
       extraHTTPHeaders: { "CF-Connecting-IP": fakeIp },
     });
-    const loginR = await api.post("/auth/login", {
+    const loginR = await api.post("/api/v1/auth/login", {
       data: { email: fixture.sales_email, password: fixture.password },
     });
     expect(loginR.status()).toBe(200);
     const { access_token } = await loginR.json();
 
     // PATCH the listing price directly via API (UI path needs full sales detail page load)
-    const patchR = await api.patch(`/sales/equipment/${fixture.record_id}/listing`, {
+    const patchR = await api.patch(`/api/v1/sales/equipment/${fixture.record_id}/listing`, {
       data: { asking_price: 88000 },
       headers: { Authorization: `Bearer ${access_token}` },
     });

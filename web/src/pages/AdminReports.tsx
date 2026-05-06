@@ -596,7 +596,10 @@ function PortalTrafficTab() {
               { label: "Page views", value: data.total_page_views.toLocaleString() },
               {
                 label: "Form abandon rate",
-                value: `${data.form_abandon_rate.toFixed(1)}%`,
+                value:
+                  data.form_abandon_rate != null
+                    ? `${data.form_abandon_rate.toFixed(1)}%`
+                    : "—",
               },
               { label: "PDF downloads", value: data.pdf_download_count.toLocaleString() },
             ].map(({ label, value }) => (
