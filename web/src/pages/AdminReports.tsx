@@ -2,6 +2,7 @@
 // ABOUTME: Phase 8 Sprint 4 — Recharts charts, filter controls, and CSV download wired to backend.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { AdminReportTab } from "../api/types";
 import {
   BarChart,
   Bar,
@@ -21,7 +22,6 @@ import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Spinner } from "../components/ui/Spinner";
-import { getAdminReportsIndex } from "../api/admin";
 import {
   getSalesByPeriod,
   getSalesByType,
@@ -722,22 +722,17 @@ const TAB_COMPONENTS: Record<string, React.ComponentType> = {
   export_center: ExportCenterTab,
 };
 
+const TABS: AdminReportTab[] = [
+  { slug: "sales_by_period", label: "Sales by Period", status: "active" },
+  { slug: "sales_by_type_location", label: "Type/Location", status: "active" },
+  { slug: "user_traffic", label: "User Traffic", status: "active" },
+  { slug: "export_center", label: "Export Center", status: "active" },
+];
+
 export function AdminReportsPage() {
-  const query = useQuery({
-    queryKey: ["admin-reports-index"],
-    queryFn: getAdminReportsIndex,
-  });
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
 
-  if (query.isLoading) return <Spinner />;
-  if (query.isError) {
-    return (
-      <Alert tone="error" title="Could not load reports">
-        {(query.error as Error).message}
-      </Alert>
-    );
-  }
-  const tabs = query.data?.tabs ?? [];
+  const tabs = TABS;
   const active = tabs.find((t) => t.slug === activeSlug) ?? tabs[0];
   const TabContent = active ? TAB_COMPONENTS[active.slug] : null;
 
