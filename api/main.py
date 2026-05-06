@@ -18,8 +18,10 @@ from routers import admin_categories as admin_categories_router
 from routers import admin_config as admin_config_router
 from routers import admin_credentials as admin_credentials_router
 from routers import admin_health as admin_health_router
+from routers import admin_reports as admin_reports_router
 from routers import admin_routing as admin_routing_router
 from routers import admin_templates as admin_templates_router
+from routers import analytics as analytics_router
 from routers import appraisal_photos as appraisal_photos_router
 from routers import appraisal_submissions as appraisal_submissions_router
 from routers import auth as auth_router
@@ -34,6 +36,7 @@ from routers import manager_approvals as manager_approvals_router
 from routers import me_appointments as me_appointments_router
 from routers import me_device_tokens as me_device_tokens_router
 from routers import me_notifications as me_notifications_router
+from routers import public as public_router
 from routers import record_locks as record_locks_router
 from routers import reports as reports_router
 from routers import sales as sales_router
@@ -98,3 +101,6 @@ app.include_router(manager_approvals_router.router, prefix="/api/v1")
 app.include_router(esign_router.router, prefix="/api/v1")
 app.include_router(valuation_router.router, prefix="/api/v1")
 app.include_router(reports_router.router, prefix="/api/v1")
+app.include_router(public_router.router, prefix="/api/v1")
+app.include_router(analytics_router.router, prefix="/api/v1")
+app.include_router(admin_reports_router.router, prefix="/api/v1")

@@ -1547,4 +1547,96 @@ Full spec: `dev_plan/07_phase7_pdf_reports.md`
 
 ---
 
-## Phase 8 — Not started
+## Phase 8 — Analytics & Public Listing Page — In progress
+
+Branch: `phase8-analytics-listing`
+
+---
+
+### Sprint 1 — Public Listing + Analytics Backend — COMPLETE (verified green 2026-05-04)
+
+Public listing catalog and inquiry form API; analytics event capture; listing management for sales reps.
+
+- [x] `api/schemas/public_listing.py` (NEW) — `PublicListingCard`, `PublicListingDetail`, `PublicListingsResponse`, `InquiryCreate`, `InquiryResponse`, `ListingPatch`
+- [x] `api/schemas/analytics.py` (NEW) — `AnalyticsEventCreate`, `AnalyticsEventResponse`; PII validator on metadata
+- [x] `api/services/listing_service.py` (NEW) — `list_public_listings` (paginated, filtered, sorted), `get_public_listing_detail`, `patch_listing`; joins `AppraisalSubmission` for verified fields, falls back to `customer_*` columns
+- [x] `api/services/inquiry_service.py` (NEW) — `create_inquiry`; sends buyer confirmation + sales rep alert via `BackgroundTasks`
+- [x] `api/services/email_service.py` (modify) — added `send_inquiry_confirmation_email` + `send_inquiry_alert_email` templates
+- [x] `api/routers/public.py` (NEW) — `GET /api/v1/public/listings`, `GET /api/v1/public/listings/:id`, `POST /api/v1/public/listings/:id/inquiries`; honeypot bot prevention; 60/min/IP listing rate limit, 5/hr/IP inquiry rate limit
+- [x] `api/routers/analytics.py` (NEW) — `POST /api/v1/analytics/event`; silently drops events from staff roles (sales/sales_manager/admin/appraiser/reporting); PII guard via schema validator
+- [x] `api/routers/sales.py` (modify) — `PATCH /api/v1/sales/equipment/{id}/listing`; sales rep updates asking_price or status (active/sold/withdrawn)
+- [x] `api/schemas/sales.py` (modify) — `ListingPatchOut`
+- [x] `api/main.py` (modify) — registered `public_router` and `analytics_router`
+- [x] `api/tests/integration/test_public_listings.py` (NEW, 10 tests) — filter, pagination, sort, detail, 404, condition filter with AppraisalSubmission
+- [x] `api/tests/integration/test_inquiries.py` (NEW, 10 tests) — creation, email, honeypot, 404, validation, listing PATCH (sold, price, auth, 404)
+- [x] `api/tests/integration/test_analytics_events.py` (NEW, 6 tests) — anonymous, customer, sales-drop, admin-drop, PII rejection, no-auth
+
+**Test gate:** 570/570 integration + 205/205 unit — all green 2026-05-04. Zero regressions vs. prior 544 integration tests.
+
+**Key decisions:**
+- `hours_condition` (condition filter) uses `AppraisalSubmission` (appraiser-verified), not `EquipmentRecord`. Listings without approved submissions are excluded from condition-filtered results.
+- Public listing domain: `temple.saltrun.net` for staging/demo; will update to TempleHE domain post sign-off.
+- Bot prevention: honeypot field `web_address` (not CAPTCHA). Silently returns 201 to avoid revealing detection.
+- Analytics events from staff roles silently drop — event captured but `recorded: false` returned so client doesn't error.
+
+### Sprint 2 — Public Listing Frontend — COMPLETE (verified green 2026-05-04)
+
+React pages for the public consignment catalog; analytics page_view hook; listing management card for sales reps.
+
+- [x] `web/src/api/listings.ts` (NEW) — typed API client for `GET /public/listings`, `GET /public/listings/:id`, `POST .../inquiries`, `PATCH /sales/equipment/:id/listing`
+- [x] `web/src/services/analytics.ts` (NEW) — `trackEvent()` + `usePageView()` hook (fires on route change; best-effort, never surfaces errors)
+- [x] `web/src/pages/PublicListings.tsx` (NEW) — `/listings` catalog page; filter sidebar (price range + condition), sort dropdown, URL-encoded filter state, pagination, empty state
+- [x] `web/src/pages/PublicListingDetail.tsx` (NEW) — `/listings/:id` detail page; equipment specs card, listing notes/transport notes, inquiry form with client-side validation + honeypot field, success/error states; SEO meta via `react-helmet-async`
+- [x] `web/src/App.tsx` (modify) — added public `/listings` and `/listings/:id` routes (no ProtectedRoute)
+- [x] `web/src/pages/SalesEquipmentDetail.tsx` (modify) — `ListingManagementCard` added; shows when `public_listing_status != null`; allows price update + mark-sold + withdraw
+- [x] `web/src/pages/PublicListings.test.tsx` (NEW) — 17 unit tests (Vitest + MSW) covering list render, empty state, filter UI, detail render, inquiry form submission + validation
+- [x] `web/e2e/phase8_listing.spec.ts` (NEW) — 5 E2E acceptance scenarios (catalog without auth, detail page, inquiry form, sales rep price update, a11y scan)
+- [x] `scripts/seed_e2e_phase8.py` (NEW) — Phase 8 E2E fixture seeder (sales user + customer + equipment record + active public listing)
+- [x] `web/e2e/helpers/api.ts` (modify) — added `seedPhase8()` helper
+- [x] `web/src/test/render.tsx` (modify) — added `HelmetProvider` wrapper
+- [x] `web/src/test/handlers.ts` (modify) — added `POST /analytics/event` MSW handler
+- [x] `web/src/main.tsx` (modify) — added `HelmetProvider` to app bootstrap
+- [x] `react-helmet-async` npm dependency added
+
+**Test gate:** 148/148 frontend unit — all green 2026-05-04. Zero regressions vs. prior 131 tests. Backend: 570/570 + 205/205 (unchanged, re-confirmed).
+
+### Sprint 3 — Admin Reporting Backend — COMPLETE (verified green 2026-05-05)
+
+**Files:**
+- [x] `api/schemas/reporting.py` (NEW) — SalesByPeriodRow/Response, SalesByTypeRow/Response, SalesByStateRow/Response, PortalTrafficResponse, PageViewMetric
+- [x] `api/services/reporting_service.py` (NEW) — sales_by_period, sales_by_type, sales_by_state, portal_traffic, export_csv aggregation queries
+- [x] `api/routers/admin_reports.py` (NEW) — GET /admin/reports/sales-by-period, sales-by-type, sales-by-state, portal-traffic; GET /admin/reports/export (CSV StreamingResponse)
+- [x] `api/main.py` (modify) — registered admin_reports_router
+- [x] `api/tests/integration/test_admin_reports.py` (NEW) — 18 integration tests
+
+**Test gate:** 588/588 integration — 18 new, 0 regressions. Unit: 205/205 (unchanged).
+
+### Sprint 4 — Admin Reporting Frontend — COMPLETE (verified green 2026-05-05)
+
+Recharts charts, filter controls, and CSV export wired to the Sprint 3 backend; analytics instrumentation wired into the intake form.
+
+- [x] `web/package.json` (modify) — added `recharts@3.8.1`
+- [x] `web/src/api/reports.ts` (modify) — appended Phase 8 admin reporting types + fetch functions (getSalesByPeriod, getSalesByType, getSalesByState, getPortalTraffic, downloadReportCsv)
+- [x] `web/src/pages/AdminReports.tsx` (modify) — replaced placeholder with 4 real tab components: SalesByPeriodTab (LineChart + BarChart + summary table + period/date filters + CSV export), SalesByTypeLocationTab (PieChart + tables + sub-view switcher), PortalTrafficTab (metric cards + top pages table + segment filter), ExportCenterTab (4 CSV download buttons)
+- [x] `web/src/services/analytics.ts` (modify) — added `useFormAnalytics(formName)` hook (fires form_step_start on mount, form_step_complete on onComplete(), form_abandon on unmount if not completed)
+- [x] `web/src/App.tsx` (modify) — wired `usePageView()` so every route transition fires a page_view event
+- [x] `web/src/pages/IntakeForm.tsx` (modify) — wired `useFormAnalytics("equipment_intake")` (start on mount, complete on mutation success)
+- [x] `web/src/pages/AdminReports.test.tsx` (NEW) — 12 Vitest tests (tab labels, data display, sub-view switching, filter refetch, error state, empty state, export buttons)
+- [x] `web/src/test/handlers.ts` (modify) — added MSW handlers for /admin/reports index + 4 report endpoints + CSV export
+- [x] `scripts/seed_e2e_phase8_reporting.py` (NEW) — E2E fixture seeder (admin user + approved records + analytics events)
+- [x] `web/e2e/helpers/api.ts` (modify) — added `seedPhase8Reporting()` helper
+- [x] `web/e2e/phase8_analytics_reporting.spec.ts` (NEW) — 5 E2E acceptance scenarios (tab render, period table, traffic cards, export center buttons, a11y scan)
+
+**Test gate:** 160/160 frontend unit — 12 new, 0 regressions. Backend: 588/588 + 205/205 (unchanged, re-confirmed).
+
+**Key decisions:**
+- Choropleth map (dev plan Feature 8.1.2) deferred — sortable state table delivers the same data with zero extra GeoJSON/D3 dependency. Carry-forward.
+- PDF export from reports deferred — needs a WeasyPrint report template distinct from the appraisal PDF. Carry-forward.
+- `useFormAnalytics` fires `form_step_start` on mount (not first keystroke) because the intake form is single-step; abandon fires on unmount if the mutation didn't succeed first.
+- `formatUsdCompact` used for Recharts tick labels; full `Intl.NumberFormat` USD in data tables.
+
+**Carry-forwards:**
+- Choropleth state map visualization
+- PDF export from admin reports (WeasyPrint template for report type)
+- CSV async job for Export Center rows > 5,000 (already flagged in Sprint 3)
+- `user_segment` new/returning filter in portal traffic (requires session first-seen tracking)

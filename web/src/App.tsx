@@ -1,6 +1,7 @@
 // ABOUTME: Top-level routes — public auth pages + the protected customer/sales/admin SPA.
 // ABOUTME: Phase 4 Sprint 1 wires the admin shell (operations + reports stub).
 import { Navigate, Route, Routes } from "react-router-dom";
+import { usePageView } from "./services/analytics";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AccountPage } from "./pages/Account";
@@ -28,14 +29,20 @@ import { SalesCalendarPage } from "./pages/SalesCalendar";
 import { SalesDashboardPage } from "./pages/SalesDashboard";
 import { SalesEquipmentDetailPage } from "./pages/SalesEquipmentDetail";
 import { VerifyEmailPage } from "./pages/VerifyEmail";
+import { PublicListingsPage } from "./pages/PublicListings";
+import { PublicListingDetailPage } from "./pages/PublicListingDetail";
 
 export default function App() {
+  usePageView();
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/portal" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+
+      <Route path="/listings" element={<PublicListingsPage />} />
+      <Route path="/listings/:id" element={<PublicListingDetailPage />} />
 
       <Route
         path="/portal"

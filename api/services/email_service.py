@@ -222,6 +222,54 @@ async def send_2fa_warning_email(to_email: str, remaining: int) -> None:
 
 
 @_safe_send
+@_safe_send
+async def send_inquiry_confirmation_email(
+    to_email: str, buyer_name: str, listing_title: str
+) -> None:
+    """Phase 8 — confirmation to the buyer after submitting an inquiry."""
+    body = f"""
+    <p>Hi {buyer_name},</p>
+    <p>Thank you for your interest in <strong>{listing_title}</strong>.</p>
+    <p>A Temple Heavy Equipment sales representative will review your inquiry
+       and reach out to you shortly.</p>
+    <p>If you have additional questions, you can reply directly to this email
+       or call us at our main office number.</p>
+    """
+    await send_email(
+        to_email,
+        f"Your inquiry — {listing_title}",
+        _base_html("Thanks for your inquiry", body),
+    )
+
+
+@_safe_send
+async def send_inquiry_alert_email(
+    to_email: str,
+    rep_name: str,
+    buyer_name: str,
+    buyer_email: str,
+    buyer_phone: str | None,
+    listing_title: str,
+    message: str | None,
+) -> None:
+    """Phase 8 — alert to the assigned sales rep when a new inquiry arrives."""
+    phone_line = f"<p>Phone: {buyer_phone}</p>" if buyer_phone else ""
+    message_line = f"<blockquote>{message}</blockquote>" if message else ""
+    body = f"""
+    <p>Hi {rep_name},</p>
+    <p>A new inquiry was submitted for <strong>{listing_title}</strong>.</p>
+    <p><strong>{buyer_name}</strong><br>
+       {buyer_email}{phone_line}</p>
+    {message_line}
+    <p>Log in to the portal to view the full inquiry and respond.</p>
+    """
+    await send_email(
+        to_email,
+        f"New inquiry: {listing_title}",
+        _base_html("New listing inquiry", body),
+    )
+
+
 async def send_walkin_invite_email(
     to_email: str, register_url: str, customer_name: str, inviter_name: str
 ) -> None:

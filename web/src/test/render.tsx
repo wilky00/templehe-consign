@@ -3,6 +3,7 @@
 import type { ReactElement } from "react";
 import { render, type RenderResult } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { HelmetProvider } from "react-helmet-async";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "../state/auth";
 
@@ -41,8 +42,10 @@ export function renderWithProviders(
   );
 
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={initialEntries}>{content}</MemoryRouter>
-    </QueryClientProvider>,
+    <HelmetProvider>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={initialEntries}>{content}</MemoryRouter>
+      </QueryClientProvider>
+    </HelmetProvider>,
   );
 }

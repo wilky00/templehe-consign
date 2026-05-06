@@ -7,6 +7,7 @@ import { ApiError } from "../api/client";
 import { listCategories, submitIntake } from "../api/equipment";
 import { uploadIntakePhoto } from "../hooks/usePhotoUpload";
 import type { OwnershipType, RunningStatus } from "../api/types";
+import { useFormAnalytics } from "../services/analytics";
 import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -59,6 +60,7 @@ export function IntakeFormPage() {
   const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { onComplete: analyticsComplete } = useFormAnalytics("equipment_intake");
 
   const categories = useQuery({
     queryKey: ["equipment-categories"],
@@ -101,6 +103,7 @@ export function IntakeFormPage() {
       return record;
     },
     onSuccess: (record) => {
+      analyticsComplete();
       qc.invalidateQueries({ queryKey: ["equipment"] });
       qc.invalidateQueries({ queryKey: ["equipment", record.id] });
       navigate(`/portal/equipment/${record.id}`);
