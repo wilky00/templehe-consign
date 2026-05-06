@@ -77,7 +77,7 @@ export interface PortalTrafficResponse {
   unique_users: number;
   total_page_views: number;
   top_pages: PageViewMetric[];
-  form_abandon_rate: number;
+  form_abandon_rate: number | null;
   pdf_download_count: number;
 }
 
