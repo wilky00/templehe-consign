@@ -6,7 +6,6 @@ import asyncio
 import json
 import os
 import uuid
-from datetime import UTC, datetime
 from decimal import Decimal
 
 import bcrypt
@@ -108,8 +107,7 @@ async def _seed_approved_record(
     )
 
     record_id = str(uuid.uuid4())
-    ref_row = await session.execute(text("SELECT nextval('equipment_reference_seq')"))
-    ref_num = f"THE-{ref_row.scalar_one():05d}"
+    ref_num = f"THE-P8R{uuid.uuid4().hex[:5].upper()}"
     await session.execute(
         text(
             """
