@@ -123,6 +123,10 @@ class Settings(BaseSettings):
     # Application
     environment: str = "development"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    # SPA base URL used to build email links (verification, password reset).
+    # When set, overrides the scheme+host derived from the incoming request — required when
+    # a TLS-terminating proxy (Caddy, nginx) forwards plain HTTP to the app container.
+    frontend_url: str = ""
 
     # Seed
     seed_admin_email: str = ""

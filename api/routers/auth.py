@@ -84,7 +84,10 @@ def _build_token_response(
 
 
 def _base_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/")
+    # settings.frontend_url wins when set (e.g. staging/prod behind a TLS-terminating proxy
+    # where request.base_url would reflect the plain-HTTP forwarded scheme and the API domain
+    # rather than the SPA domain that email links should point to).
+    return settings.frontend_url.rstrip("/") if settings.frontend_url else str(request.base_url).rstrip("/")
 
 
 def _set_refresh_cookie(response: Response, token: str) -> None:
