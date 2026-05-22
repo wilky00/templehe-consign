@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # blocks ~35s before falling back to IPv4 when Mailpit only binds to 0.0.0.0.
     smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
+    smtp_use_tls: bool = False
+    smtp_username: str = ""
+    smtp_password: str = ""
 
     # SMS — A2P 10DLC dispatch goes through a Messaging Service SID; the
     # from-number is kept for dev/sandbox testing. If the Messaging Service

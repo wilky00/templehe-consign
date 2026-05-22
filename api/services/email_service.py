@@ -39,12 +39,12 @@ def _safe_send(
 
 
 async def send_email(to_email: str, subject: str, html_body: str) -> None:
-    """Send an email. Routes to SMTP (Mailpit) in dev, SendGrid in production.
+    """Send an email. Uses SMTP when no SendGrid key is set, SendGrid otherwise.
 
     Failures are logged but never re-raised — auth flows scheduling this via
-    BackgroundTasks must not 500 the originating request when SendGrid hiccups.
+    BackgroundTasks must not 500 the originating request when mail hiccups.
     """
-    if settings.use_smtp_local:
+    if not settings.sendgrid_api_key:
         await asyncio.to_thread(_send_smtp, to_email, subject, html_body)
     else:
         await asyncio.to_thread(_send_sendgrid, to_email, subject, html_body)
@@ -67,6 +67,10 @@ def _send_smtp(to_email: str, subject: str, html_body: str) -> None:
             local_hostname="localhost",
             timeout=10,
         ) as server:
+            if settings.smtp_use_tls:
+                server.starttls()
+            if settings.smtp_username and settings.smtp_password:
+                server.login(settings.smtp_username, settings.smtp_password)
             server.sendmail(settings.sendgrid_from_email, to_email, msg.as_string())
     except Exception:
         logger.exception("smtp_send_failed", to=to_email, subject=subject)
