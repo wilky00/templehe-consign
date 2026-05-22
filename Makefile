@@ -53,3 +53,20 @@ test-api:
 lint:
 	cd api && uv run ruff check . && uv run ruff format --check .
 	cd web && npm run lint
+
+## saltrun-staging targets — deploy / migrate / tail logs on the staging server.
+## Usage: make saltrun-logs service=api
+.PHONY: saltrun-deploy saltrun-migrate saltrun-logs
+
+saltrun-deploy:
+	ssh saltrun-staging "cd /opt/templehe-consign && git pull && \
+	  docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile full up -d --build"
+
+saltrun-migrate:
+	ssh saltrun-staging "cd /opt/templehe-consign && \
+	  docker compose -f docker-compose.yml -f docker-compose.staging.yml exec api \
+	  uv run alembic upgrade head"
+
+saltrun-logs:
+	ssh saltrun-staging "cd /opt/templehe-consign && \
+	  docker compose -f docker-compose.yml -f docker-compose.staging.yml logs -f --tail=100 $(service)"

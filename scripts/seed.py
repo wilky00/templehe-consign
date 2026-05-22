@@ -8,10 +8,12 @@ import sys
 import uuid
 from datetime import date as _date
 
-# Allow running from project root or scripts/ directly
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
-# Make sibling scripts importable for the category bundle hookup below.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Allow running from repo root (local dev) or from inside the api container
+# where scripts/ is mounted at /app/scripts/ and /app/ is the api root.
+_here = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_here, "..", "api"))  # local dev: repo/api/
+sys.path.insert(0, os.path.join(_here, ".."))          # container: /app/ (= api root)
+sys.path.insert(0, _here)                              # sibling scripts
 
 import bcrypt
 from sqlalchemy import text

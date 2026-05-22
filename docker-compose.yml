@@ -1,5 +1,5 @@
-# ABOUTME: Local development stack — PostgreSQL 16 and Mailpit (email catcher).
-# ABOUTME: No Redis in POC; rate limiting and session storage use Postgres tables.
+# ABOUTME: Development stack — PostgreSQL 16, Mailpit, and all application services.
+# ABOUTME: Use profiles to start components selectively: --profile api|web|workers|full.
 services:
   postgres:
     image: postgres:16.9-alpine
@@ -27,6 +27,55 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  api:
+    build:
+      context: ./api
+    env_file: .env
+    volumes:
+      - ./scripts:/app/scripts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    profiles: [api, full]
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_R2_PUBLIC_URL: ${VITE_R2_PUBLIC_URL:-}
+    profiles: [web, full]
+
+  notification-worker:
+    build:
+      context: ./api
+    command: ["python", "scripts/notification_worker.py"]
+    volumes:
+      - ./scripts:/app/scripts:ro
+    environment:
+      PYTHONPATH: /app
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: [workers, full]
+
+  sweeper:
+    build:
+      context: ./api
+    command: ["python", "scripts/sweep_retention.py"]
+    volumes:
+      - ./scripts:/app/scripts:ro
+    environment:
+      PYTHONPATH: /app
+    env_file: .env
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: [workers, full]
 
 volumes:
   postgres_data:

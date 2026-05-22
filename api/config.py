@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     r2_bucket_reports: str = "temple-he-reports"
     r2_bucket_backups: str = "temple-he-backups"
     r2_public_url: str = ""
+    # S3-compatible endpoint override — set to the MinIO public URL on saltrun-staging.
+    # When empty, falls back to the R2 account-ID endpoint above (Cloudflare R2 pattern).
+    storage_endpoint_url: str = ""
 
     # Observability
     sentry_dsn: str = ""

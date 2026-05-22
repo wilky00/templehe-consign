@@ -24,11 +24,14 @@ import signal
 import sys
 from typing import Any
 
-# Make the api package importable when run from the repo root.
+# Make the api package importable from repo root (local dev) or inside the
+# Docker api container where /app/ is the api root and scripts/ is mounted at /app/scripts/.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_API_DIR = os.path.join(os.path.dirname(_HERE), "api")
-if _API_DIR not in sys.path:
-    sys.path.insert(0, _API_DIR)
+_PARENT = os.path.dirname(_HERE)
+_API_DIR = os.path.join(_PARENT, "api")
+for _p in (_API_DIR, _PARENT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402

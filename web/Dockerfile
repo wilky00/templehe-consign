@@ -7,6 +7,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# VITE_R2_PUBLIC_URL is embedded in the built bundle at compile time.
+# Pass --build-arg VITE_R2_PUBLIC_URL=https://... when targeting staging/prod.
+ARG VITE_R2_PUBLIC_URL=""
+ENV VITE_R2_PUBLIC_URL=$VITE_R2_PUBLIC_URL
 RUN npm run build
 
 # Serve stage

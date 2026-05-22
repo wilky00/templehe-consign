@@ -1,0 +1,61 @@
+# ABOUTME: Staging overrides for saltrun-staging. Applied on top of docker-compose.yml.
+# ABOUTME: Binds ports to 127.0.0.1 only; Caddy reverse-proxies via *.staging.saltrun.net.
+#
+# Deploy:
+#   cd /opt/templehe-consign
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile full up -d --build
+
+networks:
+  minio_default:
+    external: true  # shared MinIO instance on saltrun-staging
+
+services:
+  api:
+    ports:
+      - "127.0.0.1:8100:8000"
+    networks:
+      - default
+      - minio_default
+    env_file: .env.staging
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    ports:
+      - "127.0.0.1:8101:80"
+    volumes:
+      - ./web/nginx.staging.conf:/etc/nginx/conf.d/default.conf:ro
+    build:
+      args:
+        VITE_R2_PUBLIC_URL: ${VITE_R2_PUBLIC_URL:-https://minio.staging.saltrun.net}
+    env_file: .env.staging
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  notification-worker:
+    networks:
+      - default
+      - minio_default
+    env_file: .env.staging
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  sweeper:
+    env_file: .env.staging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -16,6 +16,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Debian 12 fixes published — they just aren't in the base image yet.
 RUN apt-get update \
     && apt-get -y --no-install-recommends upgrade \
+    && apt-get install -y --no-install-recommends \
+        libglib2.0-0 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libharfbuzz0b \
+        libfontconfig1 \
+        libcairo2 \
+        libjpeg62-turbo \
+        libopenjp2-7 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv

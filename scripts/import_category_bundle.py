@@ -27,11 +27,14 @@ import sys
 from decimal import Decimal
 from typing import Any
 
-# Make api/ importable whether we're invoked from scripts/ or api/.
+# Make api/ importable whether we're invoked from scripts/ or api/,
+# or from inside the Docker api container where /app/ is the api root.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_API_DIR = os.path.join(os.path.dirname(_HERE), "api")
-if _API_DIR not in sys.path:
-    sys.path.insert(0, _API_DIR)
+_PARENT = os.path.dirname(_HERE)
+_API_DIR = os.path.join(_PARENT, "api")
+for _p in (_API_DIR, _PARENT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
