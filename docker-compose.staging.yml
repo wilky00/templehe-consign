@@ -10,6 +10,12 @@ networks:
     external: true  # shared MinIO instance on saltrun-staging
 
 services:
+  postgres:
+    restart: unless-stopped
+
+  mailpit:
+    restart: unless-stopped
+
   api:
     ports:
       - "127.0.0.1:8100:8000"
